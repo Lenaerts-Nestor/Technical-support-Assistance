@@ -1,0 +1,60 @@
+import type { PageId } from './navigation'
+import { NAV_ITEMS } from './navigation'
+
+const ICONS: Record<PageId, React.ReactElement> = {
+  voiceCall: (
+    <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.25 1L6.6 10.8Z" />
+  ),
+  rma: (
+    <path d="m12 2 8 4.5v9L12 20l-8-4.5v-9L12 2Zm0 2.3L6.2 7.5 12 10.7l5.8-3.2L12 4.3ZM5 9.2v5.6l6 3.4v-5.6L5 9.2Zm14 0-6 3.4v5.6l6-3.4V9.2Z" />
+  ),
+  cases: (
+    <path d="M9 4h6a2 2 0 0 1 2 2v1h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3V6a2 2 0 0 1 2-2Zm0 3h6V6H9v1Z" />
+  ),
+  guides: (
+    <path d="M5 3h11a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 2v10h12V6a1 1 0 0 0-1-1H5Z" />
+  ),
+}
+
+type SidebarProps = {
+  current: PageId
+  onNavigate: (page: PageId) => void
+}
+
+export function Sidebar({ current, onNavigate }: SidebarProps) {
+  return (
+    <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50 px-4 py-5">
+      <div className="px-2">
+        <h1 className="text-lg font-semibold text-slate-900">Support Hub</h1>
+        <p className="text-xs text-slate-500">Case Dashboard</p>
+      </div>
+
+      <nav className="mt-6 flex flex-col gap-1">
+        {NAV_ITEMS.map((item) => {
+          const active = item.id === current
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onNavigate(item.id)}
+              className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? 'bg-slate-200 text-slate-900'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4 fill-current"
+                aria-hidden="true"
+              >
+                {ICONS[item.id]}
+              </svg>
+              {item.label}
+            </button>
+          )
+        })}
+      </nav>
+    </aside>
+  )
+}
