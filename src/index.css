@@ -10,23 +10,6 @@ body {
   margin: 0;
 }
 
-@layer utilities {
-  .border-slate-100 {
-    border-color: rgb(15 23 42 / 0.7) !important;
-  }
-
-  .border-slate-200 {
-    border-color: rgb(15 23 42 / 0.78) !important;
-  }
-
-  .border-slate-300 {
-    border-color: rgb(15 23 42 / 0.86) !important;
-  }
-
-  .focus\:border-slate-400:focus {
-    border-color: rgb(15 23 42 / 0.92) !important;
-  }
-}
 
 /* Tailwind's preflight leaves buttons at the default arrow cursor; restore the
    pointer so anything clickable reads as clickable. */
