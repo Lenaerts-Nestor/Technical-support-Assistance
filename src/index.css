@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 /**
  * App-wide colour tokens. Tailwind v4 turns each `--color-*` entry into a
@@ -57,7 +57,7 @@ body {
   /* Tailwind's preflight leaves buttons at the default arrow cursor; restore the
      pointer so anything clickable reads as clickable. */
   button:not(:disabled),
-  [role='button']:not([aria-disabled='true']),
+  [role="button"]:not([aria-disabled="true"]),
   summary {
     cursor: pointer;
   }
