@@ -1,41 +1,45 @@
-import { TEXTAREA } from './fieldStyles'
-import { PartFrame } from './PartFrame'
-import type { GuideDraftController } from '../useGuideDraft'
+import { SELECT, TEXTAREA } from '../../../shared/ui/styles'
+import { BlockFrame } from './BlockFrame'
+import type { BlockEditProps } from './blockEditProps'
 import type { CalloutPart, CalloutVariant } from '../types'
 
-type CalloutEditProps = {
-  part: CalloutPart
-  index: number
-  count: number
-  d: GuideDraftController
-}
-
-export function CalloutEdit({ part, index, count, d }: CalloutEditProps) {
+export function CalloutEdit({
+  part,
+  addr,
+  index,
+  count,
+  nested,
+  onMove,
+  onRemove,
+  d,
+}: BlockEditProps<CalloutPart>) {
   return (
-    <PartFrame
+    <BlockFrame
+      kind="callout"
       chip="Callout"
       index={index}
       count={count}
-      onMove={(dir) => d.movePart(part.id, dir)}
-      onRemove={() => d.removePart(part.id)}
+      nested={nested}
+      onMove={onMove}
+      onRemove={onRemove}
     >
       <select
         value={part.variant}
         onChange={(e) =>
-          d.updateCallout(part.id, { variant: e.target.value as CalloutVariant })
+          d.updateCallout(addr, { variant: e.target.value as CalloutVariant })
         }
-        className="mb-2 rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-600 focus:outline-none"
+        className={`${SELECT} mb-2.5`}
       >
         <option value="info">Info</option>
         <option value="warning">Warning</option>
       </select>
       <textarea
         value={part.text}
-        onChange={(e) => d.updateCallout(part.id, { text: e.target.value })}
+        onChange={(e) => d.updateCallout(addr, { text: e.target.value })}
         placeholder="Callout text…"
         rows={2}
         className={TEXTAREA}
       />
-    </PartFrame>
+    </BlockFrame>
   )
 }

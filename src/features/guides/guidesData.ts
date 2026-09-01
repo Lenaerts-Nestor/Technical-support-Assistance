@@ -6,6 +6,8 @@ import type {
   GuideSection,
   GuideStep,
   GuidesFile,
+  SectionBlock,
+  SectionBlockKind,
   StepSubItem,
   SubItemKind,
 } from './types'
@@ -53,14 +55,59 @@ export const PART_KINDS: { kind: GuidePartKind; label: string }[] = [
   { kind: 'term', label: 'Add Term Definition' },
 ]
 
+/** The subset of PART_KINDS that can be added inside a chapter or a section. */
+export const BLOCK_KINDS: { kind: SectionBlockKind; label: string }[] = [
+  { kind: 'table', label: 'Table' },
+  { kind: 'callout', label: 'Callout' },
+  { kind: 'term', label: 'Term' },
+]
+
+/**
+ * One accent per part type, used by the editor's block chips and left rules so
+ * an H2 chapter, an H3 section and a table are told apart before reading them.
+ */
+export const PART_TONES: Record<
+  GuidePartKind,
+  { chip: string; rule: string; dot: string }
+> = {
+  chapter: {
+    chip: 'bg-blue-400/15 text-blue-200 ring-1 ring-blue-400/30',
+    rule: 'border-l-blue-400',
+    dot: 'bg-blue-400',
+  },
+  section: {
+    chip: 'bg-violet-400/15 text-violet-200 ring-1 ring-violet-400/30',
+    rule: 'border-l-violet-400',
+    dot: 'bg-violet-400',
+  },
+  table: {
+    chip: 'bg-teal-400/15 text-teal-200 ring-1 ring-teal-400/30',
+    rule: 'border-l-teal-400',
+    dot: 'bg-teal-400',
+  },
+  callout: {
+    chip: 'bg-amber-400/15 text-amber-200 ring-1 ring-amber-400/30',
+    rule: 'border-l-amber-400',
+    dot: 'bg-amber-400',
+  },
+  term: {
+    chip: 'bg-indigo-400/15 text-indigo-200 ring-1 ring-indigo-400/30',
+    rule: 'border-l-indigo-400',
+    dot: 'bg-indigo-400',
+  },
+}
+
 /** Cycled per chapter so the eye can lock onto "the blue chapter" while scrolling. */
 export const CHAPTER_ACCENTS = [
-  { band: 'bg-sky-50 text-sky-700', dot: 'bg-sky-400' },
-  { band: 'bg-violet-50 text-violet-700', dot: 'bg-violet-400' },
-  { band: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-400' },
-  { band: 'bg-amber-50 text-amber-700', dot: 'bg-amber-400' },
-  { band: 'bg-rose-50 text-rose-700', dot: 'bg-rose-400' },
-  { band: 'bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
+  { band: 'border-sky-400/35 bg-sky-400/12 text-sky-100', dot: 'bg-sky-400' },
+  { band: 'border-violet-400/35 bg-violet-400/12 text-violet-100', dot: 'bg-violet-400' },
+  {
+    band: 'border-emerald-400/35 bg-emerald-400/12 text-emerald-100',
+    dot: 'bg-emerald-400',
+  },
+  { band: 'border-amber-400/35 bg-amber-400/12 text-amber-100', dot: 'bg-amber-400' },
+  { band: 'border-rose-400/35 bg-rose-400/12 text-rose-100', dot: 'bg-rose-400' },
+  { band: 'border-line bg-subtle text-ink', dot: 'bg-ink-faint' },
 ] as const
 
 export const accentFor = (i: number) =>
@@ -89,7 +136,12 @@ export function blankStep(): GuideStep {
 }
 
 export function blankSection(): GuideSection {
-  return { id: uid(), heading: '', body: '', steps: [blankStep()] }
+  return { id: uid(), heading: '', body: '', steps: [blankStep()], blocks: [] }
+}
+
+/** A table / callout / term to nest inside a chapter or section. */
+export function blankBlock(kind: SectionBlockKind): SectionBlock {
+  return blankPart(kind) as SectionBlock
 }
 
 export function blankSubItem(kind: SubItemKind): StepSubItem {
@@ -103,9 +155,22 @@ export function blankLink(): GuideLink {
 export function blankPart(kind: GuidePartKind): GuidePart {
   switch (kind) {
     case 'chapter':
-      return { type: 'chapter', id: uid(), subtitle: '', sections: [blankSection()] }
+      return {
+        type: 'chapter',
+        id: uid(),
+        subtitle: '',
+        sections: [blankSection()],
+        blocks: [],
+      }
     case 'section':
-      return { type: 'section', id: uid(), heading: '', body: '', steps: [blankStep()] }
+      return {
+        type: 'section',
+        id: uid(),
+        heading: '',
+        body: '',
+        steps: [blankStep()],
+        blocks: [],
+      }
     case 'table':
       return {
         type: 'table',

@@ -1,5 +1,6 @@
 import { Field } from './Field'
 import { TrashIcon } from './icons'
+import { DELETE_BTN } from '../../../shared/ui/styles'
 import { PRODUCT_PLACEHOLDERS } from '../voiceCallData'
 import type { ProductEntry } from '../types'
 
@@ -34,7 +35,7 @@ export function ProductRow({ product, canRemove, onChange, onRemove }: ProductRo
         onClick={onRemove}
         disabled={!canRemove}
         aria-label="Remove product"
-        className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:pointer-events-none disabled:opacity-30"
+        className={`${DELETE_BTN} p-2 disabled:pointer-events-none disabled:opacity-25`}
       >
         <TrashIcon className="h-4 w-4" />
       </button>

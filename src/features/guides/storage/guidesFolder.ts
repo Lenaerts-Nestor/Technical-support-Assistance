@@ -21,8 +21,15 @@ export async function verifyPermission(
   withPrompt: boolean,
 ): Promise<boolean> {
   const opts: FileSystemHandlePermissionDescriptor = { mode: 'readwrite' }
-  if ((await handle.queryPermission(opts)) === 'granted') return true
-  if (withPrompt && (await handle.requestPermission(opts)) === 'granted') return true
+  // Never let a browser that has dropped these methods (or throws on a stale
+  // handle) leave the caller hanging — an unresolved check reads as "still
+  // checking…" forever in the Sync panel.
+  try {
+    if ((await handle.queryPermission(opts)) === 'granted') return true
+    if (withPrompt && (await handle.requestPermission(opts)) === 'granted') return true
+  } catch {
+    return false
+  }
   return false
 }
 
@@ -48,6 +55,46 @@ export async function writeGuidesJson(
   const writable = await fileHandle.createWritable()
   await writable.write(text)
   await writable.close()
+}
+
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif']
+
+const isImageName = (name: string) =>
+  IMAGE_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext))
+
+/**
+ * Every image file in the linked folder, as paths relative to it — top level
+ * plus one level of sub-folders (`screens/step-1.png`), which is as deep as
+ * {@link readImageFile} is expected to resolve in practice. Sorted, and capped
+ * so a folder full of assets can't stall the editor.
+ */
+export async function listImageFiles(
+  dir: FileSystemDirectoryHandle,
+  max = 500,
+): Promise<string[]> {
+  const found: string[] = []
+  try {
+    for await (const [name, handle] of dir.entries()) {
+      if (found.length >= max) break
+      if (handle.kind === 'file') {
+        if (isImageName(name)) found.push(name)
+        continue
+      }
+      try {
+        for await (const [childName, child] of handle.entries()) {
+          if (found.length >= max) break
+          if (child.kind === 'file' && isImageName(childName)) {
+            found.push(`${name}/${childName}`)
+          }
+        }
+      } catch {
+        // Unreadable sub-folder — skip it rather than failing the whole scan.
+      }
+    }
+  } catch {
+    return []
+  }
+  return found.sort((a, b) => a.localeCompare(b))
 }
 
 /**

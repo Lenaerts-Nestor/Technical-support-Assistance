@@ -18,9 +18,11 @@ export default function App() {
   const Page = PAGES[page]
 
   return (
-    <div className="flex h-full bg-white text-slate-900">
+    <div className="bg-canvas text-ink flex h-full">
       <Sidebar current={page} onNavigate={setPage} />
-      <main className="flex-1 overflow-y-auto p-8">
+      {/* No padding here: pages own their own insets so a page with a sticky
+          header can pin it flush to the top of the scrollport. */}
+      <main className="flex-1 overflow-y-auto">
         <Page />
       </main>
     </div>

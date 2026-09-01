@@ -1,5 +1,7 @@
-import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from '../components/icons'
-import { GHOST_BTN, ICON_BTN, INPUT } from './fieldStyles'
+import { useId } from 'react'
+import { ArrowDownIcon, ArrowUpIcon, ImageIcon, TrashIcon, XIcon } from '../components/icons'
+import { useGuideImagePicker } from '../view/GuideAssetsContext'
+import { DELETE_BTN, GHOST_BTN, ICON_BTN, INPUT } from '../../../shared/ui/styles'
 import { SubItemEdit } from './SubItemEdit'
 import type { GuideDraftController, StepLoc } from '../useGuideDraft'
 import type { GuideStep } from '../types'
@@ -12,13 +14,22 @@ type StepEditProps = {
   d: GuideDraftController
 }
 
-/** One editable step: text, image filename, ordered bullet / note sub-items. */
+/** One editable step: text, image, ordered bullet / note sub-items. */
 export function StepEdit({ loc, step, index, count, d }: StepEditProps) {
+  const { imageNames, pickImage } = useGuideImagePicker()
+  const listId = useId()
+  const image = step.image ?? ''
+
+  const browse = async () => {
+    const name = await pickImage()
+    if (name) d.updateStep(loc, step.id, { image: name })
+  }
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+    <div className="border-line bg-subtle rounded-lg border p-2.5">
       <div className="flex items-start gap-2">
-        <div className="flex flex-col items-center gap-0.5 pt-0.5">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-500">
+        <div className="flex flex-col items-center gap-1 pt-0.5">
+          <span className="bg-brand-soft text-brand-strong ring-brand-line flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold ring-1">
             {index + 1}
           </span>
           <button
@@ -49,20 +60,52 @@ export function StepEdit({ loc, step, index, count, d }: StepEditProps) {
               placeholder={`Step ${index + 1}…`}
               className={INPUT}
             />
-            <input
-              value={step.image ?? ''}
-              onChange={(e) => d.updateStep(loc, step.id, { image: e.target.value })}
-              placeholder="Image file name…"
-              className={`${INPUT} max-w-[200px]`}
-            />
             <button
               type="button"
               onClick={() => d.removeStep(loc, step.id)}
               aria-label="Delete step"
-              className="shrink-0 text-slate-400 hover:text-rose-600"
+              className={`${DELETE_BTN} p-1`}
             >
               <TrashIcon className="h-4 w-4" />
             </button>
+          </div>
+
+          {/* Image: browse the linked folder, or type / autocomplete a filename. */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void browse()}
+              aria-label="Choose an image from the linked folder"
+              title="Choose an image from the linked folder"
+              className={GHOST_BTN}
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+              {image ? 'Change image' : 'Choose image'}
+            </button>
+            <input
+              value={image}
+              onChange={(e) => d.updateStep(loc, step.id, { image: e.target.value })}
+              placeholder="No image — or type a filename…"
+              list={imageNames.length > 0 ? listId : undefined}
+              className={`${INPUT} max-w-[280px]`}
+            />
+            {imageNames.length > 0 && (
+              <datalist id={listId}>
+                {imageNames.map((name) => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            )}
+            {image && (
+              <button
+                type="button"
+                onClick={() => d.updateStep(loc, step.id, { image: '' })}
+                aria-label="Remove image"
+                className={`${DELETE_BTN} p-1`}
+              >
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           {step.subItems.length > 0 && (

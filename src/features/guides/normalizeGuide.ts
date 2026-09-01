@@ -5,6 +5,7 @@ import type {
   GuideSection,
   GuideStep,
   GuidesFile,
+  SectionBlock,
   StepSubItem,
   SubItemKind,
   TablePart,
@@ -72,6 +73,15 @@ function normalizeStep(raw: unknown): GuideStep {
   }
 }
 
+/** Tables / callouts / terms nested inside a chapter or section. */
+function normalizeBlocks(raw: unknown): SectionBlock[] {
+  return asArr(raw)
+    .map(normalizePart)
+    .filter((p): p is SectionBlock =>
+      p !== null && (p.type === 'table' || p.type === 'callout' || p.type === 'term'),
+    )
+}
+
 function normalizeSection(raw: unknown): GuideSection {
   const o = asObj(raw)
   return {
@@ -79,6 +89,7 @@ function normalizeSection(raw: unknown): GuideSection {
     heading: asStr(o.heading),
     body: asStr(o.body),
     steps: asArr(o.steps).map(normalizeStep),
+    blocks: normalizeBlocks(o.blocks),
   }
 }
 
@@ -104,6 +115,7 @@ function normalizePart(raw: unknown): GuidePart | null {
         id: withId(o.id),
         subtitle: asStr(o.subtitle),
         sections: asArr(o.sections).map(normalizeSection),
+        blocks: normalizeBlocks(o.blocks),
       }
     case 'section':
       return {
@@ -112,6 +124,7 @@ function normalizePart(raw: unknown): GuidePart | null {
         heading: asStr(o.heading),
         body: asStr(o.body),
         steps: asArr(o.steps).map(normalizeStep),
+        blocks: normalizeBlocks(o.blocks),
       }
     case 'table':
       return normalizeTable(o)

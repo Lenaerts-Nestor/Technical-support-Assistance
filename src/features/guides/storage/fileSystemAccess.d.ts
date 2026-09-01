@@ -23,22 +23,43 @@ declare global {
     ): Promise<PermissionState>
   }
 
+  interface FileSystemDirectoryHandle {
+    /** Union-typed so `kind` narrows to the file / directory handle. */
+    entries(): AsyncIterableIterator<
+      [string, FileSystemFileHandle | FileSystemDirectoryHandle]
+    >
+    /** Path segments from this directory down to `handle`, or null if outside it. */
+    resolve(handle: FileSystemHandle): Promise<string[] | null>
+  }
+
+  type WellKnownDirectory =
+    | 'desktop'
+    | 'documents'
+    | 'downloads'
+    | 'music'
+    | 'pictures'
+    | 'videos'
+
   interface DirectoryPickerOptions {
     id?: string
     mode?: FileSystemPermissionMode
-    startIn?:
-      | FileSystemHandle
-      | 'desktop'
-      | 'documents'
-      | 'downloads'
-      | 'music'
-      | 'pictures'
-      | 'videos'
+    startIn?: FileSystemHandle | WellKnownDirectory
+  }
+
+  interface OpenFilePickerOptions {
+    id?: string
+    multiple?: boolean
+    excludeAcceptAllOption?: boolean
+    startIn?: FileSystemHandle | WellKnownDirectory
+    types?: { description?: string; accept: Record<string, string[]> }[]
   }
 
   interface Window {
     showDirectoryPicker(
       options?: DirectoryPickerOptions,
     ): Promise<FileSystemDirectoryHandle>
+    showOpenFilePicker(
+      options?: OpenFilePickerOptions,
+    ): Promise<FileSystemFileHandle[]>
   }
 }

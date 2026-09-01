@@ -1,28 +1,37 @@
+import { CARD } from '../../../shared/ui/styles'
 import type { TablePart } from '../types'
 
-/** A reference table: tinted header row, horizontal scroll on overflow. */
-export function TableView({ part }: { part: TablePart }) {
-  const { headers, rows } = part.table
+type TableViewProps = {
+  part: TablePart
+  /** Nested inside a chapter/section card — drops a level of border weight. */
+  nested?: boolean
+}
 
+/** A reference table: tinted header row, horizontal scroll on overflow. */
+export function TableView({ part, nested = false }: TableViewProps) {
   return (
     <section
-      id={part.id}
-      className="scroll-mt-24 overflow-hidden rounded-xl border border-slate-200 bg-white"
+      id={nested ? undefined : part.id}
+      className={
+        nested
+          ? 'border-line bg-canvas overflow-hidden rounded-lg border'
+          : `${CARD} scroll-mt-20 overflow-hidden`
+      }
     >
-      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-2.5">
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+      <div className="border-line-soft bg-subtle flex items-center gap-2 border-b px-4 py-2.5">
+        <span className="rounded-md bg-teal-400/15 px-1.5 py-0.5 text-[10px] font-bold tracking-[0.06em] text-teal-200 uppercase ring-1 ring-teal-400/30">
           TBL
         </span>
-        <span className="text-sm font-semibold text-slate-900">{part.title || 'Table'}</span>
+        <span className="text-ink text-sm font-semibold">{part.title || 'Table'}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              {headers.map((h, i) => (
+              {part.table.headers.map((h, i) => (
                 <th
                   key={i}
-                  className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700"
+                  className="border-line text-ink bg-subtle border-b px-3 py-2 text-left font-semibold tracking-[0.02em]"
                 >
                   {h}
                 </th>
@@ -30,12 +39,12 @@ export function TableView({ part }: { part: TablePart }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, r) => (
-              <tr key={r} className="even:bg-slate-50/50">
+            {part.table.rows.map((row, r) => (
+              <tr key={r} className="even:bg-subtle/50">
                 {row.map((cell, c) => (
                   <td
                     key={c}
-                    className="border-b border-slate-100 px-3 py-2 align-top text-slate-600"
+                    className="border-line-soft text-ink-muted border-b px-3 py-2 align-top"
                   >
                     <span className="whitespace-pre-line">{cell}</span>
                   </td>

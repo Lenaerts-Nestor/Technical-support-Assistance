@@ -4,7 +4,7 @@ import type { GuideLink } from '../types'
 /** External reference links, rendered as clickable cards. Shared shape with the editor. */
 export function QuickLinks({ links }: { links: GuideLink[] }) {
   if (links.length === 0) {
-    return <p className="text-xs text-slate-400">No quick links on this guide.</p>
+    return <p className="text-ink-faint text-xs">No quick links on this guide.</p>
   }
 
   return (
@@ -15,15 +15,15 @@ export function QuickLinks({ links }: { links: GuideLink[] }) {
             href={link.url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-start gap-1.5 rounded-lg border border-slate-200 p-2.5 hover:border-slate-300 hover:bg-slate-50"
+            className="border-line hover:border-brand-line hover:bg-brand-soft group flex items-start gap-2 rounded-lg border p-2.5 transition-colors"
           >
-            <ExternalLinkIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+            <ExternalLinkIcon className="group-hover:text-brand text-ink-faint mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span className="min-w-0">
-              <span className="block truncate text-xs font-semibold text-slate-700">
+              <span className="group-hover:text-brand-strong text-ink block truncate text-xs font-semibold">
                 {link.title || link.url}
               </span>
               {link.description && (
-                <span className="mt-0.5 block text-[11px] leading-snug text-slate-500">
+                <span className="text-ink-muted mt-0.5 block text-[11px] leading-snug">
                   {link.description}
                 </span>
               )}

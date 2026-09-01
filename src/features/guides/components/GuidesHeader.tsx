@@ -1,4 +1,5 @@
 import { PlusIcon } from './icons'
+import { PAGE_SUBTITLE, PAGE_TITLE, PRIMARY_BTN } from '../../../shared/ui/styles'
 
 type GuidesHeaderProps = {
   onNewGuide: () => void
@@ -7,18 +8,12 @@ type GuidesHeaderProps = {
 /** Page title + the New Guide action. */
 export function GuidesHeader({ onNewGuide }: GuidesHeaderProps) {
   return (
-    <header className="flex items-start justify-between">
+    <header className="flex items-start justify-between gap-4">
       <div>
-        <h2 className="text-xl font-semibold text-slate-900">Guides</h2>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Step-by-step reference guides
-        </p>
+        <h2 className={PAGE_TITLE}>Guides</h2>
+        <p className={PAGE_SUBTITLE}>Step-by-step reference guides</p>
       </div>
-      <button
-        type="button"
-        onClick={onNewGuide}
-        className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-      >
+      <button type="button" onClick={onNewGuide} className={PRIMARY_BTN}>
         <PlusIcon className="h-4 w-4" />
         New Guide
       </button>

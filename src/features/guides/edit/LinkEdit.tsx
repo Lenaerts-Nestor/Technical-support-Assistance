@@ -1,5 +1,5 @@
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from '../components/icons'
-import { ICON_BTN, INPUT } from './fieldStyles'
+import { DELETE_BTN, ICON_BTN, INPUT, PANEL } from '../../../shared/ui/styles'
 import type { GuideLink } from '../types'
 
 type LinkEditProps = {
@@ -13,8 +13,11 @@ type LinkEditProps = {
 
 export function LinkEdit({ link, index, count, onChange, onMove, onRemove }: LinkEditProps) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-      <div className="mb-1.5 flex items-center gap-1">
+    <div className={`${PANEL} p-2.5`}>
+      <div className="mb-2 flex items-center gap-1">
+        <span className="text-ink-faint text-[11px] font-semibold tracking-[0.06em] uppercase">
+          Link {index + 1}
+        </span>
         <span className="flex-1" />
         <button
           type="button"
@@ -38,7 +41,7 @@ export function LinkEdit({ link, index, count, onChange, onMove, onRemove }: Lin
           type="button"
           onClick={onRemove}
           aria-label="Delete link"
-          className="text-slate-400 hover:text-rose-600"
+          className={`${DELETE_BTN} p-1`}
         >
           <TrashIcon className="h-4 w-4" />
         </button>

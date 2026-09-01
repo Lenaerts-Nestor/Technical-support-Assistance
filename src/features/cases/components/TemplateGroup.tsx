@@ -1,3 +1,5 @@
+import { GROUP_TONES } from '../casesData'
+import { SECTION_LABEL } from '../../../shared/ui/styles'
 import type { TemplateGroup as TemplateGroupModel } from '../types'
 
 type TemplateGroupProps = {
@@ -7,9 +9,12 @@ type TemplateGroupProps = {
 
 /** A labelled block of template buttons; clicking one inserts its copy. */
 export function TemplateGroup({ group, onInsert }: TemplateGroupProps) {
+  const tone = GROUP_TONES[group.id] ?? GROUP_TONES.default
+
   return (
     <div>
-      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <h4 className={`mb-2 flex items-center gap-1.5 ${SECTION_LABEL}`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} aria-hidden />
         {group.label}
       </h4>
       <div className="grid grid-cols-2 gap-1.5">
@@ -18,7 +23,7 @@ export function TemplateGroup({ group, onInsert }: TemplateGroupProps) {
             key={button.id}
             type="button"
             onClick={() => onInsert(button.id)}
-            className="rounded-md border border-slate-200 px-2.5 py-1.5 text-left text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
+            className={`border-line bg-canvas text-ink-muted rounded-md border px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${tone.hover}`}
           >
             {button.label}
           </button>

@@ -9,6 +9,33 @@ export const LANGUAGES: { id: CaseLanguage; label: string }[] = [
   { id: 'es', label: 'ES' },
 ]
 
+/**
+ * One accent per template group so the Utilities panel can be scanned by colour
+ * rather than by reading every label. Keyed by `TemplateGroup.id`.
+ */
+export const GROUP_TONES: Record<string, { dot: string; hover: string }> = {
+  opening: {
+    dot: 'bg-blue-400',
+    hover: 'hover:border-blue-400/60 hover:bg-blue-400/12 hover:text-blue-100',
+  },
+  diagnostics: {
+    dot: 'bg-violet-400',
+    hover: 'hover:border-violet-400/60 hover:bg-violet-400/12 hover:text-violet-100',
+  },
+  rma: {
+    dot: 'bg-amber-400',
+    hover: 'hover:border-amber-400/60 hover:bg-amber-400/12 hover:text-amber-100',
+  },
+  followUp: {
+    dot: 'bg-emerald-400',
+    hover: 'hover:border-emerald-400/60 hover:bg-emerald-400/12 hover:text-emerald-100',
+  },
+  default: {
+    dot: 'bg-ink-faint',
+    hover: 'hover:border-line-strong hover:bg-subtle hover:text-ink',
+  },
+}
+
 /** Template buttons shown in the Utilities panel, grouped and in display order. */
 export const TEMPLATE_GROUPS: TemplateGroup[] = [
   {

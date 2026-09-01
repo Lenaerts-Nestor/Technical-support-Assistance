@@ -7,6 +7,7 @@ import {
 } from './storage/handleStore'
 import {
   isFolderSyncSupported,
+  listImageFiles,
   readGuidesJson,
   readImageFile,
   verifyPermission,
@@ -93,6 +94,8 @@ export function useGuidesFolder({
   const [imageUrls, setImageUrls] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   )
+  /** Image filenames present in the linked folder, for the step image picker. */
+  const [imageNames, setImageNames] = useState<readonly string[]>([])
 
   const handleRef = useRef<FileSystemDirectoryHandle | null>(null)
   const linkedRef = useRef(false)
@@ -115,6 +118,7 @@ export function useGuidesFolder({
     objectUrlsRef.current.clear()
     requestedImagesRef.current.clear()
     setImageUrls(new Map())
+    setImageNames([])
   }, [])
 
   /** Read the folder's guides into state, or seed the file if it's not there yet. */
@@ -134,7 +138,13 @@ export function useGuidesFolder({
         onAdoptRef.current(parsed)
       } else {
         const seed = guidesRef.current
-        await writeGuidesJson(handle, JSON.stringify(toGuidesFile(seed), null, 2))
+        try {
+          await writeGuidesJson(handle, JSON.stringify(toGuidesFile(seed), null, 2))
+        } catch {
+          setError('Could not create guides.json in that folder.')
+          setStatus('error')
+          return
+        }
         syncedSnapshotRef.current = JSON.stringify(seed)
       }
       linkedRef.current = true
@@ -142,6 +152,7 @@ export function useGuidesFolder({
       setError(null)
       setStatus('ready')
       setSyncEpoch((n) => n + 1)
+      setImageNames(await listImageFiles(handle))
     },
     [],
   )
@@ -171,18 +182,28 @@ export function useGuidesFolder({
     if (!isFolderSyncSupported()) return
     let cancelled = false
     void (async () => {
-      const handle = await loadFolderHandle()
-      if (cancelled) return
-      if (!handle) {
-        setStatus('idle')
-        return
-      }
-      handleRef.current = handle
-      setFolderName(handle.name)
-      if (await verifyPermission(handle, false)) {
-        if (!cancelled) await adoptFromFolder(handle)
-      } else if (!cancelled) {
-        setStatus('reconnect')
+      try {
+        const handle = await loadFolderHandle()
+        if (cancelled) return
+        if (!handle) {
+          setStatus('idle')
+          return
+        }
+        handleRef.current = handle
+        setFolderName(handle.name)
+        if (await verifyPermission(handle, false)) {
+          if (!cancelled) await adoptFromFolder(handle)
+        } else if (!cancelled) {
+          setStatus('reconnect')
+        }
+      } catch {
+        // Anything unexpected on startup (a stale handle, a failed seed write)
+        // must still land on a state the Sync panel offers a way out of —
+        // otherwise it sits on "Checking for a linked folder…" indefinitely.
+        if (!cancelled) {
+          setError('Could not open the remembered folder — reconnect to retry.')
+          setStatus(handleRef.current ? 'reconnect' : 'idle')
+        }
       }
     })()
     return () => {
@@ -249,9 +270,14 @@ export function useGuidesFolder({
     }
     releaseImages()
     handleRef.current = handle
-    await saveFolderHandle(handle)
+    await saveFolderHandle(handle).catch(() => {})
     setFolderName(handle.name)
-    await adoptFromFolder(handle)
+    try {
+      await adoptFromFolder(handle)
+    } catch {
+      setError('Could not read that folder.')
+      setStatus('error')
+    }
   }, [adoptFromFolder, releaseImages])
 
   const reconnect = useCallback(async () => {
@@ -259,9 +285,15 @@ export function useGuidesFolder({
     if (!handle) return
     if (!(await verifyPermission(handle, true))) {
       setError('Permission was not granted.')
+      setStatus('reconnect')
       return
     }
-    await adoptFromFolder(handle)
+    try {
+      await adoptFromFolder(handle)
+    } catch {
+      setError('Could not read that folder — link it again.')
+      setStatus('error')
+    }
   }, [adoptFromFolder])
 
   const unlink = useCallback(async () => {
@@ -286,7 +318,45 @@ export function useGuidesFolder({
     (name: string) => imageUrls.get(name),
     [imageUrls],
   )
-  const assets = useMemo<GuideAssets>(() => ({ resolveImage }), [resolveImage])
+
+  /**
+   * Open the OS file picker inside the linked folder and hand back the chosen
+   * file's name, relative to that folder where we can work it out. Resolves to
+   * `null` if the user cancels or no folder is linked.
+   */
+  const pickImage = useCallback(async (): Promise<string | null> => {
+    const dir = handleRef.current
+    if (!dir || typeof window.showOpenFilePicker !== 'function') return null
+    let file: FileSystemFileHandle
+    try {
+      ;[file] = await window.showOpenFilePicker({
+        id: 'support-hub-guide-image',
+        startIn: dir,
+        multiple: false,
+        types: [
+          {
+            description: 'Images',
+            accept: {
+              'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif'],
+            },
+          },
+        ],
+      })
+    } catch {
+      return null // cancelled
+    }
+    // `resolve` gives the path segments from the folder to the file, so a file
+    // in a sub-folder comes back as "screens/step-1.png" rather than a bare name.
+    const segments = await dir.resolve(file).catch(() => null)
+    const name = segments && segments.length > 0 ? segments.join('/') : file.name
+    setImageNames((prev) => (prev.includes(name) ? prev : [...prev, name].sort()))
+    return name
+  }, [])
+
+  const assets = useMemo<GuideAssets>(
+    () => ({ resolveImage, imageNames, pickImage }),
+    [imageNames, pickImage, resolveImage],
+  )
 
   return {
     supported: status !== 'unsupported',

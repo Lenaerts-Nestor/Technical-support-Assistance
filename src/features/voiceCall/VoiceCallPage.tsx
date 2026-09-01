@@ -8,7 +8,7 @@ export function VoiceCallPage() {
   const vc = useVoiceCall()
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6">
+    <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
       <CallHeader justCopied={vc.justCopied} onCopy={vc.copyNotes} />
 
       <ProductsCard

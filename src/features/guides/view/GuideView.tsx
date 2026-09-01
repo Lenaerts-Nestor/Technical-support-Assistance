@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { formatCardDate } from '../guidesData'
 import { ChevronLeftIcon } from '../components/icons'
+import { DANGER_BTN, EMPTY, GHOST_BTN_MD } from '../../../shared/ui/styles'
 import { GuideMasonry } from './GuideMasonry'
 import { GuidePartView } from './GuidePartView'
 import { GuideRail, type TocEntry } from './GuideRail'
@@ -82,43 +83,33 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
   }, [body, collapsed, toggleChapter])
 
   return (
-    <div className="mx-auto max-w-[1600px]">
-      <header className="sticky top-0 z-10 -mx-8 mb-6 flex items-center gap-3 border-b border-slate-200 bg-white/90 px-8 py-3 backdrop-blur">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-        >
+    <div>
+      {/* Flush to the scrollport top and one row tall, so nothing shows above it
+          while scrolling and it steals as little height as possible. */}
+      <header className="border-line-strong bg-canvas sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-8">
+        <button type="button" onClick={onBack} className={GHOST_BTN_MD}>
           <ChevronLeftIcon className="h-4 w-4" />
           Back
         </button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-semibold text-slate-900">
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <h2 className="text-ink truncate text-base font-semibold tracking-tight">
             {guide.title || 'Untitled Guide'}
           </h2>
-          <p className="text-xs text-slate-400">
-            {guide.category && (
-              <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-500">
-                {guide.category}
-              </span>
-            )}
+          {guide.category && (
+            <span className="border-brand-line bg-brand-soft text-brand-strong shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold">
+              {guide.category}
+            </span>
+          )}
+          <span className="text-ink-faint shrink-0 text-xs">
             updated {formatCardDate(guide.updatedAt)}
-          </p>
+          </span>
         </div>
         {chapterIds.length > 0 && (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="rounded-md border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-          >
+          <button type="button" onClick={toggleAll} className={GHOST_BTN_MD}>
             {allCollapsed ? 'Expand all' : 'Collapse all'}
           </button>
         )}
-        <button
-          type="button"
-          onClick={onEdit}
-          className="rounded-md border border-slate-200 px-2.5 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
-        >
+        <button type="button" onClick={onEdit} className={GHOST_BTN_MD}>
           Edit
         </button>
         <button
@@ -126,13 +117,13 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
           onClick={() => {
             if (window.confirm(`Delete "${guide.title || 'this guide'}"?`)) onDelete()
           }}
-          className="rounded-md border border-rose-200 px-2.5 py-1 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50"
+          className={DANGER_BTN}
         >
           Delete
         </button>
       </header>
 
-      <div className="grid grid-cols-[1fr_300px] items-start gap-6">
+      <div className="mx-auto grid max-w-[1600px] grid-cols-[1fr_300px] items-start gap-6 px-8 pt-6 pb-8">
         <div className="min-w-0 space-y-4">
           {lead.map((part) => (
             <GuidePartView key={part.id} part={part} />
@@ -141,7 +132,7 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
           {items.length > 0 ? (
             <GuideMasonry items={items} />
           ) : lead.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm text-slate-400">
+            <p className={EMPTY}>
               This guide has no steps yet — just reference links.
             </p>
           ) : null}

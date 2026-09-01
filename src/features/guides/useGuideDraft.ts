@@ -1,5 +1,12 @@
 import { useCallback, useState } from 'react'
-import { blankLink, blankPart, blankSection, blankStep, blankSubItem } from './guidesData'
+import {
+  blankBlock,
+  blankLink,
+  blankPart,
+  blankSection,
+  blankStep,
+  blankSubItem,
+} from './guidesData'
 import type {
   CalloutVariant,
   Guide,
@@ -7,12 +14,32 @@ import type {
   GuidePart,
   GuidePartKind,
   GuideStep,
+  SectionBlock,
+  SectionBlockKind,
   StepSubItem,
   SubItemKind,
 } from './types'
 
-/** Where a step lives: a standalone `section` part, or a section inside a chapter. */
-export type StepLoc = { partId: string; sectionId?: string }
+/**
+ * Where a step or a nested block lives: a standalone `section` part, a chapter
+ * (no `sectionId`), or one section inside a chapter.
+ */
+export type NodeLoc = { partId: string; sectionId?: string }
+
+/** Historical name for the same address, kept for the step editors. */
+export type StepLoc = NodeLoc
+
+/**
+ * Address of a table / callout / term. The same three editors serve both
+ * top-level parts and blocks nested inside a chapter or section, so every field
+ * setter takes one of these instead of a bare part id.
+ */
+export type BlockRef =
+  | { scope: 'part'; partId: string }
+  | { scope: 'nested'; loc: NodeLoc; blockId: string }
+
+const isBlock = (p: GuidePart): p is SectionBlock =>
+  p.type === 'table' || p.type === 'callout' || p.type === 'term'
 
 function moveById<T extends { id: string }>(arr: T[], id: string, dir: -1 | 1): T[] {
   const idx = arr.findIndex((x) => x.id === id)
@@ -44,24 +71,9 @@ export function useGuideDraft(
     [],
   )
 
-  /* ---- title + tags ---------------------------------------------------- */
+  /* ---- title ----------------------------------------------------------- */
 
   const setTitle = useCallback((title: string) => patch({ title }), [patch])
-
-  const addTag = useCallback((raw: string) => {
-    const tag = raw.trim()
-    if (!tag) return
-    setDraft((d) => {
-      const tags = d.tags ?? []
-      return tags.includes(tag) ? d : { ...d, tags: [...tags, tag] }
-    })
-  }, [])
-
-  const removeTag = useCallback(
-    (tag: string) =>
-      setDraft((d) => ({ ...d, tags: (d.tags ?? []).filter((t) => t !== tag) })),
-    [],
-  )
 
   /* ---- parts --------------------------------------------------------- */
 
@@ -223,83 +235,139 @@ export function useGuideDraft(
     [updateSubItems],
   )
 
+  /* ---- nested blocks (tables / callouts / terms in a chapter or section) -- */
+
+  const updateBlocks = useCallback(
+    (loc: NodeLoc, fn: (blocks: SectionBlock[]) => SectionBlock[]) =>
+      updatePart(loc.partId, (p) => {
+        if (loc.sectionId) {
+          if (p.type !== 'chapter') return p
+          return {
+            ...p,
+            sections: p.sections.map((s) =>
+              s.id === loc.sectionId ? { ...s, blocks: fn(s.blocks ?? []) } : s,
+            ),
+          }
+        }
+        if (p.type === 'chapter' || p.type === 'section') {
+          return { ...p, blocks: fn(p.blocks ?? []) }
+        }
+        return p
+      }),
+    [updatePart],
+  )
+
+  const addBlock = useCallback(
+    (loc: NodeLoc, kind: SectionBlockKind) =>
+      updateBlocks(loc, (blocks) => [...blocks, blankBlock(kind)]),
+    [updateBlocks],
+  )
+  const removeBlock = useCallback(
+    (loc: NodeLoc, blockId: string) =>
+      updateBlocks(loc, (blocks) => blocks.filter((b) => b.id !== blockId)),
+    [updateBlocks],
+  )
+  const moveBlock = useCallback(
+    (loc: NodeLoc, blockId: string, dir: -1 | 1) =>
+      updateBlocks(loc, (blocks) => moveById(blocks, blockId, dir)),
+    [updateBlocks],
+  )
+
+  /**
+   * Apply `fn` to the table / callout / term at `ref`, wherever it lives. Every
+   * field setter below goes through here so nested and top-level blocks share
+   * one code path.
+   */
+  const updateBlockNode = useCallback(
+    (ref: BlockRef, fn: (b: SectionBlock) => SectionBlock) => {
+      if (ref.scope === 'part') {
+        updatePart(ref.partId, (p) => (isBlock(p) ? fn(p) : p))
+        return
+      }
+      updateBlocks(ref.loc, (blocks) =>
+        blocks.map((b) => (b.id === ref.blockId ? fn(b) : b)),
+      )
+    },
+    [updateBlocks, updatePart],
+  )
+
   /* ---- table -------------------------------------------------- */
 
   const setTableTitle = useCallback(
-    (partId: string, title: string) =>
-      updatePart(partId, (p) => (p.type === 'table' ? { ...p, title } : p)),
-    [updatePart],
+    (ref: BlockRef, title: string) =>
+      updateBlockNode(ref, (b) => (b.type === 'table' ? { ...b, title } : b)),
+    [updateBlockNode],
   )
   const setTableCols = useCallback(
-    (partId: string, n: number) =>
-      updatePart(partId, (p) => {
-        if (p.type !== 'table') return p
+    (ref: BlockRef, n: number) =>
+      updateBlockNode(ref, (b) => {
+        if (b.type !== 'table') return b
         const count = Math.max(1, n)
         const headers = Array.from(
           { length: count },
-          (_, i) => p.table.headers[i] ?? `Column ${i + 1}`,
+          (_, i) => b.table.headers[i] ?? `Column ${i + 1}`,
         )
-        const rows = p.table.rows.map((r) =>
+        const rows = b.table.rows.map((r) =>
           Array.from({ length: count }, (_, i) => r[i] ?? ''),
         )
-        return { ...p, table: { headers, rows } }
+        return { ...b, table: { headers, rows } }
       }),
-    [updatePart],
+    [updateBlockNode],
   )
   const setTableRows = useCallback(
-    (partId: string, n: number) =>
-      updatePart(partId, (p) => {
-        if (p.type !== 'table') return p
+    (ref: BlockRef, n: number) =>
+      updateBlockNode(ref, (b) => {
+        if (b.type !== 'table') return b
         const count = Math.max(0, n)
-        const width = p.table.headers.length
+        const width = b.table.headers.length
         const rows = Array.from(
           { length: count },
-          (_, i) => p.table.rows[i] ?? Array.from({ length: width }, () => ''),
+          (_, i) => b.table.rows[i] ?? Array.from({ length: width }, () => ''),
         )
-        return { ...p, table: { ...p.table, rows } }
+        return { ...b, table: { ...b.table, rows } }
       }),
-    [updatePart],
+    [updateBlockNode],
   )
   const setTableHeader = useCallback(
-    (partId: string, col: number, value: string) =>
-      updatePart(partId, (p) => {
-        if (p.type !== 'table') return p
-        const headers = p.table.headers.map((h, i) => (i === col ? value : h))
-        return { ...p, table: { ...p.table, headers } }
+    (ref: BlockRef, col: number, value: string) =>
+      updateBlockNode(ref, (b) => {
+        if (b.type !== 'table') return b
+        const headers = b.table.headers.map((h, i) => (i === col ? value : h))
+        return { ...b, table: { ...b.table, headers } }
       }),
-    [updatePart],
+    [updateBlockNode],
   )
   const setTableCell = useCallback(
-    (partId: string, row: number, col: number, value: string) =>
-      updatePart(partId, (p) => {
-        if (p.type !== 'table') return p
-        const rows = p.table.rows.map((r, ri) =>
+    (ref: BlockRef, row: number, col: number, value: string) =>
+      updateBlockNode(ref, (b) => {
+        if (b.type !== 'table') return b
+        const rows = b.table.rows.map((r, ri) =>
           ri === row ? r.map((c, ci) => (ci === col ? value : c)) : r,
         )
-        return { ...p, table: { ...p.table, rows } }
+        return { ...b, table: { ...b.table, rows } }
       }),
-    [updatePart],
+    [updateBlockNode],
   )
 
   /* ---- callout -------------------------------------------- */
 
   const updateCallout = useCallback(
-    (partId: string, fields: { variant?: CalloutVariant; text?: string }) =>
-      updatePart(partId, (p) => (p.type === 'callout' ? { ...p, ...fields } : p)),
-    [updatePart],
+    (ref: BlockRef, fields: { variant?: CalloutVariant; text?: string }) =>
+      updateBlockNode(ref, (b) => (b.type === 'callout' ? { ...b, ...fields } : b)),
+    [updateBlockNode],
   )
 
   /* ---- term ---------------------------------------------- */
 
   const updateTerm = useCallback(
-    (partId: string, fields: { title?: string; explanation?: string }) =>
-      updatePart(partId, (p) => (p.type === 'term' ? { ...p, ...fields } : p)),
-    [updatePart],
+    (ref: BlockRef, fields: { title?: string; explanation?: string }) =>
+      updateBlockNode(ref, (b) => (b.type === 'term' ? { ...b, ...fields } : b)),
+    [updateBlockNode],
   )
   const setTermBullets = useCallback(
-    (partId: string, bullets: string[]) =>
-      updatePart(partId, (p) => (p.type === 'term' ? { ...p, bullets } : p)),
-    [updatePart],
+    (ref: BlockRef, bullets: string[]) =>
+      updateBlockNode(ref, (b) => (b.type === 'term' ? { ...b, bullets } : b)),
+    [updateBlockNode],
   )
 
   /* ---- links ------------------------------------------- */
@@ -335,8 +403,6 @@ export function useGuideDraft(
   return {
     draft,
     setTitle,
-    addTag,
-    removeTag,
     addPart,
     removePart,
     movePart,
@@ -354,6 +420,9 @@ export function useGuideDraft(
     updateSubItem,
     removeSubItem,
     moveSubItem,
+    addBlock,
+    removeBlock,
+    moveBlock,
     setTableTitle,
     setTableCols,
     setTableRows,

@@ -23,6 +23,8 @@ export type GuideSection = {
   heading: string
   body: string
   steps: GuideStep[]
+  /** Tables / callouts / terms belonging to this section, rendered under its steps. */
+  blocks?: SectionBlock[]
 }
 
 export type ChapterPart = {
@@ -30,6 +32,8 @@ export type ChapterPart = {
   id: string
   subtitle: string
   sections: GuideSection[]
+  /** Chapter-level blocks, rendered under all of its sections. */
+  blocks?: SectionBlock[]
 }
 
 export type SectionPart = {
@@ -38,6 +42,7 @@ export type SectionPart = {
   heading: string
   body: string
   steps: GuideStep[]
+  blocks?: SectionBlock[]
 }
 
 export type TablePart = {
@@ -73,6 +78,14 @@ export type GuidePart =
   | TermPart
 
 export type GuidePartKind = GuidePart['type']
+
+/**
+ * The part types that can also nest inside a chapter or a section. Chapters and
+ * sections themselves cannot nest — the hierarchy stays two levels deep.
+ */
+export type SectionBlock = TablePart | CalloutPart | TermPart
+
+export type SectionBlockKind = SectionBlock['type']
 
 export type GuideLink = {
   id: string

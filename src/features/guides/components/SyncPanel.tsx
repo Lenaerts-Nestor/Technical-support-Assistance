@@ -1,6 +1,13 @@
 import { useRef } from 'react'
 import type { GuidesFolderController } from '../useGuidesFolder'
 import {
+  CARD,
+  CARD_HEADER,
+  GHOST_BTN,
+  INSET,
+  SECTION_LABEL,
+} from '../../../shared/ui/styles'
+import {
   AppendIcon,
   DownloadIcon,
   FolderIcon,
@@ -19,8 +26,8 @@ type SyncPanelProps = {
 const clockTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-const GHOST_BTN =
-  'inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50'
+const TILE_BTN =
+  'border-line bg-canvas text-ink-muted hover:border-brand-line hover:bg-brand-soft hover:text-brand-strong flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-[11px] font-medium transition-colors'
 
 /**
  * Right-hand Sync box: link an on-disk folder for automatic `guides.json`
@@ -45,83 +52,122 @@ export function SyncPanel({
   const combinedError = folder.error ?? error
 
   return (
-    <aside className="sticky top-0 flex h-fit flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-slate-900">Sync</h3>
+    <aside className={`${CARD} sticky top-0 flex h-fit flex-col`}>
+      <div className={CARD_HEADER}>
+        <h3 className="text-ink text-sm font-semibold">Sync</h3>
+      </div>
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          <FolderIcon className="h-3.5 w-3.5" />
-          {folder.folderName ?? 'Folder'}
+      <div className="flex flex-col gap-4 p-4">
+        <div className={`${INSET} p-3`}>
+          <div className={`flex items-center gap-1.5 ${SECTION_LABEL}`}>
+            <FolderIcon className="h-3.5 w-3.5" />
+            {folder.folderName ?? 'Folder'}
+          </div>
+
+          <FolderBody folder={folder} />
         </div>
 
-        <FolderBody folder={folder} />
+        <div className="grid grid-cols-3 gap-2">
+          <button type="button" onClick={onExport} className={TILE_BTN}>
+            <DownloadIcon className="h-4 w-4" />
+            Export
+          </button>
+          <button type="button" onClick={onTemplate} className={TILE_BTN}>
+            <TemplateIcon className="h-4 w-4" />
+            Template
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className={TILE_BTN}
+          >
+            <AppendIcon className="h-4 w-4" />
+            Append
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            onChange={handleFile}
+            className="hidden"
+          />
+        </div>
+
+        <p className="text-ink-faint text-xs leading-relaxed">
+          Append replaces the current list with a guides JSON. With a folder
+          linked, every change is written back to <code>guides.json</code>{' '}
+          automatically.
+        </p>
+
+        {combinedError && (
+          <p className="rounded-lg border border-rose-400/40 bg-rose-400/10 px-2.5 py-2 text-xs text-rose-200">
+            {combinedError}
+          </p>
+        )}
       </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          onClick={onExport}
-          className="flex flex-col items-center gap-1 rounded-md border border-slate-200 px-2 py-2 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
-        >
-          <DownloadIcon className="h-4 w-4" />
-          Export
-        </button>
-        <button
-          type="button"
-          onClick={onTemplate}
-          className="flex flex-col items-center gap-1 rounded-md border border-slate-200 px-2 py-2 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
-        >
-          <TemplateIcon className="h-4 w-4" />
-          Template
-        </button>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="flex flex-col items-center gap-1 rounded-md border border-slate-200 px-2 py-2 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50"
-        >
-          <AppendIcon className="h-4 w-4" />
-          Append
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".json,application/json"
-          onChange={handleFile}
-          className="hidden"
-        />
-      </div>
-
-      <p className="text-xs text-slate-400">
-        Append replaces the current list with a guides JSON. With a folder linked,
-        every change is written back to <code>guides.json</code> automatically.
-      </p>
-
-      {combinedError && <p className="text-xs text-rose-600">{combinedError}</p>}
     </aside>
+  )
+}
+
+/** Colour + copy for each folder-sync state. */
+const STATUS_TONE = {
+  ok: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200',
+  busy: 'border-line bg-subtle text-ink-muted',
+  error: 'border-rose-400/40 bg-rose-400/10 text-rose-200',
+} as const
+
+function StatusPill({
+  tone,
+  children,
+}: {
+  tone: keyof typeof STATUS_TONE
+  children: React.ReactNode
+}) {
+  return (
+    <span
+      className={`mt-2 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold ${STATUS_TONE[tone]}`}
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+      {children}
+    </span>
   )
 }
 
 function FolderBody({ folder }: { folder: GuidesFolderController }) {
   if (folder.status === 'unsupported') {
     return (
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="text-ink-muted mt-1.5 text-xs leading-relaxed">
         Folder sync needs Chrome or Edge on desktop. Use Export / Append below.
       </p>
     )
   }
 
   if (folder.status === 'checking') {
-    return <p className="mt-1 text-xs text-slate-500">Checking for a linked folder…</p>
+    return (
+      <>
+        <StatusPill tone="busy">Checking…</StatusPill>
+        {/* A stuck check used to leave this panel with no way forward; the retry
+            is always offered so the folder can be re-picked regardless. */}
+        <button
+          type="button"
+          onClick={() => void folder.link()}
+          className={`${GHOST_BTN} mt-2 w-full`}
+        >
+          <FolderIcon className="h-3.5 w-3.5" />
+          Pick folder again
+        </button>
+      </>
+    )
   }
 
   if (folder.status === 'idle') {
     return (
       <>
-        <p className="mt-1 text-xs text-slate-500">No folder linked.</p>
+        <p className="text-ink-muted mt-1.5 text-xs">No folder linked.</p>
         <button
           type="button"
           onClick={() => void folder.link()}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-800"
+          className="bg-brand hover:bg-brand-strong text-on-brand mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors"
         >
           <FolderIcon className="h-3.5 w-3.5" />
           Link folder
@@ -133,11 +179,11 @@ function FolderBody({ folder }: { folder: GuidesFolderController }) {
   if (folder.status === 'reconnect') {
     return (
       <>
-        <p className="mt-1 text-xs text-slate-500">Permission needed to sync.</p>
+        <p className="text-ink-muted mt-1.5 text-xs">Permission needed to sync.</p>
         <button
           type="button"
           onClick={() => void folder.reconnect()}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-amber-200 px-3 py-1.5 text-xs font-medium text-amber-900 transition-colors hover:bg-amber-300"
+          className="bg-brand hover:bg-brand-strong text-on-brand mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors"
         >
           <SyncIcon className="h-3.5 w-3.5" />
           Reconnect
@@ -146,22 +192,22 @@ function FolderBody({ folder }: { folder: GuidesFolderController }) {
     )
   }
 
-  const statusLine =
+  const status =
     folder.status === 'saving'
-      ? { text: 'Saving…', tone: 'text-slate-500' }
+      ? { text: 'Saving…', tone: 'busy' as const }
       : folder.status === 'error'
-        ? { text: 'Sync error', tone: 'text-rose-600' }
+        ? { text: 'Sync error', tone: 'error' as const }
         : {
             text: folder.lastSyncedAt
               ? `Synced ${clockTime(folder.lastSyncedAt)}`
               : 'Linked',
-            tone: 'text-emerald-600',
+            tone: 'ok' as const,
           }
 
   return (
     <>
-      <p className={`mt-1 text-xs font-medium ${statusLine.tone}`}>{statusLine.text}</p>
-      <div className="mt-2 grid grid-cols-3 gap-1.5">
+      <StatusPill tone={status.tone}>{status.text}</StatusPill>
+      <div className="mt-2.5 grid grid-cols-3 gap-1.5">
         <button type="button" onClick={() => void folder.saveNow()} className={GHOST_BTN}>
           Save now
         </button>

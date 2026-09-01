@@ -1,4 +1,5 @@
 import { GuideCard } from './GuideCard'
+import { COUNT_BADGE, SECTION_LABEL } from '../../../shared/ui/styles'
 import type { Guide } from '../types'
 
 type GuideGroupProps = {
@@ -21,11 +22,14 @@ export function GuideGroup({
 }: GuideGroupProps) {
   return (
     <section>
-      <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <div className="border-line mb-3 flex items-baseline justify-between border-b pb-2">
+        <h3 className={`flex items-center gap-2 ${SECTION_LABEL}`}>
           {title}
+          <span className={`${COUNT_BADGE} tracking-normal normal-case`}>
+            {guides.length}
+          </span>
         </h3>
-        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-300">
+        <span className="text-ink-faint text-[11px] font-medium tracking-[0.06em] uppercase">
           {sideLabel}
         </span>
       </div>

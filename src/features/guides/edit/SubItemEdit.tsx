@@ -1,5 +1,5 @@
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from '../components/icons'
-import { ICON_BTN, INPUT } from './fieldStyles'
+import { DELETE_BTN, ICON_BTN, INPUT, SELECT } from '../../../shared/ui/styles'
 import type { StepSubItem, SubItemKind } from '../types'
 
 type SubItemEditProps = {
@@ -24,7 +24,10 @@ export function SubItemEdit({
 
   return (
     <div className="flex items-center gap-1.5 pl-6">
-      <span aria-hidden className="text-slate-300">
+      <span
+        aria-hidden
+        className={isNote ? 'text-sky-400' : 'text-ink-faint'}
+      >
         {isNote ? '◎' : '•'}
       </span>
 
@@ -32,7 +35,7 @@ export function SubItemEdit({
         <select
           value={item.kind}
           onChange={(e) => onChange({ kind: e.target.value as SubItemKind })}
-          className="rounded-md border border-slate-200 px-1.5 py-1.5 text-xs text-slate-600 focus:outline-none"
+          className={SELECT}
         >
           <option value="info">Info</option>
           <option value="warning">Warning</option>
@@ -68,7 +71,7 @@ export function SubItemEdit({
         type="button"
         onClick={onRemove}
         aria-label="Remove"
-        className="text-slate-400 hover:text-rose-600"
+        className={`${DELETE_BTN} p-1`}
       >
         <XIcon className="h-4 w-4" />
       </button>

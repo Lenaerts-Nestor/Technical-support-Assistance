@@ -3,6 +3,7 @@ import { TableView } from './TableView'
 import { CalloutView } from './CalloutView'
 import { TermView } from './TermView'
 import { SectionBlockView } from './SectionBlockView'
+import { CARD } from '../../../shared/ui/styles'
 import type { GuidePart } from '../types'
 
 type GuidePartViewProps = {
@@ -32,14 +33,12 @@ export function GuidePartView({
       )
     case 'section':
       return (
-        <section
-          id={part.id}
-          className="scroll-mt-24 rounded-xl border border-slate-200 bg-white px-4 py-4"
-        >
+        <section id={part.id} className={`${CARD} scroll-mt-20 px-4 py-4`}>
           <SectionBlockView
             heading={part.heading || 'Section'}
             body={part.body}
             steps={part.steps}
+            blocks={part.blocks}
           />
         </section>
       )

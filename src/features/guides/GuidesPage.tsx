@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { EMPTY } from '../../shared/ui/styles'
 import { useGuides } from './useGuides'
 import { GuidesHeader } from './components/GuidesHeader'
 import { GuideGroup } from './components/GuideGroup'
@@ -33,17 +34,17 @@ export function GuidesPage() {
     )
   } else {
     screen = (
-      <div className="mx-auto max-w-[1600px] space-y-6">
+      <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
         <GuidesHeader onNewGuide={guides.newGuide} />
 
         <div className="grid grid-cols-[1fr_320px] items-start gap-6">
-          <div className="space-y-8">
+          <div className="space-y-7">
             {isEmpty ? (
-              <p className="rounded-xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm text-slate-400">
+              <p className={EMPTY}>
                 No guides loaded yet. Link a folder in the Sync panel, use{' '}
-                <span className="font-medium text-slate-500">Append</span> to load
-                a guides JSON, or start one with{' '}
-                <span className="font-medium text-slate-500">New Guide</span>.
+                <span className="text-ink font-semibold">Append</span> to load a
+                guides JSON, or start one with{' '}
+                <span className="text-ink font-semibold">New Guide</span>.
               </p>
             ) : (
               <>
