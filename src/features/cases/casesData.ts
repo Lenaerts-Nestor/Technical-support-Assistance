@@ -36,6 +36,47 @@ export const GROUP_TONES: Record<string, { dot: string; hover: string }> = {
   },
 }
 
+/**
+ * Give-away phrases from a pasted AI answer. The editor flags these so they
+ * never reach a customer. Matched case-insensitively on whole words only, and
+ * any run of whitespace stands in for the spaces here — so a phrase broken
+ * across a line still gets caught.
+ *
+ * Safe to edit: add or remove lines, nothing else depends on the list. Longer
+ * entries win over shorter ones, so keeping "copilot said" alongside "copilot"
+ * is what makes Remove cut the whole phrase instead of leaving "said:".
+ */
+export const FLAGGED_PHRASES: string[] = [
+  // Attribution — the whole phrase goes, not just the name.
+  'copilot said',
+  'chatgpt said',
+  'claude said',
+  'gemini said',
+
+  // Assistant / vendor names, on their own.
+  'copilot',
+  'chatgpt',
+  'claude',
+  'gemini',
+  'bard',
+  'grok',
+  'perplexity',
+  'openai',
+  'anthropic',
+  'deepseek',
+  'llama',
+  'chatbot',
+
+  // Phrasing that reads as a pasted answer.
+  'as an AI language model',
+  'as an AI',
+  'AI assistant',
+  'AI model',
+  'language model',
+  "I'm sorry, but",
+  'I cannot assist',
+]
+
 /** Template buttons shown in the Utilities panel, grouped and in display order. */
 export const TEMPLATE_GROUPS: TemplateGroup[] = [
   {

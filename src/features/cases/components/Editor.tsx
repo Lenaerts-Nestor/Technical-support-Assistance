@@ -1,5 +1,7 @@
 import type { RefObject } from "react";
 import { ClearIcon, CopyIcon } from "./icons";
+import { FlaggedBar } from "./FlaggedBar";
+import type { FlaggedMatch } from "../types";
 import {
   CARD,
   CARD_HEADER,
@@ -12,9 +14,12 @@ type EditorProps = {
   value: string;
   editorRef: RefObject<HTMLTextAreaElement | null>;
   justCopied: boolean;
+  flagged: FlaggedMatch[];
   onChange: (value: string) => void;
   onClear: () => void;
   onCopy: () => void;
+  onJumpToFlagged: () => void;
+  onRemoveFlagged: () => void;
   className?: string;
 };
 
@@ -23,9 +28,12 @@ export function Editor({
   value,
   editorRef,
   justCopied,
+  flagged,
   onChange,
   onClear,
   onCopy,
+  onJumpToFlagged,
+  onRemoveFlagged,
   className,
 }: EditorProps) {
   return (
@@ -59,6 +67,11 @@ export function Editor({
           </button>
         </div>
       </div>
+      <FlaggedBar
+        matches={flagged}
+        onJump={onJumpToFlagged}
+        onRemove={onRemoveFlagged}
+      />
       <textarea
         ref={editorRef}
         value={value}

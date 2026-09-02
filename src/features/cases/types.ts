@@ -18,3 +18,11 @@ export type TemplateGroup = {
  * `useCases` falls back to a bracketed placeholder while an entry is missing.
  */
 export type TemplateBodies = Record<string, Partial<Record<CaseLanguage, string>>>
+
+/** One occurrence of a flagged phrase found in the draft. */
+export type FlaggedMatch = {
+  /** The phrase exactly as it appears in the draft, for the warning text. */
+  text: string
+  start: number
+  end: number
+}

@@ -23,9 +23,12 @@ export function CasesPage() {
           value={cases.draft}
           editorRef={cases.editorRef}
           justCopied={cases.justCopied}
+          flagged={cases.flagged}
           onChange={cases.setDraft}
           onClear={cases.clear}
           onCopy={cases.copy}
+          onJumpToFlagged={cases.jumpToFlagged}
+          onRemoveFlagged={cases.removeFlagged}
         />
         <UtilitiesPanel
           className={COLUMN_HEIGHT}
