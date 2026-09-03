@@ -50,8 +50,12 @@ function downloadJson(filename: string, data: unknown) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  // In the document and revoked a tick later: revoking synchronously after
+  // click() races the browser's read of the blob.
+  document.body.append(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 export function useGuides() {

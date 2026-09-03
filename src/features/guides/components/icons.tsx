@@ -1,21 +1,9 @@
-type IconProps = { className?: string }
+import { ICON_BASE as base } from '../../../shared/ui/iconBase'
+import type { IconProps } from '../../../shared/ui/iconBase'
 
-const base = {
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 2,
-  strokeLinecap: 'round' as const,
-  strokeLinejoin: 'round' as const,
-}
-
-export function PlusIcon({ className }: IconProps) {
-  return (
-    <svg {...base} className={className}>
-      <path d="M12 5v14M5 12h14" />
-    </svg>
-  )
-}
+// Shared with other features, re-exported so this file stays the one place
+// guides components import an icon from.
+export { PlusIcon, TrashIcon } from '../../../shared/ui/icons'
 
 export function PinIcon({ className }: IconProps) {
   return (
@@ -170,10 +158,3 @@ export function XIcon({ className }: IconProps) {
   )
 }
 
-export function TrashIcon({ className }: IconProps) {
-  return (
-    <svg {...base} className={className}>
-      <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
-    </svg>
-  )
-}

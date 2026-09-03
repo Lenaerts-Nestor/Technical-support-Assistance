@@ -1,8 +1,19 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { FLAGGED_PHRASES, TEMPLATE_BODIES, TEMPLATE_GROUPS } from './casesData'
+import { useCallback, useMemo, useRef } from 'react'
+import { FLAGGED_PHRASES, LANGUAGES, TEMPLATE_BODIES, TEMPLATE_GROUPS } from './casesData'
+import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
+import { useCopyToClipboard } from '../../shared/hooks/useCopyToClipboard'
 import type { CaseLanguage, FlaggedMatch, TemplateButton } from './types'
 
 const ALL_BUTTONS: TemplateButton[] = TEMPLATE_GROUPS.flatMap((g) => g.buttons)
+
+const DRAFT_KEY = storageKey('cases', 'draft')
+const LANGUAGE_KEY = storageKey('cases', 'language')
+
+const reviveDraft = (raw: unknown): string | null =>
+  typeof raw === 'string' ? raw : null
+
+const reviveLanguage = (raw: unknown): CaseLanguage | null =>
+  LANGUAGES.some((l) => l.id === raw) ? (raw as CaseLanguage) : null
 
 /** Resolve a button's copy for the active language, or a placeholder if none yet. */
 function templateText(id: string, language: CaseLanguage): string {
@@ -91,9 +102,13 @@ function cutMatch(text: string, match: FlaggedMatch): string {
 }
 
 export function useCases() {
-  const [draft, setDraft] = useState('')
-  const [language, setLanguage] = useState<CaseLanguage>('en')
-  const [justCopied, setJustCopied] = useState(false)
+  const [draft, setDraft] = usePersistentState(DRAFT_KEY, () => '', reviveDraft)
+  const [language, setLanguage] = usePersistentState<CaseLanguage>(
+    LANGUAGE_KEY,
+    () => 'en',
+    reviveLanguage,
+  )
+  const { copied, copy: copyToClipboard } = useCopyToClipboard()
   const editorRef = useRef<HTMLTextAreaElement>(null)
 
   const flagged = useMemo(() => findFlagged(draft), [draft])
@@ -116,7 +131,7 @@ export function useCases() {
     )
     nextJump.current = 0
     editorRef.current?.focus()
-  }, [])
+  }, [setDraft])
 
   const insertTemplate = useCallback(
     (id: string) => {
@@ -135,23 +150,15 @@ export function useCases() {
         return value
       })
     },
-    [language],
+    [language, setDraft],
   )
 
   const clear = useCallback(() => {
     setDraft('')
     editorRef.current?.focus()
-  }, [])
+  }, [setDraft])
 
-  const copy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(draft)
-      setJustCopied(true)
-      window.setTimeout(() => setJustCopied(false), 2000)
-    } catch {
-      setJustCopied(false)
-    }
-  }, [draft])
+  const copy = useCallback(() => copyToClipboard(draft), [copyToClipboard, draft])
 
   return {
     draft,
@@ -162,7 +169,7 @@ export function useCases() {
     insertTemplate,
     clear,
     copy,
-    justCopied,
+    justCopied: copied !== null,
     flagged,
     jumpToFlagged,
     removeFlagged,

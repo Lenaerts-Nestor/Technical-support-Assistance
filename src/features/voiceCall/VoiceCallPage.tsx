@@ -9,7 +9,12 @@ export function VoiceCallPage() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
-      <CallHeader justCopied={vc.justCopied} onCopy={vc.copyNotes} />
+      <CallHeader
+        justCopied={vc.justCopied}
+        hasContent={vc.hasContent}
+        onCopy={vc.copyNotes}
+        onClear={vc.clearCall}
+      />
 
       <ProductsCard
         products={vc.products}

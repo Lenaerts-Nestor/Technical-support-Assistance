@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { ClearIcon, CopyIcon } from "./icons";
+import { TrashIcon, CopyIcon } from "./icons";
 import { FlaggedBar } from "./FlaggedBar";
 import type { FlaggedMatch } from "../types";
 import {
@@ -52,7 +52,7 @@ export function Editor({
             disabled={!value}
             className={GHOST_BTN}
           >
-            <ClearIcon className="h-3.5 w-3.5" />
+            <TrashIcon className="h-3.5 w-3.5" />
             Clear
           </button>
           <button

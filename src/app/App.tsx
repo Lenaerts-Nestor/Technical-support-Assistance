@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Sidebar } from './Sidebar'
+import { ErrorBoundary } from './ErrorBoundary'
+import { NAV_ITEMS } from './navigation'
 import type { PageId } from './navigation'
 import { VoiceCallPage } from '../features/voiceCall/VoiceCallPage'
 import { RmaPage } from '../features/rma/RmaPage'
@@ -15,15 +17,28 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
 
 export default function App() {
   const [page, setPage] = useState<PageId>('voiceCall')
-  const Page = PAGES[page]
 
   return (
     <div className="bg-canvas text-ink flex h-full">
       <Sidebar current={page} onNavigate={setPage} />
-      {/* No padding here: pages own their own insets so a page with a sticky
-          header can pin it flush to the top of the scrollport. */}
-      <main className="flex-1 overflow-y-auto">
-        <Page />
+      {/*
+        Every page stays mounted and the inactive ones are hidden, so stepping
+        away from a half-filled form mid-call and coming back keeps it. Each
+        page owns its scrollport (rather than one shared one on <main>), which
+        also keeps each page's scroll position and lets a sticky header pin
+        flush to the top of its own page.
+      */}
+      <main className="flex-1 overflow-hidden">
+        {NAV_ITEMS.map(({ id }) => {
+          const Page = PAGES[id]
+          return (
+            <div key={id} hidden={id !== page} className="h-full overflow-y-auto">
+              <ErrorBoundary>
+                <Page />
+              </ErrorBoundary>
+            </div>
+          )
+        })}
       </main>
     </div>
   )

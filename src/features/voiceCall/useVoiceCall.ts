@@ -1,5 +1,7 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { NOTE_SECTIONS } from './voiceCallData'
+import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
+import { useCopyToClipboard } from '../../shared/hooks/useCopyToClipboard'
 import type { NoteFieldState, NoteMode, ProductEntry } from './types'
 
 type ProductPatch = Partial<Omit<ProductEntry, 'id'>>
@@ -18,6 +20,48 @@ const initialNotes = (): Record<string, NoteFieldState> =>
     NOTE_SECTIONS.map((s) => [s.id, { value: '', mode: 'text' as NoteMode }]),
   )
 
+const PRODUCTS_KEY = storageKey('voiceCall', 'products')
+const NOTES_KEY = storageKey('voiceCall', 'notes')
+
+const asStr = (v: unknown): string => (typeof v === 'string' ? v : '')
+const asObj = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+
+function reviveProducts(raw: unknown): ProductEntry[] {
+  const list = Array.isArray(raw) ? raw : []
+  const products = list.map((item) => {
+    const o = asObj(item)
+    return {
+      id: asStr(o.id) || uid(),
+      model: asStr(o.model),
+      firmware: asStr(o.firmware),
+      serial: asStr(o.serial),
+    }
+  })
+  // The page always renders at least one product row.
+  return products.length ? products : [emptyProduct()]
+}
+
+/**
+ * Merge stored note values onto a fresh section map. Rebuilding from
+ * NOTE_SECTIONS rather than trusting the stored keys is what stops a section
+ * added or renamed since the save from leaving the page reading `.value` off
+ * `undefined`.
+ */
+function reviveNotes(raw: unknown): Record<string, NoteFieldState> {
+  const stored = asObj(raw)
+  const notes = initialNotes()
+  for (const section of NOTE_SECTIONS) {
+    const o = asObj(stored[section.id])
+    notes[section.id] = {
+      value: asStr(o.value),
+      mode: o.mode === 'bullets' ? 'bullets' : 'text',
+    }
+  }
+  return notes
+}
+
+/** Assemble every filled-in field into the plain-text blob copied to the clipboard. */
 function formatNote(state: NoteFieldState): string {
   const text = state.value.trim()
   if (!text) return ''
@@ -30,7 +74,6 @@ function formatNote(state: NoteFieldState): string {
     .join('\n')
 }
 
-/** Assemble every filled-in field into the plain-text blob copied to the clipboard. */
 function buildNotesText(
   products: ProductEntry[],
   notes: Record<string, NoteFieldState>,
@@ -56,46 +99,55 @@ function buildNotesText(
 }
 
 export function useVoiceCall() {
-  const [products, setProducts] = useState<ProductEntry[]>(() => [emptyProduct()])
-  const [notes, setNotes] = useState<Record<string, NoteFieldState>>(initialNotes)
-  const [justCopied, setJustCopied] = useState(false)
+  const [products, setProducts] = usePersistentState(
+    PRODUCTS_KEY,
+    () => [emptyProduct()],
+    reviveProducts,
+  )
+  const [notes, setNotes] = usePersistentState(NOTES_KEY, initialNotes, reviveNotes)
+  const { copied, copy } = useCopyToClipboard()
 
   const addProduct = useCallback(
     () => setProducts((list) => [...list, emptyProduct()]),
-    [],
+    [setProducts],
   )
   const updateProduct = useCallback(
     (id: string, patch: ProductPatch) =>
       setProducts((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p))),
-    [],
+    [setProducts],
   )
   const removeProduct = useCallback(
     (id: string) =>
       setProducts((list) => (list.length > 1 ? list.filter((p) => p.id !== id) : list)),
-    [],
+    [setProducts],
   )
 
   const setNoteValue = useCallback(
     (id: string, value: string) =>
       setNotes((map) => ({ ...map, [id]: { ...map[id], value } })),
-    [],
+    [setNotes],
   )
   const setNoteMode = useCallback(
     (id: string, mode: NoteMode) =>
       setNotes((map) => ({ ...map, [id]: { ...map[id], mode } })),
-    [],
+    [setNotes],
   )
 
-  const copyNotes = useCallback(async () => {
-    const text = buildNotesText(products, notes)
-    try {
-      await navigator.clipboard.writeText(text)
-      setJustCopied(true)
-      window.setTimeout(() => setJustCopied(false), 2000)
-    } catch {
-      setJustCopied(false)
-    }
-  }, [products, notes])
+  const copyNotes = useCallback(
+    () => copy(buildNotesText(products, notes)),
+    [copy, notes, products],
+  )
+
+  /** Wipe the form for the next call — the notes persist, so this is the reset. */
+  const clearCall = useCallback(() => {
+    setProducts([emptyProduct()])
+    setNotes(initialNotes())
+  }, [setNotes, setProducts])
+
+  /** True while any field holds something worth losing. */
+  const hasContent =
+    products.some((p) => p.model.trim() || p.firmware.trim() || p.serial.trim()) ||
+    NOTE_SECTIONS.some((s) => notes[s.id].value.trim())
 
   return {
     products,
@@ -106,6 +158,8 @@ export function useVoiceCall() {
     setNoteValue,
     setNoteMode,
     copyNotes,
-    justCopied,
+    justCopied: copied !== null,
+    clearCall,
+    hasContent,
   }
 }

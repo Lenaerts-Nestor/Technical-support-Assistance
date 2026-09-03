@@ -17,17 +17,27 @@ export function RmaPage() {
             Return Merchandise Authorization — templates &amp; form
           </p>
         </div>
-        <a
-          href={SN_LOOKUP_URL || undefined}
-          target="_blank"
-          rel="noreferrer"
-          aria-disabled={!SN_LOOKUP_URL}
-          title={SN_LOOKUP_URL ? 'Open the serial lookup' : 'Set SN_LOOKUP_URL in rmaData.ts'}
-          className={`${GHOST_BTN_MD} ${SN_LOOKUP_URL ? '' : 'pointer-events-none opacity-40'}`}
-        >
-          SN Lookup
-          <ExternalLinkIcon className="h-3.5 w-3.5" />
-        </a>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={rma.clearForm}
+            disabled={!rma.hasContent}
+            className={GHOST_BTN_MD}
+          >
+            Clear form
+          </button>
+          <a
+            href={SN_LOOKUP_URL || undefined}
+            target="_blank"
+            rel="noreferrer"
+            aria-disabled={!SN_LOOKUP_URL}
+            title={SN_LOOKUP_URL ? 'Open the serial lookup' : 'Set SN_LOOKUP_URL in rmaData.ts'}
+            className={`${GHOST_BTN_MD} ${SN_LOOKUP_URL ? '' : 'pointer-events-none opacity-40'}`}
+          >
+            SN Lookup
+            <ExternalLinkIcon className="h-3.5 w-3.5" />
+          </a>
+        </div>
       </header>
 
       <div className="grid grid-cols-2 items-start gap-6">

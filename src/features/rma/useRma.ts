@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { DETAIL_FIELDS, ISSUE_CATEGORIES } from './rmaData'
+import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
+import { useCopyToClipboard } from '../../shared/hooks/useCopyToClipboard'
 import type { RmaDetailField, RmaDetails, RmaUnit } from './types'
 
 const uid = () => crypto.randomUUID()
@@ -20,33 +22,80 @@ const BLANK_DETAILS: RmaDetails = {
 /** How long a Copy button shows its confirmed state. */
 const COPIED_MS = 1500
 
+const UNITS_KEY = storageKey('rma', 'units')
+const DETAILS_KEY = storageKey('rma', 'details')
+const CATEGORY_KEY = storageKey('rma', 'category')
+const ISSUE_KEY = storageKey('rma', 'issue')
+
+const asStr = (v: unknown): string => (typeof v === 'string' ? v : '')
+const asObj = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
+const asNullableStr = (v: unknown): string | null =>
+  typeof v === 'string' && v ? v : null
+
+function reviveUnits(raw: unknown): RmaUnit[] {
+  const list = Array.isArray(raw) ? raw : []
+  const units = list.map((item) => {
+    const o = asObj(item)
+    return {
+      id: asStr(o.id) || uid(),
+      serial: asStr(o.serial),
+      productName: asStr(o.productName),
+    }
+  })
+  // The form always renders at least one unit row.
+  return units.length ? units : [blankUnit()]
+}
+
+/**
+ * Rebuild from DETAIL_FIELDS rather than trusting the stored keys, so a field
+ * added or renamed since the save can't leave a `value` reading `undefined`.
+ */
+function reviveDetails(raw: unknown): RmaDetails {
+  const stored = asObj(raw)
+  const details = { ...BLANK_DETAILS }
+  for (const field of DETAIL_FIELDS) details[field.id] = asStr(stored[field.id])
+  return details
+}
+
 /**
  * All RMA page state: the fill-in form, the two-level issue determinator, and
- * the text each Copy button puts on the clipboard. Live scratchpad only —
- * nothing is persisted between sessions.
+ * the text each Copy button puts on the clipboard. Autosaved to localStorage,
+ * so a refresh mid-call keeps the form — `clearForm` is how you start a new one.
  */
 export function useRma() {
-  const [units, setUnits] = useState<RmaUnit[]>(() => [blankUnit()])
-  const [details, setDetails] = useState<RmaDetails>(BLANK_DETAILS)
-  const [categoryId, setCategoryId] = useState<string | null>(null)
-  const [issue, setIssue] = useState<string | null>(null)
-  const [copied, setCopied] = useState<'details' | 'determinator' | null>(null)
-  const copiedTimer = useRef<number | undefined>(undefined)
+  const [units, setUnits] = usePersistentState(UNITS_KEY, () => [blankUnit()], reviveUnits)
+  const [details, setDetails] = usePersistentState(
+    DETAILS_KEY,
+    () => BLANK_DETAILS,
+    reviveDetails,
+  )
+  const [categoryId, setCategoryId] = usePersistentState<string | null>(
+    CATEGORY_KEY,
+    () => null,
+    asNullableStr,
+  )
+  const [issue, setIssue] = usePersistentState<string | null>(
+    ISSUE_KEY,
+    () => null,
+    asNullableStr,
+  )
+  const { copied, copy } = useCopyToClipboard<'details' | 'determinator'>(COPIED_MS)
 
   /* ---- units ----------------------------------------------------------- */
 
-  const addUnit = useCallback(() => setUnits((list) => [...list, blankUnit()]), [])
+  const addUnit = useCallback(() => setUnits((list) => [...list, blankUnit()]), [setUnits])
 
   const updateUnit = useCallback(
     (id: string, patch: Partial<Omit<RmaUnit, 'id'>>) =>
       setUnits((list) => list.map((u) => (u.id === id ? { ...u, ...patch } : u))),
-    [],
+    [setUnits],
   )
 
   const removeUnit = useCallback(
     (id: string) =>
       setUnits((list) => (list.length > 1 ? list.filter((u) => u.id !== id) : list)),
-    [],
+    [setUnits],
   )
 
   /* ---- details --------------------------------------------------------- */
@@ -54,7 +103,7 @@ export function useRma() {
   const setDetail = useCallback(
     (field: RmaDetailField, value: string) =>
       setDetails((d) => ({ ...d, [field]: value })),
-    [],
+    [setDetails],
   )
 
   /* ---- issue determinator --------------------------------------------- */
@@ -65,12 +114,15 @@ export function useRma() {
   )
 
   /** Picking a new category clears the second-level issue underneath it. */
-  const selectCategory = useCallback((id: string) => {
-    setCategoryId(id)
-    setIssue(null)
-  }, [])
+  const selectCategory = useCallback(
+    (id: string) => {
+      setCategoryId(id)
+      setIssue(null)
+    },
+    [setCategoryId, setIssue],
+  )
 
-  const selectIssue = useCallback((value: string) => setIssue(value), [])
+  const selectIssue = useCallback((value: string) => setIssue(value), [setIssue])
 
   const determinatorText = useMemo(
     () =>
@@ -100,21 +152,30 @@ export function useRma() {
     return lines.join('\n')
   }, [details, units])
 
-  const flashCopied = useCallback((which: 'details' | 'determinator') => {
-    setCopied(which)
-    window.clearTimeout(copiedTimer.current)
-    copiedTimer.current = window.setTimeout(() => setCopied(null), COPIED_MS)
-  }, [])
+  const copyDetails = useCallback(
+    () => copy(detailsText, 'details'),
+    [copy, detailsText],
+  )
 
-  const copyDetails = useCallback(() => {
-    void navigator.clipboard.writeText(detailsText)
-    flashCopied('details')
-  }, [detailsText, flashCopied])
+  const copyDeterminator = useCallback(
+    () => copy(determinatorText, 'determinator'),
+    [copy, determinatorText],
+  )
 
-  const copyDeterminator = useCallback(() => {
-    void navigator.clipboard.writeText(determinatorText)
-    flashCopied('determinator')
-  }, [determinatorText, flashCopied])
+  /* ---- reset ----------------------------------------------------------- */
+
+  const clearForm = useCallback(() => {
+    setUnits([blankUnit()])
+    setDetails(BLANK_DETAILS)
+    setCategoryId(null)
+    setIssue(null)
+  }, [setCategoryId, setDetails, setIssue, setUnits])
+
+  /** True while any field holds something worth losing. */
+  const hasContent =
+    units.some((u) => u.serial.trim() || u.productName.trim()) ||
+    DETAIL_FIELDS.some((f) => details[f.id].trim()) ||
+    categoryId !== null
 
   return {
     units,
@@ -130,6 +191,8 @@ export function useRma() {
     selectIssue,
     copyDetails,
     copyDeterminator,
+    clearForm,
+    hasContent,
   }
 }
 
