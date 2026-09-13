@@ -75,6 +75,14 @@ export const FLAGGED_PHRASES: string[] = [
   'language model',
   "I'm sorry, but",
   'I cannot assist',
+
+  // Stylistic tells, not names, but writing habits a pasted AI answer gives
+  // away with. The em dash is the big one: real agents almost never type one,
+  // AI answers are full of them.
+  '—',
+  'as of my last update',
+  'as of my knowledge cutoff',
+  "i'm unable to browse the internet",
 ]
 
 /** Template buttons shown in the Utilities panel, grouped and in display order. */
