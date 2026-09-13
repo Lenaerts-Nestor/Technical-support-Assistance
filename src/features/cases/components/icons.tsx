@@ -14,3 +14,21 @@ export function WarnIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function BoldIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} className={className}>
+      <path d="M7 4h6a3.5 3.5 0 0 1 0 7H7z" />
+      <path d="M7 11h7a3.5 3.5 0 0 1 0 7H7z" />
+    </svg>
+  )
+}
+
+export function BulletListIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} className={className}>
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
+      <path d="M9 6h11M9 12h11M9 18h11" />
+    </svg>
+  )
+}

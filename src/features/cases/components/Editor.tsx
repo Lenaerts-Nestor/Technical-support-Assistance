@@ -1,6 +1,7 @@
-import type { RefObject } from "react";
+import type { KeyboardEvent, RefObject } from "react";
 import { TrashIcon, CopyIcon } from "./icons";
 import { FlaggedBar } from "./FlaggedBar";
+import { FormatToolbar } from "./FormatToolbar";
 import type { FlaggedMatch } from "../types";
 import {
   CARD,
@@ -16,10 +17,13 @@ type EditorProps = {
   justCopied: boolean;
   flagged: FlaggedMatch[];
   onChange: (value: string) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
   onClear: () => void;
   onCopy: () => void;
   onJumpToFlagged: () => void;
   onRemoveFlagged: () => void;
+  onBold: () => void;
+  onBullets: () => void;
   className?: string;
 };
 
@@ -30,10 +34,13 @@ export function Editor({
   justCopied,
   flagged,
   onChange,
+  onKeyDown,
   onClear,
   onCopy,
   onJumpToFlagged,
   onRemoveFlagged,
+  onBold,
+  onBullets,
   className,
 }: EditorProps) {
   return (
@@ -67,6 +74,7 @@ export function Editor({
           </button>
         </div>
       </div>
+      <FormatToolbar onBold={onBold} onBullets={onBullets} />
       <FlaggedBar
         matches={flagged}
         onJump={onJumpToFlagged}
@@ -76,6 +84,7 @@ export function Editor({
         ref={editorRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
         placeholder="Start typing your email here…"
         className="text-ink placeholder:text-ink-faint w-full flex-1 resize-none px-5 py-4 text-[15px] leading-relaxed focus:outline-none"
       />

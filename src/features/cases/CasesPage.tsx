@@ -24,11 +24,14 @@ export function CasesPage() {
           editorRef={cases.editorRef}
           justCopied={cases.justCopied}
           flagged={cases.flagged}
-          onChange={cases.setDraft}
+          onChange={cases.updateDraft}
+          onKeyDown={cases.handleEditorKeyDown}
           onClear={cases.clear}
           onCopy={cases.copy}
           onJumpToFlagged={cases.jumpToFlagged}
           onRemoveFlagged={cases.removeFlagged}
+          onBold={cases.applyBold}
+          onBullets={cases.applyBullets}
         />
         <UtilitiesPanel
           className={COLUMN_HEIGHT}
