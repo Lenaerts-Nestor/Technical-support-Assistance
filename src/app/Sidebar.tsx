@@ -14,6 +14,9 @@ const ICONS: Record<PageId, React.ReactElement> = {
   guides: (
     <path d="M5 3h11a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm0 2v10h12V6a1 1 0 0 0-1-1H5Z" />
   ),
+  kevinGuide: (
+    <path d="M12 2 4 6v5c0 4.7 3.2 8.9 8 10 4.8-1.1 8-5.3 8-10V6l-8-4Zm-1.2 13.4L7.4 12l1.4-1.4 2 2 4.4-4.4 1.4 1.4-5.8 5.8Z" />
+  ),
 }
 
 type SidebarProps = {

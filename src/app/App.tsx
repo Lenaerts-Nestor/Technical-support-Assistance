@@ -7,12 +7,14 @@ import { VoiceCallPage } from '../features/voiceCall/VoiceCallPage'
 import { RmaPage } from '../features/rma/RmaPage'
 import { CasesPage } from '../features/cases/CasesPage'
 import { GuidesPage } from '../features/guides/GuidesPage'
+import { KevinGuidePage } from '../features/kevinGuide/KevinGuidePage'
 
 const PAGES: Record<PageId, () => React.ReactElement> = {
   voiceCall: VoiceCallPage,
   rma: RmaPage,
   cases: CasesPage,
   guides: GuidesPage,
+  kevinGuide: KevinGuidePage,
 }
 
 export default function App() {
