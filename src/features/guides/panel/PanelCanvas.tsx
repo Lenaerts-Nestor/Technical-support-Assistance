@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 import { GHOST_BTN } from '../../../shared/ui/styles'
-import { DevicePanel } from './DevicePanel'
-import { deviceBounds, layoutScene, type Pt } from './scene'
+import type { Resolution } from './connect'
+import { DevicePanel, type Pending } from './DevicePanel'
+import { anchorOfPoint, deviceBounds, layoutScene, parsePoint, type Pt } from './scene'
 
 type PanelCanvasProps = Omit<
   ComponentProps<typeof DevicePanel>,
@@ -10,13 +11,18 @@ type PanelCanvasProps = Omit<
 > & {
   /** Fixed CSS height; omit to fill the parent. */
   height?: number | string
-  /** When set, equipment shows a "+" to drag a cable from; called with both ends' ids. */
+  /** When set, ports can be dragged onto other ports or boxes; called with both ends' ids. */
   onConnect?: (fromId: string, toId: string) => void
-  /** When set, equipment boxes can be dragged; called continuously with the new top-left. */
+  /**
+   * Decides what a drop would do: connect to a specific port, to the first free
+   * compatible port of a box, or be refused with a reason (shown while dragging).
+   */
+  resolveConnection?: (fromId: string, dropId: string) => Resolution
+  /** When set, unit boxes can be dragged; called continuously with the new top-left. */
   onMoveUnit?: (endpointId: string, pos: Pt) => void
   /**
-   * When set, clicking a "+" or a port opens this menu beside the click. Dragging
-   * from a "+" still connects a cable.
+   * When set, clicking a port opens this menu beside the click (and a "+" on a
+   * plain box does too).
    */
   renderMenu?: (pointId: string, close: () => void) => ReactNode
   /** Extra controls pinned top-left. */
@@ -34,13 +40,15 @@ const MENU_W = 288
 /**
  * The diagram on a pannable, zoomable canvas: wheel zooms toward the pointer,
  * dragging the background pans, and Fit frames the whole scene. In the editor
- * it also lets equipment boxes be dragged around, cables be dragged out of a
- * "+", and opens a menu when a "+" or a port is clicked. Clicks still work: a
- * drag that moves past a few pixels is swallowed instead of selecting.
+ * it also lets unit boxes be dragged around, cables be dragged out of any port
+ * (with a live check of whether the drop is allowed), and opens a menu when a
+ * port is clicked. Clicks still work: a drag that moves past a few pixels is
+ * swallowed instead of selecting.
  */
 export function PanelCanvas({
   height,
   onConnect,
+  resolveConnection,
   onMoveUnit,
   renderMenu,
   toolbar,
@@ -55,8 +63,9 @@ export function PanelCanvas({
   const dragged = useRef(false)
   /** Once the user has zoomed or panned, resizes stop re-framing the scene. */
   const touched = useRef(false)
-  const [pending, setPending] = useState<{ from: Pt; to: Pt; target: string | null } | null>(null)
+  const [pending, setPending] = useState<Pending | null>(null)
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const fitScale = size.w > 0 && size.h > 0 ? Math.min(size.w / bounds.w, size.h / bounds.h) : 0
 
@@ -77,7 +86,7 @@ export function PanelCanvas({
     return () => ro.disconnect()
   }, [])
 
-  // Re-frame when the scene itself changes shape (device swap, equipment toggled) or on first measure.
+  // Re-frame when the scene itself changes shape (device swap, units added) or on first measure.
   // Keyed on what is in the scene, not where boxes are, so dragging a box doesn't re-frame the view under the pointer.
   const sceneKey = `${device.id}|${endpoints?.length ?? -1}|${(cables ?? []).length}`
   const lastKey = useRef('')
@@ -88,6 +97,12 @@ export function PanelCanvas({
     // Also follows container resizes (e.g. the sidebar collapsing) until the user takes over.
     if (!touched.current) fit()
   }, [sceneKey, fitScale, fit])
+
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), 4500)
+    return () => clearTimeout(t)
+  }, [notice])
 
   const zoomAt = useCallback(
     (factor: number, px?: number, py?: number) =>
@@ -132,43 +147,66 @@ export function PanelCanvas({
   const openMenuAt = (id: string, clientX: number, clientY: number) => {
     const r = boxRef.current?.getBoundingClientRect()
     if (!r || !renderMenu) return
-    setMenu({ id, x: Math.min(clientX - r.left + 8, Math.max(8, r.width - MENU_W - 8)), y: Math.max(8, Math.min(clientY - r.top, r.height - 120)) })
+    setMenu({
+      id,
+      x: Math.min(clientX - r.left + 8, Math.max(8, r.width - MENU_W - 8)),
+      y: Math.max(8, Math.min(clientY - r.top, r.height - 120)),
+    })
   }
 
-  const targetAt = (x: number, y: number) =>
+  const pointAt = (x: number, y: number) =>
     document.elementFromPoint(x, y)?.closest('[data-point-id]')?.getAttribute('data-point-id') ?? null
 
-  /** Drag from a "+": a dashed line follows the pointer; releasing over a port or box connects, a plain click opens the menu. */
-  const startConnect = (fromId: string, e: React.PointerEvent) => {
-    const from = scene.items.find((i) => `ep:${i.endpoint.id}` === fromId)?.inner
+  /**
+   * Drag a cable out of a port (or the "+" of a plain box). A dashed line follows
+   * the pointer and says whether dropping would work; a plain click is left to
+   * the normal click handling (the "+" opens its menu).
+   */
+  const startConnect = (fromId: string, e: React.PointerEvent, isHandle: boolean) => {
+    const from = anchorOfPoint(device, scene.items, fromId)?.pt
     if (!from) return
-    e.preventDefault()
     const startX = e.clientX
     const startY = e.clientY
     let moved = false
+    const state = (ev: PointerEvent): Pending | null => {
+      const to = toScene(ev.clientX, ev.clientY)
+      if (!to) return null
+      const drop = pointAt(ev.clientX, ev.clientY)
+      if (!drop || drop === fromId) return { from, to, target: null, ok: null }
+      const res = resolveConnection ? resolveConnection(fromId, drop) : ({ ok: true, to: drop } as Resolution)
+      return {
+        from,
+        to,
+        target: res.to ?? drop,
+        ok: res.ok,
+        reason: res.ok ? undefined : res.reason,
+      }
+    }
     const move = (ev: PointerEvent) => {
       if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD) return
       moved = true
-      const to = toScene(ev.clientX, ev.clientY)
-      const t = targetAt(ev.clientX, ev.clientY)
-      if (to) setPending({ from, to, target: t && t !== fromId ? t : null })
+      dragged.current = true
+      setPending(state(ev))
     }
     const up = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       setPending(null)
       if (!moved) {
-        openMenuAt(fromId, ev.clientX, ev.clientY)
+        if (isHandle) openMenuAt(fromId, ev.clientX, ev.clientY)
         return
       }
-      const t = targetAt(ev.clientX, ev.clientY)
-      if (t && t !== fromId) onConnect?.(fromId, t)
+      const drop = pointAt(ev.clientX, ev.clientY)
+      if (!drop || drop === fromId) return
+      const res = resolveConnection ? resolveConnection(fromId, drop) : ({ ok: true, to: drop } as Resolution)
+      if (res.ok) onConnect?.(fromId, res.to)
+      else if (res.reason) setNotice(res.reason)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
   }
 
-  /** Drag an equipment box: snaps to a grid; a tiny movement stays a click. */
+  /** Drag a unit box: snaps to a grid; a tiny movement stays a click. */
   const startMoveUnit = (pointId: string, e: React.PointerEvent) => {
     const item = scene.items.find((i) => `ep:${i.endpoint.id}` === pointId)
     const start = toScene(e.clientX, e.clientY)
@@ -203,12 +241,21 @@ export function PanelCanvas({
     const target = e.target as Element
     const handle = target.closest('[data-handle]')
     if (handle && (onConnect || renderMenu)) {
-      startConnect(handle.getAttribute('data-handle')!, e)
+      startConnect(handle.getAttribute('data-handle')!, e, true)
       return
     }
     const point = target.closest('[data-point-id]')?.getAttribute('data-point-id')
     dragged.current = false
-    if (point?.startsWith('ep:') && onMoveUnit && startMoveUnit(point, e)) return
+    if (point) {
+      const pt = parsePoint(point)
+      const isBox = !!pt && !pt.portKey
+      if (isBox && onMoveUnit && startMoveUnit(point, e)) return
+      // Any port, chassis or unit, can start a cable.
+      if (!isBox && onConnect) {
+        startConnect(point, e, false)
+        return
+      }
+    }
     const start = { x: e.clientX, y: e.clientY, cx: view.cx, cy: view.cy }
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - start.x
@@ -258,10 +305,10 @@ export function PanelCanvas({
           {...panel}
           onPortClick={(id, e) => {
             onPortClick?.(id, e)
-            // Equipment opens the menu from its "+" only; a port opens it where it was clicked.
-            if (renderMenu && !id.startsWith('ep:')) {
-              const el = e.currentTarget as Element
-              const r = el.getBoundingClientRect()
+            // A port opens the menu where it was clicked; a box is selected, not menu'd.
+            const pt = parsePoint(id)
+            if (renderMenu && !(pt && !pt.portKey)) {
+              const r = (e.currentTarget as Element).getBoundingClientRect()
               openMenuAt(id, 'clientX' in e ? e.clientX : r.right, 'clientY' in e ? e.clientY : r.top)
             }
           }}
@@ -291,6 +338,14 @@ export function PanelCanvas({
           onPointerDown={(e) => e.stopPropagation()}
         >
           {renderMenu(menu.id, () => setMenu(null))}
+        </div>
+      )}
+      {notice && (
+        <div
+          role="alert"
+          className="absolute bottom-7 left-1/2 z-10 max-w-[80%] -translate-x-1/2 rounded-md border border-rose-400/50 bg-rose-950/90 px-3 py-1.5 text-xs font-medium text-rose-100 shadow-card"
+        >
+          {notice}
         </div>
       )}
       <p className="text-ink-faint pointer-events-none absolute bottom-1.5 left-2.5 text-[10px]">

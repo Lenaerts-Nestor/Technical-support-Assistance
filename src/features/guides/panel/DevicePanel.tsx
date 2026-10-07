@@ -9,7 +9,7 @@ import {
   type Pt,
   type Rect,
 } from './scene'
-import { getUnitKind } from './units'
+import { SIGNAL_COLOR, getUnitKind, getUnitModel } from './units'
 import type { PanelCable, PanelEndpoint } from '../types'
 
 const KIND_CLASS: Record<PortKind, string> = {
@@ -21,6 +21,16 @@ const KIND_CLASS: Record<PortKind, string> = {
   audio: 'fill-lime-400/15 stroke-lime-400/60',
 }
 
+export type Pending = {
+  from: Pt
+  to: Pt
+  /** The point the pointer is over, if any. */
+  target: string | null
+  /** Whether dropping here would make a valid cable; null while over nothing. */
+  ok: boolean | null
+  reason?: string
+}
+
 type DevicePanelProps = {
   device: DeviceDef
   /** Ports that carry a note in this guide: drawn with a small dot. */
@@ -29,23 +39,23 @@ type DevicePanelProps = {
   highlighted?: ReadonlySet<string>
   /** Arcs drawn between ports for the active troubleshooting check. */
   links?: { from: string; to: string }[]
-  /** Equipment beside the unit and the cables to it. Omit to draw the unit alone. */
+  /** Units on the panel and the cables to them. Omit to draw the chassis alone. */
   endpoints?: PanelEndpoint[]
   cables?: PanelCable[]
   /** Card swaps to show for the current step: an arrow between the two slots. */
   moves?: { from: string; to: string }[]
-  /** Show a "+" on each piece of equipment to drag a new cable from. */
+  /** Show a "+" on plain boxes (without ports) to drag a cable from. */
   connectable?: boolean
-  /** A cable being dragged, and the port or box it would land on. */
-  pending?: { from: Pt; to: Pt; target: string | null } | null
-  /** A port id, or `ep:<id>` for equipment. */
+  /** A cable being dragged, and what it is hovering over. */
+  pending?: Pending | null
+  /** A point id: chassis port, `ep:<unit>:<port>`, or `ep:<unit>` for a box. */
   selected?: string | null
   selectedCable?: string | null
   onPortClick?: (id: string, e: React.MouseEvent | React.KeyboardEvent) => void
+  onCableClick?: (cableId: string) => void
   /** Cables the current step pulled out (drawn as ghosts) or plugged in (pulsing). */
   ghostCables?: PanelCable[]
   freshCables?: ReadonlySet<string>
-  onCableClick?: (cableId: string) => void
   /** Visible region. Defaults to the whole scene; the canvas drives it for pan / zoom. */
   viewBox?: Rect
   className?: string
@@ -66,7 +76,7 @@ function linkPath(a: PortDef, b: PortDef): string {
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
-/** The rear-panel schematic itself. Purely presentational: callers own all state. */
+/** The panel itself: the chassis (if any), the units with their ports, and every cable. Purely presentational. */
 export function DevicePanel({
   device,
   annotated = EMPTY_SET,
@@ -87,12 +97,13 @@ export function DevicePanel({
   className = 'h-auto w-full select-none',
 }: DevicePanelProps) {
   const byId = new Map(device.ports.map((p) => [p.id, p]))
-  const withEquipment = endpoints !== undefined
+  const withUnits = endpoints !== undefined
   const scene = layoutScene(device, endpoints ?? NO_ENDPOINTS, cables)
   const items = scene.items
-  const vb = viewBox ?? (withEquipment ? scene.bounds : deviceBounds(device))
+  const vb = viewBox ?? (withUnits ? scene.bounds : deviceBounds(device))
   const movedSlots = new Set(moves.flatMap((m) => [m.from, m.to]))
   const frameBySlot = new Map(device.frames.filter((f) => f.slotId).map((f) => [f.slotId!, f]))
+  const usedPoints = new Set(cables.flatMap((c) => [c.from, c.to]))
 
   // With a selection, cables that don't touch it step back so the one in focus reads.
   const touches = (c: PanelCable) =>
@@ -117,6 +128,9 @@ export function DevicePanel({
         }
       : { 'data-point-id': id }
 
+  const dropStroke = (id: string) =>
+    pending?.target === id && pending.ok !== null ? (pending.ok ? '#34d399' : '#fb7185') : null
+
   return (
     <svg
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
@@ -138,18 +152,22 @@ export function DevicePanel({
         </marker>
       </defs>
 
-      <rect
-        x={1}
-        y={1}
-        width={device.width - 2}
-        height={device.height - 2}
-        rx={10}
-        className="fill-canvas stroke-line-strong"
-        strokeWidth={2}
-      />
-      <text x={24} y={26} className="fill-ink-muted text-[13px] font-semibold">
-        {device.name} · rear
-      </text>
+      {!device.freestyle && (
+        <>
+          <rect
+            x={1}
+            y={1}
+            width={device.width - 2}
+            height={device.height - 2}
+            rx={10}
+            className="fill-canvas stroke-line-strong"
+            strokeWidth={2}
+          />
+          <text x={24} y={26} className="fill-ink-muted text-[13px] font-semibold">
+            {device.name} · rear
+          </text>
+        </>
+      )}
 
       {device.zones.map((z) => (
         <g key={z.label}>
@@ -214,6 +232,7 @@ export function DevicePanel({
       {device.ports.map((port) => {
         const isHot = highlighted.has(port.id)
         const isSel = selected === port.id
+        const drop = dropStroke(port.id)
         return (
           <g
             key={port.id}
@@ -238,8 +257,9 @@ export function DevicePanel({
               width={port.w}
               height={port.h}
               rx={4}
-              className={isSel ? 'fill-ink/20 stroke-ink' : KIND_CLASS[port.kind]}
-              strokeWidth={isSel ? 2.5 : 1.5}
+              className={isSel ? 'fill-ink/20 stroke-ink' : drop ? 'fill-ink/10' : KIND_CLASS[port.kind]}
+              stroke={drop ?? undefined}
+              strokeWidth={isSel || drop ? 2.5 : 1.5}
             />
             <text
               x={port.x + port.w / 2}
@@ -256,7 +276,7 @@ export function DevicePanel({
         )
       })}
 
-      {withEquipment && (
+      {withUnits && !device.freestyle && (
         <>
           {items.some((i) => i.endpoint.side === 'source') && (
             <text x={-(EP_W + 80)} y={24} className="fill-ink-faint text-[11px] font-bold tracking-widest uppercase">
@@ -268,53 +288,116 @@ export function DevicePanel({
               Displays
             </text>
           )}
-          {items.map(({ endpoint: e, x, y, w, h, lines }) => {
-            const id = epPointId(e.id)
-            const isSel = selected === id
-            const isDrop = pending?.target === id
-            const kind = getUnitKind(e.kind)
-            return (
-              <g
-                key={e.id}
-                aria-label={e.name || kind.label}
-                {...press(id)}
-                className={onPortClick ? 'cursor-pointer outline-none' : undefined}
-              >
-                <rect
-                  x={x}
-                  y={y}
-                  width={w}
-                  height={h}
-                  rx={8}
-                  className="fill-surface"
-                  stroke={isSel || isDrop ? '#f0a542' : kind.color}
-                  strokeOpacity={isSel || isDrop ? 1 : 0.7}
-                  strokeWidth={isSel || isDrop ? 3 : 1.5}
-                />
-                <g transform={`translate(${x + 10} ${y + 6}) scale(0.7)`} fill="none" stroke={kind.color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d={kind.icon} />
-                </g>
-                <text x={x + 32} y={y + 17} className="fill-ink-faint text-[8px] font-bold tracking-widest uppercase">
-                  {kind.label}
-                </text>
-                <text x={x + 12} y={y + 35} className="fill-ink text-[13px] font-semibold">
-                  {clip(e.name || 'Unnamed', 26)}
-                </text>
-                {e.detail && (
-                  <text x={x + 12} y={y + 48} className="fill-ink-muted text-[10px]">
-                    {clip(e.detail, 36)}
-                  </text>
-                )}
-                {lines.map((line, i) => (
-                  <text key={i} x={x + 12} y={y + 62 + i * 13} className="fill-ink-muted text-[10px]">
-                    {clip(line, 38)}
-                  </text>
-                ))}
-              </g>
-            )
-          })}
         </>
       )}
+
+      {items.map(({ endpoint: e, x, y, w, h, lines, ports }) => {
+        const id = epPointId(e.id)
+        const isSel = selected === id
+        const drop = dropStroke(id)
+        const kind = getUnitKind(e.kind)
+        const model = getUnitModel(e.kind, e.model)
+        const title = ports.length > 0 && model ? `${kind.label} · ${model.name}` : kind.label
+        return (
+          <g key={e.id}>
+            <g
+              aria-label={e.name || kind.label}
+              {...press(id)}
+              className={onPortClick ? 'cursor-pointer outline-none' : undefined}
+            >
+              <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                rx={8}
+                className="fill-surface"
+                stroke={drop ?? (isSel ? '#f0a542' : kind.color)}
+                strokeOpacity={isSel || drop ? 1 : 0.7}
+                strokeWidth={isSel || drop ? 3 : 1.5}
+              />
+              <g transform={`translate(${x + 10} ${y + 6}) scale(0.7)`} fill="none" stroke={kind.color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                <path d={kind.icon} />
+              </g>
+              <text x={x + 32} y={y + 17} className="fill-ink-faint text-[8px] font-bold tracking-widest uppercase">
+                {clip(title, 34)}
+              </text>
+              <text x={x + 12} y={y + 35} className="fill-ink text-[13px] font-semibold">
+                {clip(e.name || 'Unnamed', 26)}
+              </text>
+              {e.detail && (
+                <text x={x + 12} y={y + 48} className="fill-ink-muted text-[10px]">
+                  {clip(e.detail, 36)}
+                </text>
+              )}
+              {lines.map((line, i) => (
+                <text key={i} x={x + 12} y={y + 62 + i * 13} className="fill-ink-muted text-[10px]">
+                  {clip(line, 38)}
+                </text>
+              ))}
+            </g>
+
+            {ports.map((p) => {
+              const color = SIGNAL_COLOR[p.spec.signal]
+              const isPortSel = selected === p.id
+              const portDrop = dropStroke(p.id)
+              const used = usedPoints.has(p.id)
+              const left = p.dir === -1
+              return (
+                <g
+                  key={p.id}
+                  aria-label={`${e.name || kind.label}: ${p.spec.label}`}
+                  {...press(p.id)}
+                  className={onPortClick ? 'cursor-crosshair outline-none' : undefined}
+                >
+                  {highlighted.has(p.id) && (
+                    <rect
+                      x={p.x - 3}
+                      y={p.y - 3}
+                      width={p.w + 6}
+                      height={p.h + 6}
+                      rx={6}
+                      className="animate-pulse fill-rose-400/25 stroke-rose-400"
+                      strokeWidth={2}
+                    />
+                  )}
+                  <rect
+                    x={p.x}
+                    y={p.y}
+                    width={p.w}
+                    height={p.h}
+                    rx={4}
+                    fill={color}
+                    fillOpacity={isPortSel || portDrop ? 0.3 : 0.15}
+                    stroke={portDrop ?? (isPortSel ? '#ffffff' : color)}
+                    strokeOpacity={isPortSel || portDrop ? 1 : 0.6}
+                    strokeWidth={isPortSel || portDrop ? 2.5 : 1.2}
+                  />
+                  <text
+                    x={p.x + p.w / 2 + (left ? 3 : -3)}
+                    y={p.y + p.h / 2 + 3.3}
+                    textAnchor="middle"
+                    className="fill-ink text-[9px] font-semibold"
+                  >
+                    {p.spec.label}
+                  </text>
+                  <circle
+                    cx={p.anchor.x}
+                    cy={p.anchor.y}
+                    r={5}
+                    fill={used ? color : '#1a1a1c'}
+                    stroke={color}
+                    strokeWidth={1.8}
+                  />
+                  {annotated.has(p.id) && (
+                    <circle cx={left ? p.x + p.w - 3 : p.x + 3} cy={p.y + 3} r={4} className="fill-brand stroke-canvas" strokeWidth={1.2} />
+                  )}
+                </g>
+              )
+            })}
+          </g>
+        )
+      })}
 
       {cables.map((c, i) => {
         const route = routeCable(device, items, c, i)
@@ -332,8 +415,8 @@ export function DevicePanel({
             <path d={route.d} fill="none" stroke="transparent" strokeWidth={14} />
             <path d={route.d} fill="none" className="stroke-canvas" strokeWidth={emphasised ? 6.5 : 5} strokeLinecap="round" />
             <path d={route.d} fill="none" stroke={color} strokeWidth={emphasised ? 3.5 : 2.5} strokeLinecap="round" />
-            <circle cx={route.ends[0].x} cy={route.ends[0].y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
-            <circle cx={route.ends[1].x} cy={route.ends[1].y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
+            <circle cx={route.ends[0].x} cy={route.ends[0].y} r={3.5} fill={color} className="stroke-canvas" strokeWidth={1.2} />
+            <circle cx={route.ends[1].x} cy={route.ends[1].y} r={3.5} fill={color} className="stroke-canvas" strokeWidth={1.2} />
             {c.label && (
               <text
                 x={route.label.x}
@@ -365,28 +448,54 @@ export function DevicePanel({
       })}
 
       {connectable &&
-        items.map(({ endpoint: e, inner }) => (
-          <g key={e.id} data-handle={epPointId(e.id)} className="cursor-crosshair">
-            <circle cx={inner.x} cy={inner.y} r={11} className="fill-brand stroke-canvas" strokeWidth={2} />
-            <path
-              d={`M ${inner.x - 5} ${inner.y} H ${inner.x + 5} M ${inner.x} ${inner.y - 5} V ${inner.y + 5}`}
-              className="stroke-on-brand pointer-events-none"
-              strokeWidth={2.2}
-              strokeLinecap="round"
-            />
-            <title>Drag to a port or another box to connect a cable</title>
-          </g>
-        ))}
+        items
+          .filter((i) => i.ports.length === 0)
+          .map(({ endpoint: e, inner }) => (
+            <g key={e.id} data-handle={epPointId(e.id)} className="cursor-crosshair">
+              <circle cx={inner.x} cy={inner.y} r={11} className="fill-brand stroke-canvas" strokeWidth={2} />
+              <path
+                d={`M ${inner.x - 5} ${inner.y} H ${inner.x + 5} M ${inner.x} ${inner.y - 5} V ${inner.y + 5}`}
+                className="stroke-on-brand pointer-events-none"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+              />
+              <title>Drag to a port or another box to connect a cable</title>
+            </g>
+          ))}
 
       {pending && (
-        <path
-          d={`M ${pending.from.x} ${pending.from.y} L ${pending.to.x} ${pending.to.y}`}
-          className="stroke-brand pointer-events-none"
-          strokeWidth={3}
-          strokeDasharray="7 5"
-          strokeLinecap="round"
-          fill="none"
-        />
+        <g className="pointer-events-none">
+          <path
+            d={`M ${pending.from.x} ${pending.from.y} L ${pending.to.x} ${pending.to.y}`}
+            stroke={pending.ok === false ? '#fb7185' : '#f0a542'}
+            strokeWidth={3}
+            strokeDasharray="7 5"
+            strokeLinecap="round"
+            fill="none"
+          />
+          {pending.ok === false && pending.reason && (
+            <text
+              x={pending.to.x + 14}
+              y={pending.to.y - 12}
+              className="fill-rose-300 stroke-canvas text-[12px] font-semibold"
+              strokeWidth={4}
+              paintOrder="stroke"
+            >
+              ✕ {clip(pending.reason, 64)}
+            </text>
+          )}
+          {pending.ok === true && (
+            <text
+              x={pending.to.x + 14}
+              y={pending.to.y - 12}
+              className="fill-emerald-300 stroke-canvas text-[12px] font-semibold"
+              strokeWidth={4}
+              paintOrder="stroke"
+            >
+              ✓ connect
+            </text>
+          )}
+        </g>
       )}
 
       {moves.map((m, i) => {

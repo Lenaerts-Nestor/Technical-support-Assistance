@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { PlusIcon, TrashIcon } from '../components/icons'
 import { PanelCanvas } from '../panel/PanelCanvas'
 import { stateAfter, stepMoves } from '../panel/flow'
-import { EP_W, epPointId, isEpPoint, pointName } from '../panel/scene'
+import { EP_W, epPointId, isEpPoint, layoutScene, parsePoint, pointName } from '../panel/scene'
+import { firstPortFor, infoFor, kindAccepts, resolveDrop, type Ctx } from '../panel/connect'
 import {
   TEMPLATES,
   cardIdFor,
@@ -11,7 +12,7 @@ import {
   getTemplate,
   type DeviceDef,
 } from '../panel/devices'
-import { getUnitKind } from '../panel/units'
+import { getUnitKind, getUnitModel, unitPortSpecs } from '../panel/units'
 import {
   DELETE_BTN,
   GHOST_BTN,
@@ -52,23 +53,36 @@ function PortOptions({ device, endpoints }: { device: DeviceDef; endpoints: Pane
           ))}
         </optgroup>
       ))}
-      {endpoints.length > 0 && (
-        <optgroup label="Units">
-          {endpoints.map((e) => (
-            <option key={e.id} value={epPointId(e.id)}>
-              {pointName(epPointId(e.id), device, endpoints)}
-            </option>
-          ))}
-        </optgroup>
-      )}
+      {endpoints.map((e) => {
+        const specs = unitPortSpecs(e.kind, e.model)
+        const name = pointName(epPointId(e.id), device, endpoints)
+        return (
+          <optgroup key={e.id} label={name}>
+            {specs.length === 0 ? (
+              <option value={epPointId(e.id)}>{name}</option>
+            ) : (
+              specs.map((s) => (
+                <option key={s.key} value={epPointId(e.id, s.key)}>
+                  {name}: {s.label}
+                </option>
+              ))
+            )}
+          </optgroup>
+        )
+      })}
     </>
   )
 }
 
 /** Drop everything that points at a port, slot, cable or box that no longer exists. */
 function pruneTo(p: PanelPart, device: DeviceDef | undefined): PanelPart {
-  const has = (id: string) =>
-    isEpPoint(id) ? p.endpoints.some((e) => epPointId(e.id) === id) : !!device?.ports.some((x) => x.id === id)
+  const has = (id: string) => {
+    const pt = parsePoint(id)
+    if (!pt) return !!device?.ports.some((x) => x.id === id)
+    const unit = p.endpoints.find((e) => e.id === pt.unitId)
+    if (!unit) return false
+    return !pt.portKey || unitPortSpecs(unit.kind, unit.model).some((s) => s.key === pt.portKey)
+  }
   return {
     ...p,
     cables: p.cables.filter((c) => has(c.from) && has(c.to)),
@@ -141,7 +155,18 @@ export function PanelEdit({
   /* ---- units & cables -------------------------------------------------- */
 
   const patchUnit = (id: string, fields: Partial<PanelEndpoint>) =>
-    set((p) => ({ ...p, endpoints: p.endpoints.map((e) => (e.id === id ? { ...e, ...fields } : e)) }))
+    set((p) => {
+      const next = { ...p, endpoints: p.endpoints.map((e) => (e.id === id ? { ...e, ...fields } : e)) }
+      // A different type or model has different ports: cables to ports it lost go away.
+      return 'kind' in fields || 'model' in fields ? pruneTo(next, device) : next
+    })
+
+  // Checks run against the setup as currently shown (after the step being edited, on that tab).
+  const ctx: Ctx | null = device ? { device, endpoints, cables: state.cables } : null
+
+  /** What dropping a cable dragged from `from` onto `drop` would do (checked live while dragging). */
+  const resolveConnection = (from: string, drop: string) =>
+    ctx ? resolveDrop(from, drop, ctx) : ({ ok: false, to: null, reason: '' } as const)
 
   const removeCable = (id: string) => {
     if (selectedCable === id) setSelectedCable(null)
@@ -153,29 +178,54 @@ export function PanelEdit({
     set((p) => pruneTo({ ...p, endpoints: p.endpoints.filter((e) => e.id !== id) }, device))
   }
 
-  /** Add a unit, optionally cabled from `from` (a port or another unit). Returns its id. */
+  /**
+   * Add a unit, optionally cabled from `from` (a port or another unit): the new
+   * unit's matching port is picked for you. Returns its id.
+   */
   const addUnit = (kindId: string, from?: string): string => {
     const kind = getUnitKind(kindId)
     const id = uid()
-    const parent = from && isEpPoint(from) ? part.endpoints.find((e) => epPointId(e.id) === from) : undefined
-    const port = from && !isEpPoint(from) ? device?.ports.find((p) => p.id === from) : undefined
-    // Chains grow outward from what they hang off; a unit added from a port goes by the port's direction.
+    const parentUnit = from ? parsePoint(from)?.unitId : undefined
+    const parent = parentUnit ? part.endpoints.find((e) => e.id === parentUnit) : undefined
+    const chassisPort = from && !isEpPoint(from) ? device?.ports.find((p) => p.id === from) : undefined
+    const fromInfo = from && ctx ? infoFor(from, ctx) : null
+    const model = getUnitModel(kindId)?.id
+
+    // Chains grow outward from what they hang off; from a chassis port, by the port's direction.
     const side: PanelEndpoint['side'] = parent
       ? parent.side
-      : port
-        ? (kind.side ?? (port.kind === 'input' ? 'source' : 'display'))
+      : chassisPort
+        ? (kind.side ?? (chassisPort.kind === 'input' ? 'source' : 'display'))
         : (kind.side ?? 'source')
+
     let pos: PanelEndpoint['pos']
-    if (parent?.pos) pos = { x: parent.pos.x + (side === 'source' ? -(EP_W + 90) : EP_W + 90), y: parent.pos.y }
-    const unit: PanelEndpoint = { id, side, kind: kindId, name: '', detail: '', info: [], ...(pos ? { pos } : {}) }
+    if (device?.freestyle) {
+      // Put it beside what it hangs off (towards the free port's side), or after the last unit.
+      const parentItem = parent ? layoutScene(device, part.endpoints, part.cables).items.find((i) => i.endpoint.id === parent.id) : undefined
+      const toRight = fromInfo?.dir === 'in' ? false : true
+      if (parentItem) {
+        pos = { x: parentItem.x + (toRight ? EP_W + 70 : -(EP_W + 70)), y: parentItem.y }
+      } else {
+        const items = device ? layoutScene(device, part.endpoints, part.cables).items : []
+        pos = items.length
+          ? { x: Math.max(...items.map((i) => i.x + i.w)) + 70, y: Math.min(...items.map((i) => i.y)) }
+          : { x: 0, y: 0 }
+      }
+    } else if (parent?.pos) {
+      pos = { x: parent.pos.x + (side === 'source' ? -(EP_W + 90) : EP_W + 90), y: parent.pos.y }
+    }
+
+    const unit: PanelEndpoint = { id, side, kind: kindId, model, name: '', detail: '', info: [], ...(pos ? { pos } : {}) }
+    const to = from && fromInfo ? firstPortFor(unit, fromInfo) : undefined
     set((p) => ({
       ...p,
       endpoints: [...p.endpoints, unit],
-      cables: from ? [...p.cables, { id: uid(), from, to: epPointId(id), label: '' }] : p.cables,
+      cables: from && to ? [...p.cables, { id: uid(), from, to, label: '' }] : p.cables,
     }))
     return id
   }
 
+  /** A cable the editor has already checked (see `resolveConnection`). */
   const connect = (from: string, to: string) => {
     if (tab === 'trouble' && active) {
       // Plugging in during a step: becomes an action of that step.
@@ -203,7 +253,8 @@ export function PanelEdit({
   const onPortClick = (id: string) => {
     setSelectedCable(null)
     setSelected(id)
-    if (isEpPoint(id)) return
+    const pt = parsePoint(id)
+    if (pt && !pt.portKey) return // a box: selecting it is all a click does
     if (tab === 'notes') {
       const existing = part.annotations.find((a) => a.portId === id)
       if (existing) setActiveNote(existing.id)
@@ -224,12 +275,14 @@ export function PanelEdit({
   const portName = (id: string) => (device ? pointName(id, device, endpoints) : id)
   const inputSlots = template?.slots.filter((s) => s.family === 'input') ?? []
 
-  const selectedUnit = selected && isEpPoint(selected) ? part.endpoints.find((e) => epPointId(e.id) === selected) : undefined
+  // Clicking a unit's box or any of its ports shows that unit in the side panel.
+  const selectedUnitId = selected ? parsePoint(selected)?.unitId : undefined
+  const selectedUnit = selectedUnitId ? part.endpoints.find((e) => e.id === selectedUnitId) : undefined
   const cable = state.cables.find((c) => c.id === selectedCable)
 
   const hint =
     tab === 'equipment'
-      ? 'Drag a box to move it · drag its + onto a port or box to cable it · click a + or a port to add a unit or remove a cable.'
+      ? 'Drag a box to move it · drag from a port onto another port or box to cable it · click a port to add a unit or remove its cable.'
       : tab === 'notes'
         ? 'Click a port to add or edit its note.'
         : tab === 'trouble'
@@ -243,13 +296,21 @@ export function PanelEdit({
   /** Menu opened by clicking a "+" or a port on the Units tab. */
   const renderMenu = (id: string, close: () => void) => {
     const mine = part.cables.filter((c) => c.from === id || c.to === id)
+    const here = ctx ? infoFor(id, ctx) : null
+    const pt = parsePoint(id)
     return (
       <div>
         <p className="text-ink text-sm font-semibold">{portName(id)}</p>
+        {here?.signal && (
+          <p className="text-ink-faint text-[11px]">
+            {here.signal.toUpperCase()} · {here.dir === 'in' ? 'input' : here.dir === 'out' ? 'output' : 'two-way'}
+          </p>
+        )}
         <p className="text-ink-muted mt-2 mb-1.5 text-[11px] font-semibold tracking-wide uppercase">
-          Add a unit here
+          Add a unit and cable it here
         </p>
         <UnitPicker
+          canPick={(kind) => !here || kindAccepts(kind, undefined, here)}
           onPick={(kind) => {
             const nid = addUnit(kind, id)
             setSelected(epPointId(nid))
@@ -274,11 +335,11 @@ export function PanelEdit({
             </ul>
           </>
         )}
-        {isEpPoint(id) && (
+        {pt && !pt.portKey && (
           <button
             type="button"
             onClick={() => {
-              removeUnit(id.slice(3))
+              removeUnit(pt.unitId)
               close()
             }}
             className="mt-3 text-xs font-medium text-rose-300 underline underline-offset-2"
@@ -288,6 +349,48 @@ export function PanelEdit({
         )}
       </div>
     )
+  }
+
+  /**
+   * Chassis layout: forget dragged positions. Freestyle: lay units out left to
+   * right following the cables (an output feeds the next column), top to bottom
+   * within a column.
+   */
+  const autoArrange = () => {
+    if (!device?.freestyle) {
+      set((p) => ({
+        ...p,
+        endpoints: p.endpoints.map((e) => {
+          const rest = { ...e }
+          delete rest.pos
+          return rest
+        }),
+      }))
+      return
+    }
+    const level = new Map(part.endpoints.map((e) => [e.id, 0]))
+    const order = new Map(part.endpoints.map((e, i) => [e.id, i]))
+    // Edges point from what sends to what receives; two-way links go from the older unit to the newer.
+    const edges = part.cables.flatMap((c) => {
+      const a = ctx ? infoFor(c.from, ctx) : null
+      const b = ctx ? infoFor(c.to, ctx) : null
+      if (!a?.unitId || !b?.unitId || a.unitId === b.unitId) return []
+      const aSends = a.dir === 'out' || b.dir === 'in' || (a.dir === 'io' && b.dir === 'io' && (order.get(a.unitId) ?? 0) <= (order.get(b.unitId) ?? 0))
+      return [aSends ? ([a.unitId, b.unitId] as const) : ([b.unitId, a.unitId] as const)]
+    })
+    for (let i = 0; i < part.endpoints.length; i++) {
+      for (const [from, to] of edges) level.set(to, Math.max(level.get(to) ?? 0, (level.get(from) ?? 0) + 1))
+    }
+    const items = layoutScene(device, part.endpoints, part.cables).items
+    const colY = new Map<number, number>()
+    const pos = new Map<string, { x: number; y: number }>()
+    for (const e of part.endpoints) {
+      const lv = Math.min(level.get(e.id) ?? 0, part.endpoints.length)
+      const y = colY.get(lv) ?? 0
+      pos.set(e.id, { x: lv * (EP_W + 150), y })
+      colY.set(lv, y + (items.find((i) => i.endpoint.id === e.id)?.h ?? 120) + 40)
+    }
+    set((p) => ({ ...p, endpoints: p.endpoints.map((e) => ({ ...e, pos: pos.get(e.id) })) }))
   }
 
   const toolbar =
@@ -311,19 +414,8 @@ export function PanelEdit({
             </div>
           )}
         </div>
-        {part.endpoints.some((e) => e.pos) && (
-          <button
-            type="button"
-            onClick={() => set((p) => ({
-                ...p,
-                endpoints: p.endpoints.map((e) => {
-                  const rest = { ...e }
-                  delete rest.pos
-                  return rest
-                }),
-              }))}
-            className={GHOST_BTN}
-          >
+        {(device?.freestyle ? part.endpoints.length > 1 : part.endpoints.some((e) => e.pos)) && (
+          <button type="button" onClick={autoArrange} className={GHOST_BTN}>
             Auto-arrange
           </button>
         )}
@@ -419,6 +511,7 @@ export function PanelEdit({
                 setSelectedCable((c) => (c === id ? null : id))
               }}
               onConnect={tab === 'equipment' || (tab === 'trouble' && !!active) ? connect : undefined}
+              resolveConnection={resolveConnection}
               onMoveUnit={tab === 'equipment' ? (id, pos) => patchUnit(id, { pos }) : undefined}
               renderMenu={tab === 'equipment' ? renderMenu : undefined}
               toolbar={toolbar}
@@ -429,7 +522,7 @@ export function PanelEdit({
           </div>
 
           <div role="tablist" className="border-line mt-3 flex gap-1 border-b">
-            {TABS.map((t) => (
+            {TABS.filter((t) => t.id !== 'layout' || (template?.slots.length ?? 0) > 0).map((t) => (
               <button
                 key={t.id}
                 type="button"

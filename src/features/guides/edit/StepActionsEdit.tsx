@@ -1,5 +1,6 @@
 import { XIcon } from '../components/icons'
 import { epPointId, pointName } from '../panel/scene'
+import { unitPortSpecs } from '../panel/units'
 import type { DeviceDef, SlotDef } from '../panel/devices'
 import { DELETE_BTN, GHOST_BTN, INPUT, SELECT } from '../../../shared/ui/styles'
 import type { PanelAction, PanelCable, PanelEndpoint } from '../types'
@@ -41,7 +42,11 @@ export function StepActionsEdit({ actions, onChange, device, endpoints, inputSlo
 
   const add = (type: PanelAction['type']) => {
     const id = uid()
-    const first = device.ports[0]?.id ?? ''
+    const unitPorts = endpoints.flatMap((e) => {
+      const specs = unitPortSpecs(e.kind, e.model)
+      return specs.length ? specs.map((s) => epPointId(e.id, s.key)) : [epPointId(e.id)]
+    })
+    const first = device.ports[0]?.id ?? unitPorts[0] ?? ''
     const next: PanelAction =
       type === 'swap-cards'
         ? { id, type, from: inputSlots[0]?.id ?? '', to: inputSlots[1]?.id ?? '' }
@@ -49,7 +54,7 @@ export function StepActionsEdit({ actions, onChange, device, endpoints, inputSlo
           ? { id, type, a: endpoints[0]?.id ?? '', b: endpoints[1]?.id ?? '' }
           : type === 'unplug'
             ? { id, type, cableId: cablesBefore[0]?.id ?? '' }
-            : { id, type, cableId: uid(), from: first, to: endpoints[0] ? epPointId(endpoints[0].id) : first, label: '' }
+            : { id, type, cableId: uid(), from: first, to: unitPorts[1] ?? unitPorts[0] ?? first, label: '' }
     onChange([...actions, next])
   }
 
@@ -117,7 +122,9 @@ export function StepActionsEdit({ actions, onChange, device, endpoints, inputSlo
       ))}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-ink-faint text-[11px]">This step:</span>
-        {(Object.keys(LABEL) as PanelAction['type'][]).map((t) => (
+        {(Object.keys(LABEL) as PanelAction['type'][])
+          .filter((t) => !(t === 'swap-cards' && inputSlots.length < 2) && !(t === 'swap-units' && endpoints.length < 2))
+          .map((t) => (
           <button key={t} type="button" onClick={() => add(t)} className={GHOST_BTN}>
             + {LABEL[t]}
           </button>
