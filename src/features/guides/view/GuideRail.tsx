@@ -57,10 +57,12 @@ export function GuideRail({ toc, links }: GuideRailProps) {
         </div>
       )}
 
-      <div className="border-line-soft border-t pt-4">
-        <h3 className={`mb-2 ${SECTION_LABEL}`}>Quick Links</h3>
-        <QuickLinks links={links} />
-      </div>
+      {links.length > 0 && (
+        <div className={toc.length > 0 ? 'border-line-soft border-t pt-4' : undefined}>
+          <h3 className={`mb-2 ${SECTION_LABEL}`}>Quick Links</h3>
+          <QuickLinks links={links} />
+        </div>
+      )}
     </aside>
   )
 }

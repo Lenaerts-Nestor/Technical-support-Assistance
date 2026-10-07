@@ -177,7 +177,11 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
         </div>
       ) : (
         <PanelWorkspaceProvider value={panels.length > 0 ? setTab : null}>
-        <div className="mx-auto grid max-w-[1600px] grid-cols-[1fr_300px] items-start gap-6 px-8 pt-6 pb-8">
+        <div
+          className={`mx-auto grid max-w-[1600px] items-start gap-6 px-8 pt-6 pb-8 ${
+            toc.length > 0 || guide.links.length > 0 ? 'grid-cols-[1fr_300px]' : 'grid-cols-1'
+          }`}
+        >
           <div className="min-w-0 space-y-4">
             {lead.map((part) => (
               <GuidePartView key={part.id} part={part} />
@@ -192,7 +196,7 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
             ) : null}
           </div>
 
-          <GuideRail toc={toc} links={guide.links} />
+            {(toc.length > 0 || guide.links.length > 0) && <GuideRail toc={toc} links={guide.links} />}
         </div>
         </PanelWorkspaceProvider>
       )}

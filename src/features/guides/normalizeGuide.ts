@@ -130,6 +130,7 @@ function normalizePanel(raw: unknown): PanelPart {
         name: asStr(x.name),
         detail: asStr(x.detail),
         kind: asStr(x.kind) || (x.side === 'display' ? 'display' : 'source'),
+        ...(asStr(x.model) ? { model: asStr(x.model) } : {}),
         ...(typeof asObj(x.pos).x === 'number' && typeof asObj(x.pos).y === 'number'
           ? { pos: { x: asObj(x.pos).x as number, y: asObj(x.pos).y as number } }
           : {}),

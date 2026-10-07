@@ -63,6 +63,8 @@ export type DeviceDef = {
   texts: TextDef[]
   ports: PortDef[]
   routing: Routing
+  /** An empty canvas: no chassis is drawn, only the units placed on it. */
+  freestyle?: boolean
   note: string
 }
 
@@ -254,6 +256,7 @@ export type DeviceTemplate = {
   fixedPorts: PortDef[]
   slots: SlotDef[]
   routing: Routing
+  freestyle?: boolean
   note: string
 }
 
@@ -396,9 +399,26 @@ const NVX: DeviceTemplate = {
   note: NOTE_FIXED,
 }
 
-export const TEMPLATES: DeviceTemplate[] = [DM_MD16X16, NVX]
+/** No chassis at all: place units on a blank canvas and cable them together. */
+const FREESTYLE: DeviceTemplate = {
+  id: 'freestyle',
+  name: 'Freestyle (blank canvas)',
+  summary: 'Add units and cable them together to design your own panel.',
+  width: 0,
+  height: 0,
+  zones: [],
+  frames: [],
+  texts: [],
+  fixedPorts: [],
+  slots: [],
+  routing: { gutters: [], top: 0, bottom: 0 },
+  freestyle: true,
+  note: 'Port lists are generic for the unit family until checked against the real rear panel.',
+}
 
-export const DEFAULT_DEVICE_ID = DM_MD16X16.id
+export const TEMPLATES: DeviceTemplate[] = [FREESTYLE, DM_MD16X16, NVX]
+
+export const DEFAULT_DEVICE_ID = FREESTYLE.id
 
 export const getTemplate = (id: string): DeviceTemplate | undefined =>
   TEMPLATES.find((t) => t.id === id)
@@ -458,6 +478,7 @@ export function getDevice(id: string, cards: Record<string, string> = {}): Devic
     texts,
     ports,
     routing: t.routing,
+    freestyle: t.freestyle,
     note: t.note,
   }
 }

@@ -1,4 +1,6 @@
 import { getDevice, cardIdFor, getTemplate, type DeviceDef } from './devices'
+import { parsePoint } from './scene'
+import { unitPortSpecs } from './units'
 import type { PanelAction, PanelCable, PanelEndpoint, PanelPart, PanelScenario, PanelStep } from '../types'
 
 /**
@@ -50,9 +52,24 @@ export function stateAfter(part: PanelPart, steps: PanelStep[]): FlowState {
         const a = endpoints.find((e) => e.id === act.a)
         const b = endpoints.find((e) => e.id === act.b)
         if (!a || !b || a === b) continue
-        const [ea, eb] = [`ep:${a.id}`, `ep:${b.id}`]
-        const swap = (id: string) => (id === ea ? eb : id === eb ? ea : id)
-        cables = cables.map((c) => ({ ...c, from: swap(c.from), to: swap(c.to) }))
+        // Cables stay put, so whatever was on one unit's port now sits on the same port of the other.
+        const swap = (id: string) => {
+          for (const [x, y] of [[a.id, b.id], [b.id, a.id]]) {
+            if (id === `ep:${x}`) return `ep:${y}`
+            if (id.startsWith(`ep:${x}:`)) return `ep:${y}:${id.slice(`ep:${x}:`.length)}`
+          }
+          return id
+        }
+        const hasPort = (id: string) => {
+          const pt = parsePoint(id)
+          if (!pt?.portKey) return true
+          const u = endpoints.find((e) => e.id === pt.unitId)
+          return !!u && unitPortSpecs(u.kind, u.model).some((s) => s.key === pt.portKey)
+        }
+        // A port the other model doesn't have leaves its cable hanging, so the cable drops out.
+        cables = cables
+          .map((c) => ({ ...c, from: swap(c.from), to: swap(c.to) }))
+          .filter((c) => hasPort(c.from) && hasPort(c.to))
         const pos = a.pos
         a.pos = b.pos
         b.pos = pos

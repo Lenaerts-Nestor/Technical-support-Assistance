@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { CalloutIcon, ChevronLeftIcon, PanelIcon, PlusIcon, TableIcon, TermIcon } from '../components/icons'
 import { PART_KINDS, PART_TONES } from '../guidesData'
 import { useGuideDraft } from '../useGuideDraft'
@@ -33,6 +34,8 @@ const KIND_ICON: Record<GuidePartKind, (p: { className?: string }) => React.Reac
 export function GuideEditor({ guide, onSave, onCancel }: GuideEditorProps) {
   const d = useGuideDraft(guide, { onSave, onCancel })
   const { draft } = d
+  // Quick links are optional: shown from the start only when the guide already has some.
+  const [showLinks, setShowLinks] = useState(draft.links.length > 0)
 
   return (
     <div>
@@ -49,12 +52,23 @@ export function GuideEditor({ guide, onSave, onCancel }: GuideEditorProps) {
           placeholder="Guide title…"
           className={`${INPUT_HEADING} min-w-0 flex-1 placeholder:font-normal`}
         />
+        <button
+          type="button"
+          onClick={() => setShowLinks((s) => !s)}
+          aria-pressed={showLinks}
+          className={GHOST_BTN_MD}
+          title="Show or hide the quick links panel"
+        >
+          Quick links{draft.links.length > 0 ? ` (${draft.links.length})` : ''}
+        </button>
         <button type="button" onClick={d.save} className={PRIMARY_BTN}>
           Save Guide
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-[1600px] grid-cols-[1fr_320px] items-start gap-6 px-8 pt-4 pb-8">
+      <div
+        className={`mx-auto grid max-w-[1600px] items-start gap-6 px-8 pt-4 pb-8 ${showLinks ? 'grid-cols-[1fr_320px]' : 'grid-cols-1'}`}
+      >
         <div className="space-y-4">
           {/* Rides along under the top bar so a block can be added from anywhere
               in a long guide without scrolling back up. */}
@@ -99,6 +113,7 @@ export function GuideEditor({ guide, onSave, onCancel }: GuideEditorProps) {
           )}
         </div>
 
+        {showLinks && (
         <aside className={`${CARD} sticky top-[72px] flex h-fit flex-col`}>
           <div className={CARD_HEADER}>
             <h3 className="text-ink text-sm font-semibold">Quick Links</h3>
@@ -124,6 +139,7 @@ export function GuideEditor({ guide, onSave, onCancel }: GuideEditorProps) {
             ))}
           </div>
         </aside>
+        )}
       </div>
     </div>
   )

@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { PanelIcon } from '../components/icons'
+import { infoFor } from '../panel/connect'
 import { DevicePanel } from '../panel/DevicePanel'
 import { KIND_DOT, PORT_KIND_LABEL } from '../panel/devices'
+import { pointName } from '../panel/scene'
+import { SIGNAL_COLOR, SIGNAL_LABEL, unitPortSpecs } from '../panel/units'
 import { usePanelFlow } from '../panel/usePanelFlow'
 import { GHOST_BTN } from '../../../shared/ui/styles'
 import { PanelFlowBox } from './PanelFlowBox'
@@ -9,9 +12,9 @@ import { useOpenPanelWorkspace } from './panelWorkspaceContext'
 import type { PanelPart } from '../types'
 
 /**
- * Interactive rear-panel block. Collapsed it is a one-line card with a button;
+ * Interactive panel block. Collapsed it is a one-line card with a button;
  * opened it shows the diagram, a port-detail strip, and the troubleshooting
- * flow. The full-size view with equipment and cables is a separate tab.
+ * flow. The full-size view is a separate tab.
  */
 export function PanelView({ part }: { part: PanelPart }) {
   const flow = usePanelFlow(part)
@@ -28,8 +31,27 @@ export function PanelView({ part }: { part: PanelPart }) {
 
   const title = part.title || device?.name || 'Panel diagram'
   const checks = part.scenarios.length
-  const port = device?.ports.find((p) => p.id === selected)
   const note = selected ? annotations.get(selected) : undefined
+
+  const detail = useMemo(() => {
+    if (!device || !selected) return null
+    const chassis = device.ports.find((p) => p.id === selected)
+    const info = infoFor(selected, { device, endpoints: flow.endpoints, cables: flow.cables })
+    return {
+      label: pointName(selected, device, flow.endpoints),
+      kind: chassis
+        ? PORT_KIND_LABEL[chassis.kind]
+        : info?.signal
+          ? `${SIGNAL_LABEL[info.signal]} ${info.dir === 'in' ? 'input' : info.dir === 'out' ? 'output' : 'two-way'}`
+          : '',
+    }
+  }, [device, selected, flow.endpoints, flow.cables])
+
+  // Signals worth a legend entry on a freestyle panel: the ones its units actually have.
+  const signals = useMemo(
+    () => [...new Set(flow.endpoints.flatMap((e) => unitPortSpecs(e.kind, e.model).map((s) => s.signal)))],
+    [flow.endpoints],
+  )
 
   return (
     <div className="rounded-xl border border-fuchsia-400/30 border-l-[3px] border-l-fuchsia-400 bg-fuchsia-400/8">
@@ -41,7 +63,11 @@ export function PanelView({ part }: { part: PanelPart }) {
           <h3 className="text-ink truncate text-sm font-semibold">{title}</h3>
           <p className="text-ink-faint text-xs">
             {[
-              part.title || !device ? (device?.name ?? 'Unknown device') : 'Rear panel',
+              device?.freestyle
+                ? `${flow.endpoints.length} unit${flow.endpoints.length === 1 ? '' : 's'}`
+                : part.title || !device
+                  ? (device?.name ?? 'Unknown device')
+                  : 'Rear panel',
               checks > 0 && `${checks} troubleshooting check${checks === 1 ? '' : 's'}`,
             ]
               .filter(Boolean)
@@ -69,6 +95,11 @@ export function PanelView({ part }: { part: PanelPart }) {
             <>
               <DevicePanel
                 device={device}
+                // A freestyle panel is nothing but its units; a chassis panel shows them in the full view.
+                endpoints={device.freestyle ? flow.endpoints : undefined}
+                cables={flow.cables}
+                ghostCables={flow.ghosts}
+                freshCables={flow.fresh}
                 annotated={annotated}
                 highlighted={flow.highlighted}
                 links={flow.links}
@@ -78,14 +109,21 @@ export function PanelView({ part }: { part: PanelPart }) {
               />
 
               <div className="text-ink-muted mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-                {(['input', 'output', 'audio', 'network', 'control', 'power'] as const)
-                  .filter((k) => device.ports.some((p) => p.kind === k))
-                  .map((k) => (
-                    <span key={k} className="inline-flex items-center gap-1.5">
-                      <span className={`h-2 w-2 rounded-full ${KIND_DOT[k]}`} />
-                      {PORT_KIND_LABEL[k]}
-                    </span>
-                  ))}
+                {device.freestyle
+                  ? signals.map((s) => (
+                      <span key={s} className="inline-flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full" style={{ background: SIGNAL_COLOR[s] }} />
+                        {SIGNAL_LABEL[s]}
+                      </span>
+                    ))
+                  : (['input', 'output', 'audio', 'network', 'control', 'power'] as const)
+                      .filter((k) => device.ports.some((p) => p.kind === k))
+                      .map((k) => (
+                        <span key={k} className="inline-flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${KIND_DOT[k]}`} />
+                          {PORT_KIND_LABEL[k]}
+                        </span>
+                      ))}
                 {annotated.size > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <span className="bg-brand h-2 w-2 rounded-full" />
@@ -95,13 +133,11 @@ export function PanelView({ part }: { part: PanelPart }) {
               </div>
 
               <div className="border-line bg-canvas mt-3 min-h-[3.25rem] rounded-lg border px-3 py-2.5 text-sm">
-                {port ? (
+                {detail ? (
                   <>
                     <p className="text-ink font-semibold">
-                      {port.label}
-                      <span className="text-ink-faint ml-2 text-xs font-normal">
-                        {PORT_KIND_LABEL[port.kind]}
-                      </span>
+                      {detail.label}
+                      {detail.kind && <span className="text-ink-faint ml-2 text-xs font-normal">{detail.kind}</span>}
                     </p>
                     {note ? (
                       <p className="text-ink-muted mt-1 whitespace-pre-line">

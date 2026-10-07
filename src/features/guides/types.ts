@@ -133,6 +133,8 @@ export type PanelEndpoint = {
   info: PanelEndpointInfo[]
   /** Unit type from the catalog in `panel/units.ts` (NVX receiver, display…). */
   kind: string
+  /** Model within that type; decides which ports the box shows. Unset = the type's first model. */
+  model?: string
   /** Where the box was dragged to. Without it the box is placed automatically. */
   pos?: { x: number; y: number }
 }

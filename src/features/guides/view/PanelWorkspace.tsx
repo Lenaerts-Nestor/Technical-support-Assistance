@@ -3,8 +3,8 @@ import { usePanelFlow } from '../panel/usePanelFlow'
 import { PanelFlowBox } from './PanelFlowBox'
 import { PanelCanvas } from '../panel/PanelCanvas'
 import { PORT_KIND_LABEL } from '../panel/devices'
-import { getUnitKind } from '../panel/units'
-import { cableColor, epPointId, isEpPoint, pointName } from '../panel/scene'
+import { SIGNAL_LABEL, getUnitKind, getUnitModel, unitPortSpecs } from '../panel/units'
+import { cableColor, isEpPoint, parsePoint, pointName } from '../panel/scene'
 import { SECTION_LABEL } from '../../../shared/ui/styles'
 import type { PanelPart } from '../types'
 
@@ -37,10 +37,18 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
   }
 
   const port = selected && !isEpPoint(selected) ? device.ports.find((p) => p.id === selected) : undefined
-  const endpoint = selected && isEpPoint(selected)
-    ? endpoints.find((e) => epPointId(e.id) === selected)
-    : undefined
-  const connected = selected ? cables.filter((c) => c.from === selected || c.to === selected) : []
+  const sel = selected ? parsePoint(selected) : null
+  const endpoint = sel ? endpoints.find((e) => e.id === sel.unitId) : undefined
+  const unitSpec = endpoint && sel?.portKey ? unitPortSpecs(endpoint.kind, endpoint.model).find((s) => s.key === sel.portKey) : undefined
+  // A box counts all of its ports' cables; a port only its own.
+  const connected = selected
+    ? cables.filter(
+        (c) =>
+          c.from === selected ||
+          c.to === selected ||
+          (!!sel && !sel.portKey && (parsePoint(c.from)?.unitId === sel.unitId || parsePoint(c.to)?.unitId === sel.unitId)),
+      )
+    : []
   const cable = cables.find((c) => c.id === selectedCable)
   const note = selected ? annotations.get(selected) : undefined
 
@@ -98,8 +106,32 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
             </div>
           ) : endpoint ? (
             <div className="text-sm">
+              {unitSpec && (
+                <div className="border-line mb-2 border-b pb-2">
+                  <p className="text-ink font-semibold">
+                    {unitSpec.label}
+                    <span className="text-ink-faint ml-2 text-xs font-normal">
+                      {SIGNAL_LABEL[unitSpec.signal]} {unitSpec.dir === 'in' ? 'input' : unitSpec.dir === 'out' ? 'output' : 'two-way'}
+                    </span>
+                  </p>
+                  {note ? (
+                    <p className="text-ink-muted mt-1 whitespace-pre-line">
+                      {note.label && <strong className="text-ink">{note.label}. </strong>}
+                      {note.note}
+                    </p>
+                  ) : (
+                    <p className="text-ink-faint mt-1 text-xs">No note for this port in this guide.</p>
+                  )}
+                </div>
+              )}
               <p className="text-ink font-semibold">{endpoint.name || 'Unnamed'}</p>
-              <p className="text-ink-muted">{getUnitKind(endpoint.kind).label}{endpoint.detail ? ` · ${endpoint.detail}` : ''}</p>
+              <p className="text-ink-muted">
+                {getUnitKind(endpoint.kind).label}
+                {getUnitModel(endpoint.kind, endpoint.model) && getUnitKind(endpoint.kind).models.length > 0
+                  ? ` · ${getUnitModel(endpoint.kind, endpoint.model)?.name}`
+                  : ''}
+                {endpoint.detail ? ` · ${endpoint.detail}` : ''}
+              </p>
               {endpoint.info.length > 0 && (
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
                   {endpoint.info.map((i) => (
