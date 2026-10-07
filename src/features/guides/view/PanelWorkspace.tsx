@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
+import { usePanelFlow } from '../panel/usePanelFlow'
+import { PanelFlowBox } from './PanelFlowBox'
 import { PanelCanvas } from '../panel/PanelCanvas'
-import { PORT_KIND_LABEL, getDevice } from '../panel/devices'
+import { PORT_KIND_LABEL } from '../panel/devices'
 import { cableColor, epPointId, isEpPoint, pointName } from '../panel/scene'
 import { SECTION_LABEL } from '../../../shared/ui/styles'
 import type { PanelPart } from '../types'
@@ -11,27 +13,25 @@ import type { PanelPart } from '../types'
  * the troubleshooting checks. Read-only: wiring is edited in the guide editor.
  */
 export function PanelWorkspace({ part }: { part: PanelPart }) {
-  const device = useMemo(() => getDevice(part.deviceId, part.cards), [part.deviceId, part.cards])
+  const flow = usePanelFlow(part)
+  const { device, cables } = flow
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedCable, setSelectedCable] = useState<string | null>(null)
-  const [scenarioId, setScenarioId] = useState<string | null>(null)
 
   const annotations = useMemo(
     () => new Map(part.annotations.map((a) => [a.portId, a])),
     [part.annotations],
   )
   const annotated = useMemo(() => new Set(annotations.keys()), [annotations])
-  const scenario = part.scenarios.find((s) => s.id === scenarioId) ?? null
-  const highlighted = useMemo(() => new Set(scenario?.portIds ?? []), [scenario])
 
   if (!device) {
     return <p className="text-ink-muted p-6 text-sm">This panel's device template isn't available.</p>
   }
 
   const name = (id: string) => pointName(id, device, part.endpoints)
-  const cableIndex = new Map(part.cables.map((c, i) => [c.id, i]))
+  const cableIndex = new Map(cables.map((c, i) => [c.id, i]))
   const cableSummary = (id: string) => {
-    const c = part.cables.find((x) => x.id === id)
+    const c = cables.find((x) => x.id === id)
     return c ? `${name(c.from)} → ${name(c.to)}` : ''
   }
 
@@ -39,8 +39,8 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
   const endpoint = selected && isEpPoint(selected)
     ? part.endpoints.find((e) => epPointId(e.id) === selected)
     : undefined
-  const connected = selected ? part.cables.filter((c) => c.from === selected || c.to === selected) : []
-  const cable = part.cables.find((c) => c.id === selectedCable)
+  const connected = selected ? cables.filter((c) => c.from === selected || c.to === selected) : []
+  const cable = cables.find((c) => c.id === selectedCable)
   const note = selected ? annotations.get(selected) : undefined
 
   const selectPoint = (id: string) => {
@@ -58,10 +58,11 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
         <PanelCanvas
           device={device}
           endpoints={part.endpoints}
-          cables={part.cables}
+          cables={cables}
           annotated={annotated}
-          highlighted={highlighted}
-          links={scenario?.links}
+          highlighted={flow.highlighted}
+          links={flow.links}
+          moves={flow.moves}
           selected={selected}
           selectedCable={selectedCable}
           onPortClick={selectPoint}
@@ -96,6 +97,16 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
             <div className="text-sm">
               <p className="text-ink font-semibold">{endpoint.name || 'Unnamed'}</p>
               <p className="text-ink-muted">{endpoint.detail || (endpoint.side === 'source' ? 'Source' : 'Display')}</p>
+              {endpoint.info.length > 0 && (
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+                  {endpoint.info.map((i) => (
+                    <div key={i.id} className="contents">
+                      <dt className="text-ink-faint">{i.key}</dt>
+                      <dd className="text-ink">{i.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </div>
           ) : (
             <p className="text-ink-faint text-xs">Click a port, a piece of equipment or a cable.</p>
@@ -118,14 +129,14 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
         </section>
 
         <section>
-          <p className={`mb-1.5 ${SECTION_LABEL}`}>Cables ({part.cables.length})</p>
-          {part.cables.length === 0 ? (
+          <p className={`mb-1.5 ${SECTION_LABEL}`}>Cables ({cables.length})</p>
+          {cables.length === 0 ? (
             <p className="text-ink-faint text-xs">
               No cables yet. Add equipment and cables when editing the guide.
             </p>
           ) : (
             <ul className="space-y-1">
-              {part.cables.map((c) => (
+              {cables.map((c) => (
                 <li key={c.id}>
                   <button
                     type="button"
@@ -152,31 +163,7 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
           )}
         </section>
 
-        {part.scenarios.length > 0 && (
-          <section>
-            <p className={`mb-1.5 ${SECTION_LABEL}`}>Troubleshooting</p>
-            <div className="flex flex-wrap gap-1.5">
-              {part.scenarios.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  aria-pressed={s.id === scenarioId}
-                  onClick={() => setScenarioId((cur) => (cur === s.id ? null : s.id))}
-                  className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    s.id === scenarioId
-                      ? 'border-rose-400/60 bg-rose-400/15 text-rose-200'
-                      : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink'
-                  }`}
-                >
-                  {s.title || 'Untitled check'}
-                </button>
-              ))}
-            </div>
-            {scenario && (
-              <p className="text-ink mt-2 text-sm leading-relaxed whitespace-pre-line">{scenario.text}</p>
-            )}
-          </section>
-        )}
+        <PanelFlowBox part={part} flow={flow} />
 
         <p className="text-ink-faint text-[11px]">{device.note}</p>
       </aside>

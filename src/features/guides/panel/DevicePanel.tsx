@@ -1,12 +1,12 @@
 import { portCenter, type DeviceDef, type PortDef, type PortKind } from './devices'
 import {
-  EXT,
+  EP_W,
   cableColor,
-  cableGeometry,
-  layoutEquipment,
-  pointLookup,
+  deviceBounds,
   epPointId,
-  sceneBounds,
+  layoutScene,
+  routeCable,
+  type Pt,
   type Rect,
 } from './scene'
 import type { PanelCable, PanelEndpoint } from '../types'
@@ -31,6 +31,12 @@ type DevicePanelProps = {
   /** Equipment beside the unit and the cables to it. Omit to draw the unit alone. */
   endpoints?: PanelEndpoint[]
   cables?: PanelCable[]
+  /** Card swaps to show for the current step: an arrow between the two slots. */
+  moves?: { from: string; to: string }[]
+  /** Show a "+" on each piece of equipment to drag a new cable from. */
+  connectable?: boolean
+  /** A cable being dragged, and the port or box it would land on. */
+  pending?: { from: Pt; to: Pt; target: string | null } | null
   /** A port id, or `ep:<id>` for equipment. */
   selected?: string | null
   selectedCable?: string | null
@@ -44,6 +50,7 @@ type DevicePanelProps = {
 const EMPTY_SET: ReadonlySet<string> = new Set()
 const NO_ENDPOINTS: PanelEndpoint[] = []
 const NO_CABLES: PanelCable[] = []
+const NO_MOVES: { from: string; to: string }[] = []
 
 /** A troubleshooting link as a curve that arcs above both ports. */
 function linkPath(a: PortDef, b: PortDef): string {
@@ -63,6 +70,9 @@ export function DevicePanel({
   links = [],
   endpoints,
   cables = NO_CABLES,
+  moves = NO_MOVES,
+  connectable = false,
+  pending = null,
   selected = null,
   selectedCable = null,
   onPortClick,
@@ -72,9 +82,11 @@ export function DevicePanel({
 }: DevicePanelProps) {
   const byId = new Map(device.ports.map((p) => [p.id, p]))
   const withEquipment = endpoints !== undefined
-  const items = layoutEquipment(device, endpoints ?? NO_ENDPOINTS, cables)
-  const locate = pointLookup(device, items)
-  const vb = viewBox ?? sceneBounds(device, withEquipment)
+  const scene = layoutScene(device, endpoints ?? NO_ENDPOINTS, cables)
+  const items = scene.items
+  const vb = viewBox ?? (withEquipment ? scene.bounds : deviceBounds(device))
+  const movedSlots = new Set(moves.flatMap((m) => [m.from, m.to]))
+  const frameBySlot = new Map(device.frames.filter((f) => f.slotId).map((f) => [f.slotId!, f]))
 
   // With a selection, cables that don't touch it step back so the one in focus reads.
   const touches = (c: PanelCable) =>
@@ -88,6 +100,7 @@ export function DevicePanel({
           role: 'button' as const,
           tabIndex: 0,
           'aria-pressed': selected === id,
+          'data-point-id': id,
           onClick: () => onPortClick(id),
           onKeyDown: (e: React.KeyboardEvent) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -96,7 +109,7 @@ export function DevicePanel({
             }
           },
         }
-      : {}
+      : { 'data-point-id': id }
 
   return (
     <svg
@@ -155,7 +168,17 @@ export function DevicePanel({
 
       {device.frames.map((f, i) => (
         <g key={i}>
-          <rect x={f.x} y={f.y} width={f.w} height={f.h} rx={5} className="fill-surface stroke-line" />
+          <rect
+            x={f.x}
+            y={f.y}
+            width={f.w}
+            height={f.h}
+            rx={5}
+            className={
+              f.slotId && movedSlots.has(f.slotId) ? 'fill-amber-400/10 stroke-amber-400' : 'fill-surface stroke-line'
+            }
+            strokeWidth={f.slotId && movedSlots.has(f.slotId) ? 2 : 1}
+          />
           {f.title && (
             <text
               x={f.titleAnchor === 'middle' ? f.x + f.w / 2 : f.x + f.w - 8}
@@ -229,15 +252,20 @@ export function DevicePanel({
 
       {withEquipment && (
         <>
-          <text x={-EXT + 20} y={24} className="fill-ink-faint text-[11px] font-bold tracking-widest uppercase">
-            Sources
-          </text>
-          <text x={device.width + 80} y={24} className="fill-ink-faint text-[11px] font-bold tracking-widest uppercase">
-            Displays
-          </text>
-          {items.map(({ endpoint: e, x, y, w, h }) => {
+          {items.some((i) => i.endpoint.side === 'source') && (
+            <text x={-(EP_W + 80)} y={24} className="fill-ink-faint text-[11px] font-bold tracking-widest uppercase">
+              Sources
+            </text>
+          )}
+          {items.some((i) => i.endpoint.side === 'display') && (
+            <text x={device.width + 80} y={24} className="fill-ink-faint text-[11px] font-bold tracking-widest uppercase">
+              Displays
+            </text>
+          )}
+          {items.map(({ endpoint: e, x, y, w, h, lines }) => {
             const id = epPointId(e.id)
             const isSel = selected === id
+            const isDrop = pending?.target === id
             const tone = e.side === 'source' ? 'stroke-sky-400/70' : 'stroke-emerald-400/70'
             return (
               <g
@@ -252,8 +280,8 @@ export function DevicePanel({
                   width={w}
                   height={h}
                   rx={8}
-                  className={`fill-surface ${isSel ? 'stroke-ink' : tone}`}
-                  strokeWidth={isSel ? 2.5 : 1.5}
+                  className={`fill-surface ${isSel || isDrop ? 'stroke-brand' : tone}`}
+                  strokeWidth={isSel || isDrop ? 3 : 1.5}
                 />
                 <text x={x + 12} y={y + 14} className="fill-ink-faint text-[8px] font-bold tracking-widest uppercase">
                   {e.side}
@@ -266,6 +294,11 @@ export function DevicePanel({
                     {clip(e.detail, 36)}
                   </text>
                 )}
+                {lines.map((line, i) => (
+                  <text key={i} x={x + 12} y={y + 58 + i * 13} className="fill-ink-muted text-[10px]">
+                    {clip(line, 38)}
+                  </text>
+                ))}
               </g>
             )
           })}
@@ -273,10 +306,8 @@ export function DevicePanel({
       )}
 
       {cables.map((c, i) => {
-        const a = locate(c.from)
-        const b = locate(c.to)
-        if (!a || !b) return null
-        const { d, mid } = cableGeometry(a, b)
+        const route = routeCable(device, items, c, i)
+        if (!route) return null
         const color = cableColor(i)
         const emphasised = touches(c)
         const dim = hasFocus && anyTouched && !emphasised
@@ -287,24 +318,70 @@ export function DevicePanel({
             className={onCableClick ? 'cursor-pointer' : undefined}
             onClick={onCableClick ? () => onCableClick(c.id) : undefined}
           >
-            <path d={d} fill="none" stroke="transparent" strokeWidth={14} />
-            <path d={d} fill="none" className="stroke-canvas" strokeWidth={emphasised ? 6.5 : 5} strokeLinecap="round" />
-            <path d={d} fill="none" stroke={color} strokeWidth={emphasised ? 3.5 : 2.5} strokeLinecap="round" />
-            <circle cx={a.x} cy={a.y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
-            <circle cx={b.x} cy={b.y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
+            <path d={route.d} fill="none" stroke="transparent" strokeWidth={14} />
+            <path d={route.d} fill="none" className="stroke-canvas" strokeWidth={emphasised ? 6.5 : 5} strokeLinecap="round" />
+            <path d={route.d} fill="none" stroke={color} strokeWidth={emphasised ? 3.5 : 2.5} strokeLinecap="round" />
+            <circle cx={route.ends[0].x} cy={route.ends[0].y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
+            <circle cx={route.ends[1].x} cy={route.ends[1].y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
             {c.label && (
               <text
-                x={mid.x}
-                y={mid.y - 6}
-                textAnchor="middle"
+                x={route.label.x}
+                y={route.label.y}
+                textAnchor={route.label.anchor}
                 className="fill-ink stroke-canvas text-[11px] font-semibold"
                 strokeWidth={4}
                 paintOrder="stroke"
               >
-                {c.label}
+                {clip(c.label, 16)}
               </text>
             )}
           </g>
+        )
+      })}
+
+      {connectable &&
+        items.map(({ endpoint: e, inner }) => (
+          <g key={e.id} data-handle={epPointId(e.id)} className="cursor-crosshair">
+            <circle cx={inner.x} cy={inner.y} r={11} className="fill-brand stroke-canvas" strokeWidth={2} />
+            <path
+              d={`M ${inner.x - 5} ${inner.y} H ${inner.x + 5} M ${inner.x} ${inner.y - 5} V ${inner.y + 5}`}
+              className="stroke-on-brand pointer-events-none"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+            />
+            <title>Drag to a port or another box to connect a cable</title>
+          </g>
+        ))}
+
+      {pending && (
+        <path
+          d={`M ${pending.from.x} ${pending.from.y} L ${pending.to.x} ${pending.to.y}`}
+          className="stroke-brand pointer-events-none"
+          strokeWidth={3}
+          strokeDasharray="7 5"
+          strokeLinecap="round"
+          fill="none"
+        />
+      )}
+
+      {moves.map((m, i) => {
+        const a = frameBySlot.get(m.from)
+        const b = frameBySlot.get(m.to)
+        if (!a || !b) return null
+        const p = { x: a.x + a.w / 2, y: a.y + a.h / 2 }
+        const q = { x: b.x + b.w / 2, y: b.y + b.h / 2 }
+        const bend = p.x === q.x ? 90 : 0
+        return (
+          <path
+            key={i}
+            d={`M ${p.x} ${p.y} Q ${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2} ${q.x} ${q.y}`}
+            fill="none"
+            stroke="#f0a542"
+            strokeWidth={4}
+            strokeDasharray="10 7"
+            markerEnd="url(#panel-arrow)"
+            className="panel-link pointer-events-none"
+          />
         )
       })}
 

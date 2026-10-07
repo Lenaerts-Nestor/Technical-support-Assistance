@@ -30,7 +30,25 @@ export type PortDef = {
 }
 
 export type ZoneDef = { label: string; x: number; y: number; w: number; h: number }
-export type FrameDef = { x: number; y: number; w: number; h: number; title?: string; titleY?: number; titleAnchor?: 'end' | 'middle' }
+export type FrameDef = {
+  x: number
+  y: number
+  w: number
+  h: number
+  title?: string
+  titleY?: number
+  titleAnchor?: 'end' | 'middle'
+  /** Slot this frame draws, so a card move can point at it. */
+  slotId?: string
+  /** How far above the frame cables run along the gap to reach its ports. */
+  lane?: number
+}
+
+/**
+ * Where cables may run without crossing cards: vertical gutters between the
+ * unit's columns, and horizontal highways above and below everything.
+ */
+export type Routing = { gutters: number[]; top: number; bottom: number }
 export type TextDef = { text: string; x: number; y: number; anchor?: 'start' | 'middle' | 'end'; size?: number }
 
 /** A device with its cards resolved: everything `DevicePanel` needs to draw. */
@@ -44,6 +62,7 @@ export type DeviceDef = {
   frames: FrameDef[]
   texts: TextDef[]
   ports: PortDef[]
+  routing: Routing
   note: string
 }
 
@@ -234,6 +253,7 @@ export type DeviceTemplate = {
   texts: TextDef[]
   fixedPorts: PortDef[]
   slots: SlotDef[]
+  routing: Routing
   note: string
 }
 
@@ -330,6 +350,7 @@ const DM_MD16X16: DeviceTemplate = {
   ],
   fixedPorts: mdFixedPorts(),
   slots: mdSlots(),
+  routing: { gutters: [341, 759], top: 34, bottom: 762 },
   note: NOTE_CHASSIS,
 }
 
@@ -371,6 +392,7 @@ const NVX: DeviceTemplate = {
     nvxPort('power', 'DC power', 'POWER', 'power', 'Network & power', 536, 190, 64, 44),
   ],
   slots: [],
+  routing: { gutters: [], top: 36, bottom: 262 },
   note: NOTE_FIXED,
 }
 
@@ -409,6 +431,8 @@ export function getDevice(id: string, cards: Record<string, string> = {}): Devic
       title: card.name,
       titleY: slot.y + (slot.family === 'input' ? 64 : 46),
       titleAnchor: slot.family === 'input' ? 'end' : 'middle',
+      slotId: slot.id,
+      lane: slot.family === 'input' ? 4 : 2,
     })
     if (slot.numberAt) {
       texts.push({
@@ -433,6 +457,7 @@ export function getDevice(id: string, cards: Record<string, string> = {}): Devic
     frames,
     texts,
     ports,
+    routing: t.routing,
     note: t.note,
   }
 }

@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { GHOST_BTN } from '../../../shared/ui/styles'
 import { DevicePanel } from './DevicePanel'
-import { sceneBounds } from './scene'
+import { deviceBounds, layoutScene, type Pt } from './scene'
 import type { ComponentProps } from 'react'
 
-type PanelCanvasProps = Omit<ComponentProps<typeof DevicePanel>, 'viewBox' | 'className'> & {
+type PanelCanvasProps = Omit<
+  ComponentProps<typeof DevicePanel>,
+  'viewBox' | 'className' | 'connectable' | 'pending'
+> & {
   /** Fixed CSS height; omit to fill the parent. */
   height?: number | string
+  /** When set, equipment shows a "+" to drag a cable from; called with both ends' ids. */
+  onConnect?: (fromId: string, toId: string) => void
 }
 
 type View = { cx: number; cy: number; scale: number }
@@ -20,13 +25,15 @@ const DRAG_THRESHOLD = 4
  * dragging pans, and Fit frames the whole scene. Clicks on ports still work;
  * a drag that moves past a few pixels is swallowed instead of selecting.
  */
-export function PanelCanvas({ height, ...panel }: PanelCanvasProps) {
-  const { device, endpoints } = panel
-  const bounds = sceneBounds(device, endpoints !== undefined)
+export function PanelCanvas({ height, onConnect, ...panel }: PanelCanvasProps) {
+  const { device, endpoints, cables } = panel
+  const scene = layoutScene(device, endpoints ?? [], cables ?? [])
+  const bounds = endpoints !== undefined ? scene.bounds : deviceBounds(device)
   const boxRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [view, setView] = useState<View | null>(null)
   const dragged = useRef(false)
+  const [pending, setPending] = useState<{ from: Pt; to: Pt; target: string | null } | null>(null)
   /** Once the user has zoomed or panned, resizes stop re-framing the scene. */
   const touched = useRef(false)
 
@@ -89,8 +96,47 @@ export function PanelCanvas({ height, ...panel }: PanelCanvasProps) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [zoomAt])
 
+  /** Pointer position in scene units, from the current framing. */
+  const toScene = (clientX: number, clientY: number): Pt | null => {
+    const el = boxRef.current
+    if (!el || !view) return null
+    const r = el.getBoundingClientRect()
+    return {
+      x: view.cx + (clientX - r.left - size.w / 2) / view.scale,
+      y: view.cy + (clientY - r.top - size.h / 2) / view.scale,
+    }
+  }
+
+  /** Drag from a "+" handle: a dashed line follows the pointer; releasing over a port or box connects. */
+  const startConnect = (fromId: string, e: React.PointerEvent) => {
+    const from = scene.items.find((i) => `ep:${i.endpoint.id}` === fromId)?.inner
+    if (!from) return
+    e.preventDefault()
+    const targetAt = (x: number, y: number) =>
+      document.elementFromPoint(x, y)?.closest('[data-point-id]')?.getAttribute('data-point-id') ?? null
+    const move = (ev: PointerEvent) => {
+      const to = toScene(ev.clientX, ev.clientY)
+      const t = targetAt(ev.clientX, ev.clientY)
+      if (to) setPending({ from, to, target: t && t !== fromId ? t : null })
+    }
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      const t = targetAt(ev.clientX, ev.clientY)
+      setPending(null)
+      if (t && t !== fromId) onConnect?.(fromId, t)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 || !view) return
+    const handle = (e.target as Element).closest('[data-handle]')
+    if (handle && onConnect) {
+      startConnect(handle.getAttribute('data-handle')!, e)
+      return
+    }
     dragged.current = false
     const start = { x: e.clientX, y: e.clientY, cx: view.cx, cy: view.cy }
     const move = (ev: PointerEvent) => {
@@ -136,7 +182,13 @@ export function PanelCanvas({ height, ...panel }: PanelCanvasProps) {
           }
         }}
       >
-        <DevicePanel {...panel} viewBox={viewBox} className="block h-full w-full select-none" />
+        <DevicePanel
+          {...panel}
+          viewBox={viewBox}
+          connectable={!!onConnect}
+          pending={pending}
+          className="block h-full w-full select-none"
+        />
       </div>
       <div className="absolute top-2 right-2 flex gap-1.5">
         <button type="button" onClick={() => zoomAt(1.25)} aria-label="Zoom in" className={GHOST_BTN}>
