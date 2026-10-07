@@ -121,6 +121,19 @@ function normalizePanel(raw: unknown): PanelPart {
         (e): e is [string, string] => typeof e[1] === 'string' && !!e[1],
       ),
     ),
+    endpoints: asArr(o.endpoints).map((e) => {
+      const x = asObj(e)
+      return {
+        id: withId(x.id),
+        side: x.side === 'display' ? ('display' as const) : ('source' as const),
+        name: asStr(x.name),
+        detail: asStr(x.detail),
+      }
+    }),
+    cables: asArr(o.cables).map((c) => {
+      const x = asObj(c)
+      return { id: withId(x.id), from: asStr(x.from), to: asStr(x.to), label: asStr(x.label) }
+    }),
     annotations: asArr(o.annotations).map((a) => {
       const x = asObj(a)
       return { id: withId(x.id), portId: asStr(x.portId), label: asStr(x.label), note: asStr(x.note) }

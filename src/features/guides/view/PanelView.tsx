@@ -3,6 +3,7 @@ import { PanelIcon } from '../components/icons'
 import { DevicePanel } from '../panel/DevicePanel'
 import { KIND_DOT, PORT_KIND_LABEL, getDevice } from '../panel/devices'
 import { GHOST_BTN } from '../../../shared/ui/styles'
+import { useOpenPanelWorkspace } from './panelWorkspaceContext'
 import type { PanelPart } from '../types'
 
 /**
@@ -13,7 +14,7 @@ import type { PanelPart } from '../types'
 export function PanelView({ part }: { part: PanelPart }) {
   const device = useMemo(() => getDevice(part.deviceId, part.cards), [part.deviceId, part.cards])
   const [open, setOpen] = useState(false)
-  const [wide, setWide] = useState(false)
+  const openWorkspace = useOpenPanelWorkspace()
   const [selected, setSelected] = useState<string | null>(null)
   const [scenarioId, setScenarioId] = useState<string | null>(null)
 
@@ -47,6 +48,11 @@ export function PanelView({ part }: { part: PanelPart }) {
               .join(' · ')}
           </p>
         </div>
+        {openWorkspace && (
+          <button type="button" onClick={() => openWorkspace(part.id)} className={GHOST_BTN}>
+            Open full view
+          </button>
+        )}
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={GHOST_BTN}>
           <PanelIcon className="h-3.5 w-3.5" />
           {open ? 'Hide diagram' : 'Show diagram'}
@@ -61,18 +67,14 @@ export function PanelView({ part }: { part: PanelPart }) {
             </p>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <div style={{ minWidth: wide ? 1500 : undefined }}>
-                  <DevicePanel
-                    device={device}
-                    annotated={annotated}
-                    highlighted={highlighted}
-                    links={scenario?.links}
-                    selected={selected}
-                    onPortClick={(id) => setSelected((s) => (s === id ? null : id))}
-                  />
-                </div>
-              </div>
+              <DevicePanel
+                device={device}
+                annotated={annotated}
+                highlighted={highlighted}
+                links={scenario?.links}
+                selected={selected}
+                onPortClick={(id) => setSelected((s) => (s === id ? null : id))}
+              />
 
               <div className="text-ink-muted mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
                 {(['input', 'output', 'audio', 'network', 'control', 'power'] as const)
@@ -83,13 +85,6 @@ export function PanelView({ part }: { part: PanelPart }) {
                       {PORT_KIND_LABEL[k]}
                     </span>
                   ))}
-                <button
-                  type="button"
-                  onClick={() => setWide((w) => !w)}
-                  className="text-ink-muted hover:text-ink ml-auto underline underline-offset-2"
-                >
-                  {wide ? 'Fit to width' : 'Enlarge'}
-                </button>
                 {annotated.size > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <span className="bg-brand h-2 w-2 rounded-full" />

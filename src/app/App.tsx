@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from './ErrorBoundary'
+import { FocusModeContext } from './focusMode'
 import { NAV_ITEMS } from './navigation'
 import type { PageId } from './navigation'
 import { VoiceCallPage } from '../features/voiceCall/VoiceCallPage'
@@ -19,10 +20,12 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
 
 export default function App() {
   const [page, setPage] = useState<PageId>('voiceCall')
+  // A page can ask for room (see focusMode.ts); only the visible page gets it.
+  const [focus, setFocus] = useState(false)
 
   return (
     <div className="bg-canvas text-ink flex h-full">
-      <Sidebar current={page} onNavigate={setPage} />
+      <Sidebar current={page} onNavigate={setPage} compact={focus && page === 'guides'} />
       {/*
         Every page stays mounted and the inactive ones are hidden, so stepping
         away from a half-filled form mid-call and coming back keeps it. Each
@@ -36,7 +39,9 @@ export default function App() {
           return (
             <div key={id} hidden={id !== page} className="h-full overflow-y-auto">
               <ErrorBoundary>
-                <Page />
+                <FocusModeContext.Provider value={setFocus}>
+                  <Page />
+                </FocusModeContext.Provider>
               </ErrorBoundary>
             </div>
           )

@@ -92,6 +92,23 @@ export type PanelScenario = {
   links: { id: string; from: string; to: string }[]
 }
 
+/** A source (laptop, camera…) or display wired to the unit, drawn beside it. */
+export type PanelEndpoint = {
+  id: string
+  side: 'source' | 'display'
+  name: string
+  /** Free text under the name, e.g. the room. Stays in the guide file, never in code. */
+  detail: string
+}
+
+/** One cable. `from` / `to` are chassis port ids, or `ep:<endpoint id>` for equipment. */
+export type PanelCable = {
+  id: string
+  from: string
+  to: string
+  label: string
+}
+
 /**
  * Interactive rear-panel diagram. The hardware layout lives in code
  * (`panel/devices.ts`, keyed by `deviceId`); only the per-guide notes and
@@ -104,6 +121,8 @@ export type PanelPart = {
   deviceId: string
   /** Card installed per slot id, for chassis units. Missing slots use the template default. */
   cards?: Record<string, string>
+  endpoints: PanelEndpoint[]
+  cables: PanelCable[]
   annotations: PanelAnnotation[]
   scenarios: PanelScenario[]
 }

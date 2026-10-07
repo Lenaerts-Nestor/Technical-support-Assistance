@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { PlusIcon, TrashIcon } from '../components/icons'
-import { DevicePanel } from '../panel/DevicePanel'
+import { PanelCanvas } from '../panel/PanelCanvas'
+import { epPointId, isEpPoint, pointName } from '../panel/scene'
 import { TEMPLATES, cardIdFor, cardsFor, getDevice, getTemplate, type DeviceDef } from '../panel/devices'
 import {
   DELETE_BTN,
@@ -13,10 +14,10 @@ import {
 } from '../../../shared/ui/styles'
 import { BlockFrame } from './BlockFrame'
 import type { BlockEditProps } from './blockEditProps'
-import type { PanelPart } from '../types'
+import type { PanelEndpoint, PanelPart } from '../types'
 
 /** Port `<option>`s grouped by the slot or zone they belong to. */
-function PortOptions({ device }: { device: DeviceDef }) {
+function PortOptions({ device, endpoints }: { device: DeviceDef; endpoints: PanelEndpoint[] }) {
   const groups = new Map<string, DeviceDef['ports']>()
   for (const p of device.ports) groups.set(p.group, [...(groups.get(p.group) ?? []), p])
   return (
@@ -30,15 +31,26 @@ function PortOptions({ device }: { device: DeviceDef }) {
           ))}
         </optgroup>
       ))}
+      {endpoints.length > 0 && (
+        <optgroup label="Equipment">
+          {endpoints.map((e) => (
+            <option key={e.id} value={epPointId(e.id)}>
+              {pointName(epPointId(e.id), device, endpoints)}
+            </option>
+          ))}
+        </optgroup>
+      )}
     </>
   )
 }
 
 /** Drop notes and checks that point at ports the layout no longer has. */
 function pruneTo(p: PanelPart, device: DeviceDef | undefined): PanelPart {
-  const has = (id: string) => !!device?.ports.some((x) => x.id === id)
+  const has = (id: string) =>
+    isEpPoint(id) ? p.endpoints.some((e) => epPointId(e.id) === id) : !!device?.ports.some((x) => x.id === id)
   return {
     ...p,
+    cables: p.cables.filter((c) => has(c.from) && has(c.to)),
     annotations: p.annotations.filter((a) => has(a.portId)),
     scenarios: p.scenarios.map((s) => ({
       ...s,
@@ -51,7 +63,7 @@ function pruneTo(p: PanelPart, device: DeviceDef | undefined): PanelPart {
 const uid = () => crypto.randomUUID()
 
 /** What a click on the diagram does right now. */
-type Target = { kind: 'annotation' | 'scenario'; id: string } | null
+type Target = { kind: 'annotation' | 'scenario'; id: string } | { kind: 'cable' } | null
 
 export function PanelEdit({
   part,
@@ -67,12 +79,15 @@ export function PanelEdit({
   const template = getTemplate(part.deviceId)
   const [target, setTarget] = useState<Target>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  /** First end of a cable being drawn; the next click completes it. */
+  const [cableFrom, setCableFrom] = useState<string | null>(null)
 
   const set = (fn: (p: PanelPart) => PanelPart) => d.patchPanel(addr, fn)
 
   const changeDevice = (deviceId: string) => {
     setTarget(null)
     setSelected(null)
+    setCableFrom(null)
     set((p) => pruneTo({ ...p, deviceId, cards: {} }, getDevice(deviceId)))
   }
 
@@ -88,10 +103,21 @@ export function PanelEdit({
   const annotated = useMemo(() => new Set(part.annotations.map((a) => a.portId)), [part.annotations])
   const activeScenario =
     target?.kind === 'scenario' ? part.scenarios.find((s) => s.id === target.id) : undefined
+  const cableMode = target?.kind === 'cable'
   const highlighted = useMemo(() => new Set(activeScenario?.portIds ?? []), [activeScenario])
 
   const onPortClick = (portId: string) => {
-    if (target?.kind === 'annotation') {
+    if (target?.kind === 'cable') {
+      if (!cableFrom) {
+        setCableFrom(portId)
+      } else if (cableFrom !== portId) {
+        const from = cableFrom
+        set((p) => ({ ...p, cables: [...p.cables, { id: uid(), from, to: portId, label: '' }] }))
+        setCableFrom(null)
+      }
+    } else if (isEpPoint(portId)) {
+      // Equipment can only be a cable end, never a note or highlight.
+    } else if (target?.kind === 'annotation') {
       set((p) => ({
         ...p,
         annotations: p.annotations.map((a) => (a.id === target.id ? { ...a, portId } : a)),
@@ -114,7 +140,15 @@ export function PanelEdit({
     setSelected(portId)
   }
 
-  const portOptions = device ? <PortOptions device={device} /> : null
+  const removeEndpoint = (id: string) => {
+    setSelected(null)
+    setCableFrom(null)
+    set((p) =>
+      pruneTo({ ...p, endpoints: p.endpoints.filter((e) => e.id !== id) }, device),
+    )
+  }
+
+  const portOptions = device ? <PortOptions device={device} endpoints={part.endpoints} /> : null
 
   const pickBtn = (kind: 'annotation' | 'scenario', id: string) => {
     const on = target?.kind === kind && target.id === id
@@ -159,18 +193,25 @@ export function PanelEdit({
       {device && (
         <>
           <div className="mt-3">
-            <DevicePanel
+            <PanelCanvas
+              height={560}
               device={device}
+              endpoints={part.endpoints}
+              cables={part.cables}
               annotated={annotated}
               highlighted={highlighted}
               links={activeScenario?.links}
-              selected={selected}
+              selected={cableFrom ?? selected}
               onPortClick={onPortClick}
             />
             <p className="text-ink-faint mt-1 text-[11px]">
-              {target
-                ? 'Click ports on the diagram to apply them to the row you are editing.'
-                : 'Choose “Pick on diagram” on a note or check below, then click ports.'}
+              {cableMode
+                ? cableFrom
+                  ? `Now click where “${pointName(cableFrom, device, part.endpoints)}” should connect.`
+                  : 'Click a port or a piece of equipment to start a cable, then click the other end.'
+                : target
+                  ? 'Click ports on the diagram to apply them to the row you are editing.'
+                  : 'Choose “Pick on diagram” on a note or check below, or “Draw cables”, then click the diagram.'}
             </p>
           </div>
 
@@ -199,6 +240,120 @@ export function PanelEdit({
               </div>
             </details>
           )}
+
+          {/* ---- equipment & cables --------------------------------- */}
+          <div className="mt-4">
+            <p className={`mb-1.5 ${SECTION_LABEL}`}>Connected equipment</p>
+            <p className="text-ink-faint mb-2 text-[11px]">
+              Names and rooms are saved in the guide file only. Keep real customer or site details out of shared code.
+            </p>
+            <div className="space-y-2">
+              {part.endpoints.map((e) => {
+                const patchEp = (fields: Partial<PanelEndpoint>) =>
+                  set((p) => ({
+                    ...p,
+                    endpoints: p.endpoints.map((x) => (x.id === e.id ? { ...x, ...fields } : x)),
+                  }))
+                return (
+                  <div key={e.id} className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={e.side}
+                      onChange={(ev) => patchEp({ side: ev.target.value as PanelEndpoint['side'] })}
+                      className={SELECT}
+                    >
+                      <option value="source">Source</option>
+                      <option value="display">Display</option>
+                    </select>
+                    <input
+                      value={e.name}
+                      onChange={(ev) => patchEp({ name: ev.target.value })}
+                      placeholder="Name (e.g. Laptop, Display 1)…"
+                      className={`${INPUT} min-w-40 flex-1`}
+                    />
+                    <input
+                      value={e.detail}
+                      onChange={(ev) => patchEp({ detail: ev.target.value })}
+                      placeholder="Detail (optional)…"
+                      className={`${INPUT} min-w-40 flex-1`}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Delete equipment"
+                      onClick={() => removeEndpoint(e.id)}
+                      className={`${DELETE_BTN} p-1`}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(['source', 'display'] as const).map((side) => (
+                <button
+                  key={side}
+                  type="button"
+                  onClick={() =>
+                    set((p) => ({
+                      ...p,
+                      endpoints: [...p.endpoints, { id: uid(), side, name: '', detail: '' }],
+                    }))
+                  }
+                  className={GHOST_BTN}
+                >
+                  <PlusIcon className="h-3.5 w-3.5" />
+                  Add {side}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <div className="mb-1.5 flex items-center gap-2">
+              <p className={SECTION_LABEL}>Cables</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCableFrom(null)
+                  setTarget(cableMode ? null : { kind: 'cable' })
+                }}
+                className={`${GHOST_BTN} ${cableMode ? 'border-fuchsia-400/60 text-fuchsia-200' : ''}`}
+              >
+                {cableMode ? 'Done drawing' : 'Draw cables on diagram'}
+              </button>
+            </div>
+            <div className="space-y-2">
+              {part.cables.map((c) => {
+                const patchCable = (fields: Partial<typeof c>) =>
+                  set((p) => ({ ...p, cables: p.cables.map((x) => (x.id === c.id ? { ...x, ...fields } : x)) }))
+                return (
+                  <div key={c.id} className="flex flex-wrap items-center gap-2">
+                    <select value={c.from} onChange={(ev) => patchCable({ from: ev.target.value })} className={`${SELECT} max-w-52`}>
+                      {portOptions}
+                    </select>
+                    <span className="text-ink-faint text-xs">→</span>
+                    <select value={c.to} onChange={(ev) => patchCable({ to: ev.target.value })} className={`${SELECT} max-w-52`}>
+                      {portOptions}
+                    </select>
+                    <input
+                      value={c.label}
+                      onChange={(ev) => patchCable({ label: ev.target.value })}
+                      placeholder="Cable label (optional)…"
+                      className={`${INPUT} min-w-36 flex-1`}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Delete cable"
+                      onClick={() => set((p) => ({ ...p, cables: p.cables.filter((x) => x.id !== c.id) }))}
+                      className={`${DELETE_BTN} p-1`}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
 
           {/* ---- notes ------------------------------------------------ */}
           <div className="mt-4">
