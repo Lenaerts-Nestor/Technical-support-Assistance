@@ -79,26 +79,47 @@ export type PanelAnnotation = {
   note: string
 }
 
+/** One way out of a troubleshooting step: go to another step, or finish with a conclusion. */
+export type PanelAnswer = {
+  id: string
+  label: string
+  /** Id of the next step, or '' to finish with `result`. */
+  next: string
+  result: string
+}
+
 /**
- * One troubleshooting check on a panel: a question, what to test, the ports to
- * light up while it is selected, and optional lines between ports ("move this
- * cable from here to there").
+ * One step of a troubleshooting check: what to do or ask, an optional card swap
+ * between two input slots (cables follow the cards), ports to light up, lines
+ * to draw, and the answers that lead on. No answers means the step is the end.
  */
+export type PanelStep = {
+  id: string
+  text: string
+  move?: { from: string; to: string }
+  portIds: string[]
+  links: { id: string; from: string; to: string }[]
+  answers: PanelAnswer[]
+}
+
+/** A troubleshooting check: a question and the flow of steps that answers it. */
 export type PanelScenario = {
   id: string
   title: string
-  text: string
-  portIds: string[]
-  links: { id: string; from: string; to: string }[]
+  steps: PanelStep[]
 }
 
-/** A source (laptop, camera…) or display wired to the unit, drawn beside it. */
+/** One line of extra detail on a piece of equipment, e.g. "Resolution" / "1080p60". */
+export type PanelEndpointInfo = { id: string; key: string; value: string }
+
+/** A source (laptop, camera…), display, or a hop between them, drawn beside the unit. */
 export type PanelEndpoint = {
   id: string
   side: 'source' | 'display'
   name: string
   /** Free text under the name, e.g. the room. Stays in the guide file, never in code. */
   detail: string
+  info: PanelEndpointInfo[]
 }
 
 /** One cable. `from` / `to` are chassis port ids, or `ep:<endpoint id>` for equipment. */

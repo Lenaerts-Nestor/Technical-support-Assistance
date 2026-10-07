@@ -128,6 +128,10 @@ function normalizePanel(raw: unknown): PanelPart {
         side: x.side === 'display' ? ('display' as const) : ('source' as const),
         name: asStr(x.name),
         detail: asStr(x.detail),
+        info: asArr(x.info).map((i) => {
+          const y = asObj(i)
+          return { id: withId(y.id), key: asStr(y.key), value: asStr(y.value) }
+        }),
       }
     }),
     cables: asArr(o.cables).map((c) => {
@@ -140,16 +144,31 @@ function normalizePanel(raw: unknown): PanelPart {
     }),
     scenarios: asArr(o.scenarios).map((s) => {
       const x = asObj(s)
-      return {
-        id: withId(x.id),
-        title: asStr(x.title),
-        text: asStr(x.text),
-        portIds: asArr(x.portIds).map((p) => asStr(p)).filter(Boolean),
-        links: asArr(x.links).map((l) => {
+      const links = (raw: unknown) =>
+        asArr(raw).map((l) => {
           const y = asObj(l)
           return { id: withId(y.id), from: asStr(y.from), to: asStr(y.to) }
-        }),
-      }
+        })
+      const ports = (raw: unknown) => asArr(raw).map((p) => asStr(p)).filter(Boolean)
+      // Older saves kept a single text / ports / links on the check itself.
+      const steps = Array.isArray(x.steps)
+        ? x.steps.map((st) => {
+            const y = asObj(st)
+            const m = asObj(y.move)
+            return {
+              id: withId(y.id),
+              text: asStr(y.text),
+              ...(asStr(m.from) && asStr(m.to) ? { move: { from: asStr(m.from), to: asStr(m.to) } } : {}),
+              portIds: ports(y.portIds),
+              links: links(y.links),
+              answers: asArr(y.answers).map((a) => {
+                const z = asObj(a)
+                return { id: withId(z.id), label: asStr(z.label), next: asStr(z.next), result: asStr(z.result) }
+              }),
+            }
+          })
+        : [{ id: uid(), text: asStr(x.text), portIds: ports(x.portIds), links: links(x.links), answers: [] }]
+      return { id: withId(x.id), title: asStr(x.title), steps }
     }),
   }
 }

@@ -1,30 +1,30 @@
 import { useMemo, useState } from 'react'
 import { PanelIcon } from '../components/icons'
 import { DevicePanel } from '../panel/DevicePanel'
-import { KIND_DOT, PORT_KIND_LABEL, getDevice } from '../panel/devices'
+import { KIND_DOT, PORT_KIND_LABEL } from '../panel/devices'
+import { usePanelFlow } from '../panel/usePanelFlow'
 import { GHOST_BTN } from '../../../shared/ui/styles'
+import { PanelFlowBox } from './PanelFlowBox'
 import { useOpenPanelWorkspace } from './panelWorkspaceContext'
 import type { PanelPart } from '../types'
 
 /**
  * Interactive rear-panel block. Collapsed it is a one-line card with a button;
  * opened it shows the diagram, a port-detail strip, and the troubleshooting
- * checks that highlight ports and draw lines between them.
+ * flow. The full-size view with equipment and cables is a separate tab.
  */
 export function PanelView({ part }: { part: PanelPart }) {
-  const device = useMemo(() => getDevice(part.deviceId, part.cards), [part.deviceId, part.cards])
+  const flow = usePanelFlow(part)
+  const { device } = flow
   const [open, setOpen] = useState(false)
-  const openWorkspace = useOpenPanelWorkspace()
   const [selected, setSelected] = useState<string | null>(null)
-  const [scenarioId, setScenarioId] = useState<string | null>(null)
+  const openWorkspace = useOpenPanelWorkspace()
 
   const annotations = useMemo(
     () => new Map(part.annotations.map((a) => [a.portId, a])),
     [part.annotations],
   )
   const annotated = useMemo(() => new Set(annotations.keys()), [annotations])
-  const scenario = part.scenarios.find((s) => s.id === scenarioId) ?? null
-  const highlighted = useMemo(() => new Set(scenario?.portIds ?? []), [scenario])
 
   const title = part.title || device?.name || 'Panel diagram'
   const checks = part.scenarios.length
@@ -70,8 +70,9 @@ export function PanelView({ part }: { part: PanelPart }) {
               <DevicePanel
                 device={device}
                 annotated={annotated}
-                highlighted={highlighted}
-                links={scenario?.links}
+                highlighted={flow.highlighted}
+                links={flow.links}
+                moves={flow.moves}
                 selected={selected}
                 onPortClick={(id) => setSelected((s) => (s === id ? null : id))}
               />
@@ -116,35 +117,9 @@ export function PanelView({ part }: { part: PanelPart }) {
                 )}
               </div>
 
-              {checks > 0 && (
-                <div className="mt-3">
-                  <p className="text-ink-muted mb-1.5 text-[11px] font-semibold tracking-[0.08em] uppercase">
-                    Troubleshooting
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {part.scenarios.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        aria-pressed={s.id === scenarioId}
-                        onClick={() => setScenarioId((cur) => (cur === s.id ? null : s.id))}
-                        className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          s.id === scenarioId
-                            ? 'border-rose-400/60 bg-rose-400/15 text-rose-200'
-                            : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink'
-                        }`}
-                      >
-                        {s.title || 'Untitled check'}
-                      </button>
-                    ))}
-                  </div>
-                  {scenario && (
-                    <p className="text-ink mt-2 text-sm leading-relaxed whitespace-pre-line">
-                      {scenario.text}
-                    </p>
-                  )}
-                </div>
-              )}
+              <div className="mt-3">
+                <PanelFlowBox part={part} flow={flow} />
+              </div>
 
               <p className="text-ink-faint mt-3 text-[11px]">{device.note}</p>
             </>
