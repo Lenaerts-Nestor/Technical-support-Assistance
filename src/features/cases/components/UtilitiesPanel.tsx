@@ -34,7 +34,8 @@ export function UtilitiesPanel({
         <h3 className="text-ink text-sm font-semibold">Utilities</h3>
       </div>
 
-      <div className="flex flex-col gap-5 overflow-y-auto p-4">
+      <div className="grid min-h-0 flex-1 grid-cols-2 gap-6 overflow-y-auto p-4">
+        <div className="flex flex-col gap-5">
         <div>
           <h4 className={`mb-2 ${SECTION_LABEL}`}>Language</h4>
           <LanguageToggle language={language} onChange={onLanguageChange} />
@@ -43,8 +44,11 @@ export function UtilitiesPanel({
         {TEMPLATE_GROUPS.map((group) => (
           <TemplateGroup key={group.id} group={group} onInsert={onInsert} />
         ))}
+        </div>
 
-        <SnippetsGroup snippets={snippets} onInsert={onInsertText} />
+        <div className="border-line-soft border-l pl-6">
+          <SnippetsGroup snippets={snippets} language={language} onInsert={onInsertText} />
+        </div>
       </div>
     </aside>
   )

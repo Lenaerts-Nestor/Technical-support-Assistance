@@ -19,7 +19,7 @@ export function CasesPage() {
     <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
       <ComposerHeader />
 
-      <div className="grid grid-cols-[1fr_460px] items-start gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)_780px] items-start gap-6">
         <Editor
           className={COLUMN_HEIGHT}
           value={cases.draft}
