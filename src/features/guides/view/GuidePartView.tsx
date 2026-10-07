@@ -2,6 +2,7 @@ import { ChapterView } from './ChapterView'
 import { TableView } from './TableView'
 import { CalloutView } from './CalloutView'
 import { TermView } from './TermView'
+import { PanelView } from './PanelView'
 import { SectionBlockView } from './SectionBlockView'
 import { CARD } from '../../../shared/ui/styles'
 import type { GuidePart } from '../types'
@@ -48,5 +49,7 @@ export function GuidePartView({
       return <CalloutView part={part} />
     case 'term':
       return <TermView part={part} />
+    case 'panel':
+      return <PanelView part={part} />
   }
 }

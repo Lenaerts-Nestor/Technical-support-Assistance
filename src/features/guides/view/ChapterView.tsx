@@ -5,12 +5,14 @@ import { CalloutView } from './CalloutView'
 import { SectionBlockView } from './SectionBlockView'
 import { TableView } from './TableView'
 import { TermView } from './TermView'
+import { PanelView } from './PanelView'
 import type { ChapterPart, SectionBlock } from '../types'
 
 /** A table / callout / term attached to the chapter rather than one section. */
 function ChapterBlock({ block }: { block: SectionBlock }) {
   if (block.type === 'table') return <TableView part={block} nested />
   if (block.type === 'callout') return <CalloutView part={block} />
+  if (block.type === 'panel') return <PanelView part={block} />
   return <TermView part={block} />
 }
 

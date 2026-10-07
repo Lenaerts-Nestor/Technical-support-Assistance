@@ -2,6 +2,7 @@ import { CalloutView } from './CalloutView'
 import { StepView } from './StepView'
 import { TableView } from './TableView'
 import { TermView } from './TermView'
+import { PanelView } from './PanelView'
 import type { GuideStep, SectionBlock } from '../types'
 
 type SectionBlockViewProps = {
@@ -60,5 +61,6 @@ export function SectionBlockView({
 function SectionBlockItem({ block }: { block: SectionBlock }) {
   if (block.type === 'table') return <TableView part={block} nested />
   if (block.type === 'callout') return <CalloutView part={block} />
+  if (block.type === 'panel') return <PanelView part={block} />
   return <TermView part={block} />
 }

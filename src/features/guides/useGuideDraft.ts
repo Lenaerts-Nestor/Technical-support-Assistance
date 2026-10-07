@@ -14,6 +14,7 @@ import type {
   GuidePart,
   GuidePartKind,
   GuideStep,
+  PanelPart,
   SectionBlock,
   SectionBlockKind,
   StepSubItem,
@@ -39,7 +40,7 @@ export type BlockRef =
   | { scope: 'nested'; loc: NodeLoc; blockId: string }
 
 const isBlock = (p: GuidePart): p is SectionBlock =>
-  p.type === 'table' || p.type === 'callout' || p.type === 'term'
+  p.type === 'table' || p.type === 'callout' || p.type === 'term' || p.type === 'panel'
 
 function moveById<T extends { id: string }>(arr: T[], id: string, dir: -1 | 1): T[] {
   const idx = arr.findIndex((x) => x.id === id)
@@ -235,7 +236,7 @@ export function useGuideDraft(
     [updateSubItems],
   )
 
-  /* ---- nested blocks (tables / callouts / terms in a chapter or section) -- */
+  /* ---- nested blocks (tables / callouts / terms / panels in a chapter or section) -- */
 
   const updateBlocks = useCallback(
     (loc: NodeLoc, fn: (blocks: SectionBlock[]) => SectionBlock[]) =>
@@ -370,6 +371,14 @@ export function useGuideDraft(
     [updateBlockNode],
   )
 
+  /* ---- panel --------------------------------------------- */
+
+  const patchPanel = useCallback(
+    (ref: BlockRef, fn: (p: PanelPart) => PanelPart) =>
+      updateBlockNode(ref, (b) => (b.type === 'panel' ? fn(b) : b)),
+    [updateBlockNode],
+  )
+
   /* ---- links ------------------------------------------- */
 
   const addLink = useCallback(
@@ -431,6 +440,7 @@ export function useGuideDraft(
     updateCallout,
     updateTerm,
     setTermBullets,
+    patchPanel,
     addLink,
     updateLink,
     removeLink,

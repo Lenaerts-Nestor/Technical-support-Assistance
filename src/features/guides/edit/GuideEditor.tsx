@@ -1,4 +1,4 @@
-import { CalloutIcon, ChevronLeftIcon, PlusIcon, TableIcon, TermIcon } from '../components/icons'
+import { CalloutIcon, ChevronLeftIcon, PanelIcon, PlusIcon, TableIcon, TermIcon } from '../components/icons'
 import { PART_KINDS, PART_TONES } from '../guidesData'
 import { useGuideDraft } from '../useGuideDraft'
 import {
@@ -27,6 +27,7 @@ const KIND_ICON: Record<GuidePartKind, (p: { className?: string }) => React.Reac
   table: TableIcon,
   callout: CalloutIcon,
   term: TermIcon,
+  panel: PanelIcon,
 }
 
 export function GuideEditor({ guide, onSave, onCancel }: GuideEditorProps) {
