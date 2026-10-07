@@ -364,10 +364,10 @@ export function useCases() {
     [undo, redo, applyBold],
   )
 
-  const insertTemplate = useCallback(
-    (id: string) => {
+  /** Splice raw text into the draft at the caret (or over the selection). */
+  const insertText = useCallback(
+    (insert: string) => {
       const el = editorRef.current
-      const insert = templateText(id, language)
       withCheckpoint(() =>
         setDraft((text) => {
           const start = el?.selectionStart ?? text.length
@@ -383,7 +383,12 @@ export function useCases() {
         }),
       )
     },
-    [language, withCheckpoint, setDraft],
+    [withCheckpoint, setDraft],
+  )
+
+  const insertTemplate = useCallback(
+    (id: string) => insertText(templateText(id, language)),
+    [insertText, language],
   )
 
   const clear = useCallback(() => {
@@ -400,6 +405,7 @@ export function useCases() {
     setLanguage,
     editorRef,
     insertTemplate,
+    insertText,
     clear,
     copy,
     justCopied: copied !== null,
