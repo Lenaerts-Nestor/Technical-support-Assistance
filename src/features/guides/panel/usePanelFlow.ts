@@ -19,7 +19,7 @@ export function usePanelFlow(part: PanelPart) {
   )
   const step = visited[visited.length - 1] ?? null
 
-  const state = useMemo(() => stateAfter(part, stepMoves(visited)), [part, visited])
+  const state = useMemo(() => stateAfter(part, visited), [part, visited])
   const highlighted = useMemo(() => new Set(step?.portIds ?? []), [step])
 
   const open = useCallback(
@@ -59,10 +59,13 @@ export function usePanelFlow(part: PanelPart) {
     conclusion,
     canGoBack: conclusion !== null || visited.length > 1,
     device: state.device,
+    endpoints: state.endpoints,
     cables: state.cables,
+    ghosts: state.ghosts,
+    fresh: state.fresh,
     highlighted,
     links: step?.links,
-    moves: step?.move ? [step.move] : undefined,
+    moves: stepMoves(step ?? undefined),
     open,
     answer,
     back,

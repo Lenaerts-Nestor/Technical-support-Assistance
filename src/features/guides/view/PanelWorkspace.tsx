@@ -3,6 +3,7 @@ import { usePanelFlow } from '../panel/usePanelFlow'
 import { PanelFlowBox } from './PanelFlowBox'
 import { PanelCanvas } from '../panel/PanelCanvas'
 import { PORT_KIND_LABEL } from '../panel/devices'
+import { getUnitKind } from '../panel/units'
 import { cableColor, epPointId, isEpPoint, pointName } from '../panel/scene'
 import { SECTION_LABEL } from '../../../shared/ui/styles'
 import type { PanelPart } from '../types'
@@ -14,7 +15,7 @@ import type { PanelPart } from '../types'
  */
 export function PanelWorkspace({ part }: { part: PanelPart }) {
   const flow = usePanelFlow(part)
-  const { device, cables } = flow
+  const { device, cables, endpoints } = flow
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedCable, setSelectedCable] = useState<string | null>(null)
 
@@ -28,7 +29,7 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
     return <p className="text-ink-muted p-6 text-sm">This panel's device template isn't available.</p>
   }
 
-  const name = (id: string) => pointName(id, device, part.endpoints)
+  const name = (id: string) => pointName(id, device, endpoints)
   const cableIndex = new Map(cables.map((c, i) => [c.id, i]))
   const cableSummary = (id: string) => {
     const c = cables.find((x) => x.id === id)
@@ -37,7 +38,7 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
 
   const port = selected && !isEpPoint(selected) ? device.ports.find((p) => p.id === selected) : undefined
   const endpoint = selected && isEpPoint(selected)
-    ? part.endpoints.find((e) => epPointId(e.id) === selected)
+    ? endpoints.find((e) => epPointId(e.id) === selected)
     : undefined
   const connected = selected ? cables.filter((c) => c.from === selected || c.to === selected) : []
   const cable = cables.find((c) => c.id === selectedCable)
@@ -57,12 +58,14 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
       <div className="min-w-0 flex-1">
         <PanelCanvas
           device={device}
-          endpoints={part.endpoints}
+          endpoints={endpoints}
           cables={cables}
           annotated={annotated}
           highlighted={flow.highlighted}
           links={flow.links}
           moves={flow.moves}
+          ghostCables={flow.ghosts}
+          freshCables={flow.fresh}
           selected={selected}
           selectedCable={selectedCable}
           onPortClick={selectPoint}
@@ -96,7 +99,7 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
           ) : endpoint ? (
             <div className="text-sm">
               <p className="text-ink font-semibold">{endpoint.name || 'Unnamed'}</p>
-              <p className="text-ink-muted">{endpoint.detail || (endpoint.side === 'source' ? 'Source' : 'Display')}</p>
+              <p className="text-ink-muted">{getUnitKind(endpoint.kind).label}{endpoint.detail ? ` · ${endpoint.detail}` : ''}</p>
               {endpoint.info.length > 0 && (
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
                   {endpoint.info.map((i) => (

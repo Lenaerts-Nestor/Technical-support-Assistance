@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { PlusIcon, TrashIcon } from '../components/icons'
 import { PanelCanvas } from '../panel/PanelCanvas'
 import { stateAfter, stepMoves } from '../panel/flow'
-import { epPointId, isEpPoint, pointName } from '../panel/scene'
+import { EP_W, epPointId, isEpPoint, pointName } from '../panel/scene'
 import {
   TEMPLATES,
   cardIdFor,
@@ -11,16 +11,19 @@ import {
   getTemplate,
   type DeviceDef,
 } from '../panel/devices'
+import { getUnitKind } from '../panel/units'
 import {
   DELETE_BTN,
   GHOST_BTN,
   INPUT,
   INPUT_HEADING,
-  SECTION_LABEL,
   SELECT,
   TEXTAREA,
 } from '../../../shared/ui/styles'
 import { BlockFrame } from './BlockFrame'
+import { CableInspector, UnitInspector } from './EquipmentInspector'
+import { StepActionsEdit } from './StepActionsEdit'
+import { UnitPicker } from './UnitPicker'
 import type { BlockEditProps } from './blockEditProps'
 import type { PanelEndpoint, PanelPart, PanelScenario, PanelStep } from '../types'
 
@@ -28,14 +31,11 @@ const uid = () => crypto.randomUUID()
 
 type Tab = 'layout' | 'equipment' | 'notes' | 'trouble'
 const TABS: { id: Tab; label: string }[] = [
+  { id: 'equipment', label: 'Units & cables' },
   { id: 'layout', label: 'Cards' },
-  { id: 'equipment', label: 'Equipment & cables' },
   { id: 'notes', label: 'Port notes' },
   { id: 'trouble', label: 'Troubleshooting' },
 ]
-
-/** Suggested detail lines for a piece of equipment, one click each. */
-const INFO_SUGGESTIONS = ['Resolution', 'IP mode', 'IP address', 'Cable', 'Signal']
 
 /** Port `<option>`s grouped by the slot or zone they belong to. */
 function PortOptions({ device, endpoints }: { device: DeviceDef; endpoints: PanelEndpoint[] }) {
@@ -53,7 +53,7 @@ function PortOptions({ device, endpoints }: { device: DeviceDef; endpoints: Pane
         </optgroup>
       ))}
       {endpoints.length > 0 && (
-        <optgroup label="Equipment">
+        <optgroup label="Units">
           {endpoints.map((e) => (
             <option key={e.id} value={epPointId(e.id)}>
               {pointName(epPointId(e.id), device, endpoints)}
@@ -65,7 +65,7 @@ function PortOptions({ device, endpoints }: { device: DeviceDef; endpoints: Pane
   )
 }
 
-/** Drop everything that points at a port, slot or box that no longer exists. */
+/** Drop everything that points at a port, slot, cable or box that no longer exists. */
 function pruneTo(p: PanelPart, device: DeviceDef | undefined): PanelPart {
   const has = (id: string) =>
     isEpPoint(id) ? p.endpoints.some((e) => epPointId(e.id) === id) : !!device?.ports.some((x) => x.id === id)
@@ -79,6 +79,13 @@ function pruneTo(p: PanelPart, device: DeviceDef | undefined): PanelPart {
         ...st,
         portIds: st.portIds.filter(has),
         links: st.links.filter((l) => has(l.from) && has(l.to)),
+        actions: st.actions.filter((a) =>
+          a.type === 'swap-units'
+            ? p.endpoints.some((e) => e.id === a.a) && p.endpoints.some((e) => e.id === a.b)
+            : a.type === 'plug'
+              ? has(a.from) && has(a.to)
+              : true,
+        ),
       })),
     })),
   }
@@ -97,10 +104,12 @@ export function PanelEdit({
   const template = getTemplate(part.deviceId)
   const [tab, setTab] = useState<Tab>('equipment')
   const [selected, setSelected] = useState<string | null>(null)
+  const [selectedCable, setSelectedCable] = useState<string | null>(null)
   const [activeNote, setActiveNote] = useState<string | null>(null)
-  /** The step being edited: the diagram shows the unit as it is at that step. */
+  /** The step being edited: the diagram shows the setup as it is at that step. */
   const [active, setActive] = useState<{ scenarioId: string; stepId: string } | null>(null)
   const [picking, setPicking] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
 
   const set = (fn: (p: PanelPart) => PanelPart) => d.patchPanel(addr, fn)
 
@@ -110,15 +119,13 @@ export function PanelEdit({
   const showStep = tab === 'trouble' && !!activeStep
 
   const state = useMemo(
-    () => stateAfter(part, showStep && activeScenario ? stepMoves(activeScenario.steps.slice(0, activeIndex + 1)) : []),
+    () => stateAfter(part, showStep && activeScenario ? activeScenario.steps.slice(0, activeIndex + 1) : []),
     [part, showStep, activeScenario, activeIndex],
   )
   const device = state.device
+  const endpoints = state.endpoints
   const annotated = useMemo(() => new Set(part.annotations.map((a) => a.portId)), [part.annotations])
-  const highlighted = useMemo(
-    () => new Set(showStep ? activeStep?.portIds : []),
-    [showStep, activeStep],
-  )
+  const highlighted = useMemo(() => new Set(showStep ? activeStep?.portIds : []), [showStep, activeStep])
 
   const changeDevice = (deviceId: string) => {
     setSelected(null)
@@ -131,24 +138,70 @@ export function PanelEdit({
       return pruneTo({ ...p, cards }, getDevice(p.deviceId, cards))
     })
 
-  const connect = (from: string, to: string) =>
+  /* ---- units & cables -------------------------------------------------- */
+
+  const patchUnit = (id: string, fields: Partial<PanelEndpoint>) =>
+    set((p) => ({ ...p, endpoints: p.endpoints.map((e) => (e.id === id ? { ...e, ...fields } : e)) }))
+
+  const removeCable = (id: string) => {
+    if (selectedCable === id) setSelectedCable(null)
+    set((p) => ({ ...p, cables: p.cables.filter((c) => c.id !== id) }))
+  }
+
+  const removeUnit = (id: string) => {
+    setSelected(null)
+    set((p) => pruneTo({ ...p, endpoints: p.endpoints.filter((e) => e.id !== id) }, device))
+  }
+
+  /** Add a unit, optionally cabled from `from` (a port or another unit). Returns its id. */
+  const addUnit = (kindId: string, from?: string): string => {
+    const kind = getUnitKind(kindId)
+    const id = uid()
+    const parent = from && isEpPoint(from) ? part.endpoints.find((e) => epPointId(e.id) === from) : undefined
+    const port = from && !isEpPoint(from) ? device?.ports.find((p) => p.id === from) : undefined
+    // Chains grow outward from what they hang off; a unit added from a port goes by the port's direction.
+    const side: PanelEndpoint['side'] = parent
+      ? parent.side
+      : port
+        ? (kind.side ?? (port.kind === 'input' ? 'source' : 'display'))
+        : (kind.side ?? 'source')
+    let pos: PanelEndpoint['pos']
+    if (parent?.pos) pos = { x: parent.pos.x + (side === 'source' ? -(EP_W + 90) : EP_W + 90), y: parent.pos.y }
+    const unit: PanelEndpoint = { id, side, kind: kindId, name: '', detail: '', info: [], ...(pos ? { pos } : {}) }
+    set((p) => ({
+      ...p,
+      endpoints: [...p.endpoints, unit],
+      cables: from ? [...p.cables, { id: uid(), from, to: epPointId(id), label: '' }] : p.cables,
+    }))
+    return id
+  }
+
+  const connect = (from: string, to: string) => {
+    if (tab === 'trouble' && active) {
+      // Plugging in during a step: becomes an action of that step.
+      patchStep(active.scenarioId, active.stepId, (st) => ({
+        ...st,
+        actions: [...st.actions, { id: uid(), type: 'plug', cableId: uid(), from, to, label: '' }],
+      }))
+      return
+    }
     set((p) =>
       p.cables.some((c) => (c.from === from && c.to === to) || (c.from === to && c.to === from))
         ? p
         : { ...p, cables: [...p.cables, { id: uid(), from, to, label: '' }] },
     )
-
-  const removeEndpoint = (id: string) => {
-    setSelected(null)
-    set((p) => pruneTo({ ...p, endpoints: p.endpoints.filter((e) => e.id !== id) }, device))
   }
+
+  /* ---- troubleshooting ------------------------------------------------ */
 
   const patchScenario = (id: string, fn: (s: PanelScenario) => PanelScenario) =>
     set((p) => ({ ...p, scenarios: p.scenarios.map((s) => (s.id === id ? fn(s) : s)) }))
   const patchStep = (sid: string, stepId: string, fn: (s: PanelStep) => PanelStep) =>
     patchScenario(sid, (s) => ({ ...s, steps: s.steps.map((st) => (st.id === stepId ? fn(st) : st)) }))
+  const newStep = (): PanelStep => ({ id: uid(), text: '', actions: [], portIds: [], links: [], answers: [] })
 
   const onPortClick = (id: string) => {
+    setSelectedCable(null)
     setSelected(id)
     if (isEpPoint(id)) return
     if (tab === 'notes') {
@@ -167,20 +220,154 @@ export function PanelEdit({
     }
   }
 
-  const portOptions = device ? <PortOptions device={device} endpoints={part.endpoints} /> : null
-  const portName = (id: string) => (device ? pointName(id, device, part.endpoints) : id)
+  const portOptions = device ? <PortOptions device={device} endpoints={endpoints} /> : null
+  const portName = (id: string) => (device ? pointName(id, device, endpoints) : id)
   const inputSlots = template?.slots.filter((s) => s.family === 'input') ?? []
+
+  const selectedUnit = selected && isEpPoint(selected) ? part.endpoints.find((e) => epPointId(e.id) === selected) : undefined
+  const cable = state.cables.find((c) => c.id === selectedCable)
 
   const hint =
     tab === 'equipment'
-      ? 'Drag the + on a box onto a port or another box to connect a cable.'
+      ? 'Drag a box to move it · drag its + onto a port or box to cable it · click a + or a port to add a unit or remove a cable.'
       : tab === 'notes'
         ? 'Click a port to add or edit its note.'
         : tab === 'trouble'
           ? picking
             ? 'Click ports to light them up in this step. Click “Done” when finished.'
-            : 'Select a step below to see the unit as it is at that step.'
+            : activeStep
+              ? 'Drag a + to plug a cable in this step · click a cable to unplug it.'
+              : 'Select a step below to see the setup as it is at that step.'
           : 'Choose the card installed in each slot.'
+
+  /** Menu opened by clicking a "+" or a port on the Units tab. */
+  const renderMenu = (id: string, close: () => void) => {
+    const mine = part.cables.filter((c) => c.from === id || c.to === id)
+    return (
+      <div>
+        <p className="text-ink text-sm font-semibold">{portName(id)}</p>
+        <p className="text-ink-muted mt-2 mb-1.5 text-[11px] font-semibold tracking-wide uppercase">
+          Add a unit here
+        </p>
+        <UnitPicker
+          onPick={(kind) => {
+            const nid = addUnit(kind, id)
+            setSelected(epPointId(nid))
+            setSelectedCable(null)
+            close()
+          }}
+        />
+        {mine.length > 0 && (
+          <>
+            <p className="text-ink-muted mt-3 mb-1 text-[11px] font-semibold tracking-wide uppercase">Cables</p>
+            <ul className="space-y-1">
+              {mine.map((c) => (
+                <li key={c.id} className="flex items-center gap-1.5 text-xs">
+                  <span className="text-ink-muted min-w-0 flex-1 truncate">
+                    {portName(c.from === id ? c.to : c.from)}
+                  </span>
+                  <button type="button" onClick={() => removeCable(c.id)} className={GHOST_BTN}>
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {isEpPoint(id) && (
+          <button
+            type="button"
+            onClick={() => {
+              removeUnit(id.slice(3))
+              close()
+            }}
+            className="mt-3 text-xs font-medium text-rose-300 underline underline-offset-2"
+          >
+            Delete this unit
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const toolbar =
+    tab === 'equipment' ? (
+      <>
+        <div className="relative">
+          <button type="button" onClick={() => setAddOpen((o) => !o)} aria-expanded={addOpen} className={GHOST_BTN}>
+            <PlusIcon className="h-3.5 w-3.5" />
+            Add unit
+          </button>
+          {addOpen && (
+            <div className="border-line-strong bg-surface shadow-card absolute top-full left-0 z-20 mt-1 w-72 rounded-lg border p-2.5">
+              <UnitPicker
+                onPick={(kind) => {
+                  const nid = addUnit(kind)
+                  setSelected(epPointId(nid))
+                  setSelectedCable(null)
+                  setAddOpen(false)
+                }}
+              />
+            </div>
+          )}
+        </div>
+        {part.endpoints.some((e) => e.pos) && (
+          <button
+            type="button"
+            onClick={() => set((p) => ({
+                ...p,
+                endpoints: p.endpoints.map((e) => {
+                  const rest = { ...e }
+                  delete rest.pos
+                  return rest
+                }),
+              }))}
+            className={GHOST_BTN}
+          >
+            Auto-arrange
+          </button>
+        )}
+      </>
+    ) : undefined
+
+  const overlay =
+    tab === 'equipment' && cable && device ? (
+      <CableInspector
+        cable={part.cables.find((c) => c.id === cable.id) ?? cable}
+        device={device}
+        endpoints={endpoints}
+        onLabel={(label) => set((p) => ({ ...p, cables: p.cables.map((c) => (c.id === cable.id ? { ...c, label } : c)) }))}
+        onRemove={() => removeCable(cable.id)}
+        onClose={() => setSelectedCable(null)}
+      />
+    ) : tab === 'equipment' && selectedUnit && device ? (
+      <UnitInspector
+        unit={selectedUnit}
+        device={device}
+        endpoints={endpoints}
+        cables={part.cables}
+        onChange={(fields) => patchUnit(selectedUnit.id, fields)}
+        onDelete={() => removeUnit(selectedUnit.id)}
+        onRemoveCable={removeCable}
+        onClose={() => setSelected(null)}
+      />
+    ) : tab === 'trouble' && cable && activeStep && active && device ? (
+      <CableInspector
+        cable={cable}
+        device={device}
+        endpoints={endpoints}
+        onLabel={() => {}}
+        removeLabel="Unplug in this step"
+        onRemove={() => {
+          patchStep(active.scenarioId, active.stepId, (st) => ({
+            ...st,
+            actions: [...st.actions, { id: uid(), type: 'unplug', cableId: cable.id }],
+          }))
+          setSelectedCable(null)
+        }}
+        onClose={() => setSelectedCable(null)}
+      />
+    ) : undefined
 
   return (
     <BlockFrame
@@ -211,21 +398,34 @@ export function PanelEdit({
 
       {device && (
         <>
-          <div className="mt-3">
+          <div className="mt-3 flex items-start gap-3">
+            <div className="min-w-0 flex-1">
             <PanelCanvas
-              height={540}
+              height={620}
               device={device}
-              endpoints={part.endpoints}
+              endpoints={endpoints}
               cables={state.cables}
               annotated={annotated}
               highlighted={highlighted}
               links={showStep ? activeStep?.links : undefined}
-              moves={showStep && activeStep?.move ? [activeStep.move] : undefined}
+              moves={showStep ? stepMoves(activeStep) : undefined}
+              ghostCables={showStep ? state.ghosts : undefined}
+              freshCables={showStep ? state.fresh : undefined}
               selected={selected}
+              selectedCable={selectedCable}
               onPortClick={onPortClick}
-              onConnect={tab === 'equipment' ? connect : undefined}
+              onCableClick={(id) => {
+                setSelected(null)
+                setSelectedCable((c) => (c === id ? null : id))
+              }}
+              onConnect={tab === 'equipment' || (tab === 'trouble' && !!active) ? connect : undefined}
+              onMoveUnit={tab === 'equipment' ? (id, pos) => patchUnit(id, { pos }) : undefined}
+              renderMenu={tab === 'equipment' ? renderMenu : undefined}
+              toolbar={toolbar}
             />
             <p className="text-ink-faint mt-1 text-[11px]">{hint}</p>
+            </div>
+            {overlay && <div className="max-h-[620px] w-72 shrink-0">{overlay}</div>}
           </div>
 
           <div role="tablist" className="border-line mt-3 flex gap-1 border-b">
@@ -238,6 +438,8 @@ export function PanelEdit({
                 onClick={() => {
                   setTab(t.id)
                   setPicking(false)
+                  setAddOpen(false)
+                  setSelectedCable(null)
                 }}
                 className={`-mb-px rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-medium transition-colors ${
                   tab === t.id
@@ -251,7 +453,14 @@ export function PanelEdit({
           </div>
 
           <div className="pt-3">
-            {/* ---- cards ------------------------------------------------ */}
+            {tab === 'equipment' && (
+              <p className="text-ink-faint text-sm">
+                {part.endpoints.length === 0
+                  ? 'Start with “Add unit” on the diagram, or click a port or a + to add something already cabled to it.'
+                  : `${part.endpoints.length} unit${part.endpoints.length === 1 ? '' : 's'}, ${part.cables.length} cable${part.cables.length === 1 ? '' : 's'}. Click a unit or a cable on the diagram to edit it.`}
+              </p>
+            )}
+
             {tab === 'layout' &&
               (template && template.slots.length > 0 ? (
                 <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
@@ -276,168 +485,6 @@ export function PanelEdit({
                 <p className="text-ink-faint text-sm">This unit has no swappable cards.</p>
               ))}
 
-            {/* ---- equipment & cables ----------------------------------- */}
-            {tab === 'equipment' && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {(['source', 'display'] as const).map((side) => (
-                    <button
-                      key={side}
-                      type="button"
-                      onClick={() =>
-                        set((p) => ({
-                          ...p,
-                          endpoints: [...p.endpoints, { id: uid(), side, name: '', detail: '', info: [] }],
-                        }))
-                      }
-                      className={GHOST_BTN}
-                    >
-                      <PlusIcon className="h-3.5 w-3.5" />
-                      Add {side}
-                    </button>
-                  ))}
-                  <span className="text-ink-faint text-[11px]">
-                    Add a hop (wall plate, extender…) as another source or display, then cable it between.
-                  </span>
-                </div>
-
-                {part.endpoints.map((e) => {
-                  const patchEp = (fields: Partial<PanelEndpoint>) =>
-                    set((p) => ({ ...p, endpoints: p.endpoints.map((x) => (x.id === e.id ? { ...x, ...fields } : x)) }))
-                  const addInfo = (key: string) => patchEp({ info: [...e.info, { id: uid(), key, value: '' }] })
-                  const mine = part.cables.filter((c) => c.from === epPointId(e.id) || c.to === epPointId(e.id))
-                  return (
-                    <div key={e.id} className="border-line bg-surface rounded-lg border p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="border-line inline-flex overflow-hidden rounded-md border text-xs font-medium">
-                          {(['source', 'display'] as const).map((side) => (
-                            <button
-                              key={side}
-                              type="button"
-                              onClick={() => patchEp({ side })}
-                              className={`px-2.5 py-1 ${e.side === side ? 'bg-brand-soft text-brand-strong' : 'text-ink-muted hover:bg-subtle'}`}
-                            >
-                              {side === 'source' ? 'Source' : 'Display'}
-                            </button>
-                          ))}
-                        </div>
-                        <input
-                          value={e.name}
-                          onChange={(ev) => patchEp({ name: ev.target.value })}
-                          placeholder="Name (e.g. Laptop, Display 1)…"
-                          className={`${INPUT_HEADING} min-w-40 flex-1`}
-                        />
-                        <button
-                          type="button"
-                          aria-label="Delete equipment"
-                          onClick={() => removeEndpoint(e.id)}
-                          className={`${DELETE_BTN} p-1`}
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <input
-                        value={e.detail}
-                        onChange={(ev) => patchEp({ detail: ev.target.value })}
-                        placeholder="Room or model (optional)…"
-                        className={`${INPUT} mt-2`}
-                      />
-                      {e.info.length > 0 && (
-                        <div className="mt-2 space-y-1.5">
-                          {e.info.map((i) => (
-                            <div key={i.id} className="flex items-center gap-2">
-                              <div className="w-36 shrink-0">
-                                <input
-                                  value={i.key}
-                                  onChange={(ev) =>
-                                    patchEp({ info: e.info.map((x) => (x.id === i.id ? { ...x, key: ev.target.value } : x)) })
-                                  }
-                                  placeholder="Label"
-                                  className={INPUT}
-                                />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <input
-                                  value={i.value}
-                                  onChange={(ev) =>
-                                    patchEp({ info: e.info.map((x) => (x.id === i.id ? { ...x, value: ev.target.value } : x)) })
-                                  }
-                                  placeholder="Value (e.g. 1080p60, DHCP)"
-                                  className={INPUT}
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                aria-label="Delete detail"
-                                onClick={() => patchEp({ info: e.info.filter((x) => x.id !== i.id) })}
-                                className={`${DELETE_BTN} p-1`}
-                              >
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span className="text-ink-faint text-[11px]">Add detail:</span>
-                        {INFO_SUGGESTIONS.filter((k) => !e.info.some((i) => i.key === k)).map((k) => (
-                          <button key={k} type="button" onClick={() => addInfo(k)} className={GHOST_BTN}>
-                            {k}
-                          </button>
-                        ))}
-                        <button type="button" onClick={() => addInfo('')} className={GHOST_BTN}>
-                          Other…
-                        </button>
-                      </div>
-                      {mine.length > 0 && (
-                        <p className="text-ink-faint mt-2 text-[11px]">
-                          Cables: {mine.map((c) => portName(c.from === epPointId(e.id) ? c.to : c.from)).join(', ')}
-                        </p>
-                      )}
-                    </div>
-                  )
-                })}
-
-                {part.cables.length > 0 && (
-                  <div>
-                    <p className={`mb-1.5 ${SECTION_LABEL}`}>Cables</p>
-                    <div className="space-y-2">
-                      {part.cables.map((c) => {
-                        const patchCable = (fields: Partial<typeof c>) =>
-                          set((p) => ({ ...p, cables: p.cables.map((x) => (x.id === c.id ? { ...x, ...fields } : x)) }))
-                        return (
-                          <div key={c.id} className="flex flex-wrap items-center gap-2">
-                            <select value={c.from} onChange={(ev) => patchCable({ from: ev.target.value })} className={`${SELECT} max-w-52`}>
-                              {portOptions}
-                            </select>
-                            <span className="text-ink-faint text-xs">→</span>
-                            <select value={c.to} onChange={(ev) => patchCable({ to: ev.target.value })} className={`${SELECT} max-w-52`}>
-                              {portOptions}
-                            </select>
-                            <input
-                              value={c.label}
-                              onChange={(ev) => patchCable({ label: ev.target.value })}
-                              placeholder="Cable label (optional)…"
-                              className={`${INPUT} min-w-36 flex-1`}
-                            />
-                            <button
-                              type="button"
-                              aria-label="Delete cable"
-                              onClick={() => set((p) => ({ ...p, cables: p.cables.filter((x) => x.id !== c.id) }))}
-                              className={`${DELETE_BTN} p-1`}
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ---- port notes ------------------------------------------- */}
             {tab === 'notes' && (
               <div className="space-y-2">
                 {part.annotations.length === 0 && (
@@ -481,7 +528,6 @@ export function PanelEdit({
               </div>
             )}
 
-            {/* ---- troubleshooting -------------------------------------- */}
             {tab === 'trouble' && (
               <div className="space-y-3">
                 {part.scenarios.map((sc) => (
@@ -511,6 +557,7 @@ export function PanelEdit({
                         const isActive = active?.stepId === st.id
                         const patch = (fn: (s: PanelStep) => PanelStep) => patchStep(sc.id, st.id, fn)
                         const others = sc.steps.filter((x) => x.id !== st.id)
+                        const before = stateAfter(part, sc.steps.slice(0, si))
                         return (
                           <li
                             key={st.id}
@@ -559,47 +606,17 @@ export function PanelEdit({
                               className={TEXTAREA}
                             />
 
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                              <label className="text-ink-muted inline-flex items-center gap-1.5">
-                                <input
-                                  type="checkbox"
-                                  checked={!!st.move}
-                                  onChange={(ev) =>
-                                    patch((s) => ({
-                                      ...s,
-                                      move: ev.target.checked
-                                        ? { from: inputSlots[0]?.id ?? '', to: inputSlots[1]?.id ?? '' }
-                                        : undefined,
-                                    }))
-                                  }
-                                />
-                                Swap two cards
-                              </label>
-                              {st.move && (
-                                <>
-                                  <select
-                                    value={st.move.from}
-                                    onChange={(ev) => patch((s) => ({ ...s, move: { from: ev.target.value, to: s.move?.to ?? '' } }))}
-                                    className={SELECT}
-                                  >
-                                    {inputSlots.map((sl) => (
-                                      <option key={sl.id} value={sl.id}>{sl.label}</option>
-                                    ))}
-                                  </select>
-                                  <span className="text-ink-faint">⇄</span>
-                                  <select
-                                    value={st.move.to}
-                                    onChange={(ev) => patch((s) => ({ ...s, move: { from: s.move?.from ?? '', to: ev.target.value } }))}
-                                    className={SELECT}
-                                  >
-                                    {inputSlots.map((sl) => (
-                                      <option key={sl.id} value={sl.id}>{sl.label}</option>
-                                    ))}
-                                  </select>
-                                  <span className="text-ink-faint">cables follow the cards</span>
-                                </>
-                              )}
-                            </div>
+                            {device && (
+                              <StepActionsEdit
+                                actions={st.actions}
+                                onChange={(actions) => patch((s) => ({ ...s, actions }))}
+                                device={device}
+                                endpoints={before.endpoints}
+                                inputSlots={inputSlots}
+                                cablesBefore={before.cables}
+                                portOptions={portOptions}
+                              />
+                            )}
 
                             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                               <button
@@ -704,7 +721,7 @@ export function PanelEdit({
                     <button
                       type="button"
                       onClick={() => {
-                        const step: PanelStep = { id: uid(), text: '', portIds: [], links: [], answers: [] }
+                        const step = newStep()
                         patchScenario(sc.id, (s) => ({ ...s, steps: [...s.steps, step] }))
                         setActive({ scenarioId: sc.id, stepId: step.id })
                       }}
@@ -719,7 +736,7 @@ export function PanelEdit({
                 <button
                   type="button"
                   onClick={() => {
-                    const step: PanelStep = { id: uid(), text: '', portIds: [], links: [], answers: [] }
+                    const step = newStep()
                     const sc: PanelScenario = { id: uid(), title: '', steps: [step] }
                     set((p) => ({ ...p, scenarios: [...p.scenarios, sc] }))
                     setActive({ scenarioId: sc.id, stepId: step.id })

@@ -89,14 +89,25 @@ export type PanelAnswer = {
 }
 
 /**
- * One step of a troubleshooting check: what to do or ask, an optional card swap
- * between two input slots (cables follow the cards), ports to light up, lines
- * to draw, and the answers that lead on. No answers means the step is the end.
+ * Something done to the setup during a troubleshooting step. Cards swap places
+ * with their cables; swapping units exchanges two devices while the cables stay
+ * where they are; a cable can be pulled out or plugged in.
+ */
+export type PanelAction =
+  | { id: string; type: 'swap-cards'; from: string; to: string }
+  | { id: string; type: 'swap-units'; a: string; b: string }
+  | { id: string; type: 'unplug'; cableId: string }
+  | { id: string; type: 'plug'; cableId: string; from: string; to: string; label: string }
+
+/**
+ * One step of a troubleshooting check: what to do or ask, what changes in the
+ * setup, ports to light up, lines to draw, and the answers that lead on. No
+ * answers means the step is the end.
  */
 export type PanelStep = {
   id: string
   text: string
-  move?: { from: string; to: string }
+  actions: PanelAction[]
   portIds: string[]
   links: { id: string; from: string; to: string }[]
   answers: PanelAnswer[]
@@ -120,6 +131,10 @@ export type PanelEndpoint = {
   /** Free text under the name, e.g. the room. Stays in the guide file, never in code. */
   detail: string
   info: PanelEndpointInfo[]
+  /** Unit type from the catalog in `panel/units.ts` (NVX receiver, display…). */
+  kind: string
+  /** Where the box was dragged to. Without it the box is placed automatically. */
+  pos?: { x: number; y: number }
 }
 
 /** One cable. `from` / `to` are chassis port ids, or `ep:<endpoint id>` for equipment. */

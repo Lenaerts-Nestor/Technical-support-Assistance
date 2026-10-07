@@ -9,6 +9,7 @@ import {
   type Pt,
   type Rect,
 } from './scene'
+import { getUnitKind } from './units'
 import type { PanelCable, PanelEndpoint } from '../types'
 
 const KIND_CLASS: Record<PortKind, string> = {
@@ -40,7 +41,10 @@ type DevicePanelProps = {
   /** A port id, or `ep:<id>` for equipment. */
   selected?: string | null
   selectedCable?: string | null
-  onPortClick?: (id: string) => void
+  onPortClick?: (id: string, e: React.MouseEvent | React.KeyboardEvent) => void
+  /** Cables the current step pulled out (drawn as ghosts) or plugged in (pulsing). */
+  ghostCables?: PanelCable[]
+  freshCables?: ReadonlySet<string>
   onCableClick?: (cableId: string) => void
   /** Visible region. Defaults to the whole scene; the canvas drives it for pan / zoom. */
   viewBox?: Rect
@@ -71,6 +75,8 @@ export function DevicePanel({
   endpoints,
   cables = NO_CABLES,
   moves = NO_MOVES,
+  ghostCables = NO_CABLES,
+  freshCables = EMPTY_SET,
   connectable = false,
   pending = null,
   selected = null,
@@ -101,11 +107,11 @@ export function DevicePanel({
           tabIndex: 0,
           'aria-pressed': selected === id,
           'data-point-id': id,
-          onClick: () => onPortClick(id),
+          onClick: (e: React.MouseEvent) => onPortClick(id, e),
           onKeyDown: (e: React.KeyboardEvent) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
-              onPortClick(id)
+              onPortClick(id, e)
             }
           },
         }
@@ -266,11 +272,11 @@ export function DevicePanel({
             const id = epPointId(e.id)
             const isSel = selected === id
             const isDrop = pending?.target === id
-            const tone = e.side === 'source' ? 'stroke-sky-400/70' : 'stroke-emerald-400/70'
+            const kind = getUnitKind(e.kind)
             return (
               <g
                 key={e.id}
-                aria-label={e.name || e.side}
+                aria-label={e.name || kind.label}
                 {...press(id)}
                 className={onPortClick ? 'cursor-pointer outline-none' : undefined}
               >
@@ -280,22 +286,27 @@ export function DevicePanel({
                   width={w}
                   height={h}
                   rx={8}
-                  className={`fill-surface ${isSel || isDrop ? 'stroke-brand' : tone}`}
+                  className="fill-surface"
+                  stroke={isSel || isDrop ? '#f0a542' : kind.color}
+                  strokeOpacity={isSel || isDrop ? 1 : 0.7}
                   strokeWidth={isSel || isDrop ? 3 : 1.5}
                 />
-                <text x={x + 12} y={y + 14} className="fill-ink-faint text-[8px] font-bold tracking-widest uppercase">
-                  {e.side}
+                <g transform={`translate(${x + 10} ${y + 6}) scale(0.7)`} fill="none" stroke={kind.color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d={kind.icon} />
+                </g>
+                <text x={x + 32} y={y + 17} className="fill-ink-faint text-[8px] font-bold tracking-widest uppercase">
+                  {kind.label}
                 </text>
-                <text x={x + 12} y={y + 31} className="fill-ink text-[13px] font-semibold">
+                <text x={x + 12} y={y + 35} className="fill-ink text-[13px] font-semibold">
                   {clip(e.name || 'Unnamed', 26)}
                 </text>
                 {e.detail && (
-                  <text x={x + 12} y={y + 45} className="fill-ink-muted text-[10px]">
+                  <text x={x + 12} y={y + 48} className="fill-ink-muted text-[10px]">
                     {clip(e.detail, 36)}
                   </text>
                 )}
                 {lines.map((line, i) => (
-                  <text key={i} x={x + 12} y={y + 58 + i * 13} className="fill-ink-muted text-[10px]">
+                  <text key={i} x={x + 12} y={y + 62 + i * 13} className="fill-ink-muted text-[10px]">
                     {clip(line, 38)}
                   </text>
                 ))}
@@ -315,7 +326,7 @@ export function DevicePanel({
           <g
             key={c.id}
             opacity={dim ? 0.18 : 1}
-            className={onCableClick ? 'cursor-pointer' : undefined}
+            className={`${onCableClick ? 'cursor-pointer' : ''} ${freshCables.has(c.id) ? 'animate-pulse' : ''}`}
             onClick={onCableClick ? () => onCableClick(c.id) : undefined}
           >
             <path d={route.d} fill="none" stroke="transparent" strokeWidth={14} />
@@ -335,6 +346,20 @@ export function DevicePanel({
                 {clip(c.label, 16)}
               </text>
             )}
+          </g>
+        )
+      })}
+
+      {ghostCables.map((c, i) => {
+        const route = routeCable(device, items, c, cables.length + i)
+        if (!route) return null
+        return (
+          <g key={`ghost-${c.id}`} className="pointer-events-none">
+            <path d={route.d} fill="none" stroke="#fb7185" strokeWidth={3} strokeDasharray="3 7" strokeLinecap="round" opacity={0.85} />
+            <g transform={`translate(${route.label.x} ${route.label.y - 4})`}>
+              <circle r={9} className="fill-canvas stroke-rose-400" strokeWidth={2} />
+              <path d="M -3.5 -3.5 L 3.5 3.5 M 3.5 -3.5 L -3.5 3.5" className="stroke-rose-400" strokeWidth={2} strokeLinecap="round" />
+            </g>
           </g>
         )
       })}
