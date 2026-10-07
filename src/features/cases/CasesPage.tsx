@@ -1,4 +1,5 @@
 import { useCases } from './useCases'
+import { useSnippets } from './useSnippets'
 import { ComposerHeader } from './components/ComposerHeader'
 import { Editor } from './components/Editor'
 import { UtilitiesPanel } from './components/UtilitiesPanel'
@@ -12,6 +13,7 @@ const COLUMN_HEIGHT = 'h-[calc(100vh-11rem)] min-h-[560px]'
 
 export function CasesPage() {
   const cases = useCases()
+  const snippets = useSnippets()
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
@@ -38,6 +40,8 @@ export function CasesPage() {
           language={cases.language}
           onLanguageChange={cases.setLanguage}
           onInsert={cases.insertTemplate}
+          snippets={snippets}
+          onInsertText={cases.insertText}
         />
       </div>
     </div>

@@ -3,11 +3,15 @@ import { CARD, CARD_HEADER, SECTION_LABEL } from '../../../shared/ui/styles'
 import type { CaseLanguage } from '../types'
 import { LanguageToggle } from './LanguageToggle'
 import { TemplateGroup } from './TemplateGroup'
+import { SnippetsGroup } from './SnippetsGroup'
+import type { SnippetsController } from '../useSnippets'
 
 type UtilitiesPanelProps = {
   language: CaseLanguage
   onLanguageChange: (language: CaseLanguage) => void
   onInsert: (id: string) => void
+  snippets: SnippetsController
+  onInsertText: (text: string) => void
   className?: string
 }
 
@@ -20,6 +24,8 @@ export function UtilitiesPanel({
   language,
   onLanguageChange,
   onInsert,
+  snippets,
+  onInsertText,
   className,
 }: UtilitiesPanelProps) {
   return (
@@ -37,6 +43,8 @@ export function UtilitiesPanel({
         {TEMPLATE_GROUPS.map((group) => (
           <TemplateGroup key={group.id} group={group} onInsert={onInsert} />
         ))}
+
+        <SnippetsGroup snippets={snippets} onInsert={onInsertText} />
       </div>
     </aside>
   )

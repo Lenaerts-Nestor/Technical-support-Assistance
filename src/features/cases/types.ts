@@ -26,3 +26,10 @@ export type FlaggedMatch = {
   start: number
   end: number
 }
+
+/** A personal text the user added to the Utilities panel. */
+export type Snippet = {
+  id: string
+  label: string
+  text: string
+}
