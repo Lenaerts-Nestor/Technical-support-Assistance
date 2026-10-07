@@ -9,7 +9,7 @@ import type { PanelCable, PanelEndpoint } from '../types'
  */
 
 export const EP_W = 220
-const EP_BASE_H = 54
+const EP_BASE_H = 58
 const EP_LINE_H = 13
 const EP_GAP = 14
 /** Between a column and the unit, or between two columns: room for cables. */
@@ -31,6 +31,8 @@ export type EpItem = {
   h: number
   /** Hops away from the unit: 0 touches it, 1 feeds a depth-0 box, and so on. */
   depth: number
+  /** True when the box sits left of the unit's middle (where its cables leave from the right edge). */
+  left: boolean
   /** Edge facing the unit, and the edge facing away from it. */
   inner: Pt
   outer: Pt
@@ -121,19 +123,24 @@ export function layoutScene(
       let bottom = 40 - EP_GAP
       for (const { endpoint, want } of col) {
         const h = heightOf(endpoint)
-        const y = Math.max(Number.isFinite(want) ? want - h / 2 : 0, bottom + EP_GAP)
-        bottom = y + h
-        const left = { x, y: y + h / 2 }
-        const right = { x: x + EP_W, y: y + h / 2 }
+        // A dragged box stays where it was put; the rest stack around the gaps.
+        const fixed = endpoint.pos
+        const y = fixed ? fixed.y : Math.max(Number.isFinite(want) ? want - h / 2 : 0, bottom + EP_GAP)
+        if (!fixed) bottom = y + h
+        const bx = fixed ? fixed.x : x
+        const isLeft = fixed ? bx + EP_W / 2 < device.width / 2 : side === 'source'
+        const leftEdge = { x: bx, y: y + h / 2 }
+        const rightEdge = { x: bx + EP_W, y: y + h / 2 }
         placed.set(epPointId(endpoint.id), {
           endpoint,
-          x,
+          x: bx,
           y,
           w: EP_W,
           h,
           depth: d,
-          inner: side === 'source' ? right : left,
-          outer: side === 'source' ? left : right,
+          left: isLeft,
+          inner: isLeft ? rightEdge : leftEdge,
+          outer: isLeft ? leftEdge : rightEdge,
           lines: infoLines(endpoint),
         })
       }
@@ -146,8 +153,12 @@ export function layoutScene(
   const right = hasSide('display')
     ? device.width + EP_MARGIN + EP_W + maxDepth.display * (EP_W + COL_GAP) + 20
     : device.width
+  const moved = items.filter((i) => i.endpoint.pos)
+  const minX = Math.min(left, ...moved.map((i) => i.x - 40))
+  const maxX = Math.max(right, ...moved.map((i) => i.x + i.w + 40))
+  const minY = Math.min(0, ...moved.map((i) => i.y - 30))
   const bottom = Math.max(device.height, ...items.map((i) => i.y + i.h + 30))
-  return { items, bounds: { x: left, y: 0, w: right - left, h: bottom } }
+  return { items, bounds: { x: minX, y: minY, w: maxX - minX, h: bottom - minY } }
 }
 
 export const deviceBounds = (device: DeviceDef): Rect => ({ x: 0, y: 0, w: device.width, h: device.height })
@@ -218,9 +229,10 @@ export function routeCable(
 
   // Equipment to equipment: a plain curve between the facing edges.
   if (ea && eb) {
-    const [near, far] = ea.depth <= eb.depth ? [ea, eb] : [eb, ea]
-    const a = far.inner
-    const b = ea.depth === eb.depth ? near.inner : near.outer
+    // Whichever sides of the two boxes face each other.
+    const aLeftOfB = ea.x + ea.w / 2 <= eb.x + eb.w / 2
+    const a = aLeftOfB ? { x: ea.x + ea.w, y: ea.y + ea.h / 2 } : { x: ea.x, y: ea.y + ea.h / 2 }
+    const b = aLeftOfB ? { x: eb.x, y: eb.y + eb.h / 2 } : { x: eb.x + eb.w, y: eb.y + eb.h / 2 }
     const dx = Math.max(Math.abs(b.x - a.x) * 0.5, 30)
     const dir = b.x >= a.x ? 1 : -1
     return {
@@ -243,7 +255,7 @@ export function routeCable(
     const lane = laneY(device, p) + (j - 2) * 0.5
     const t = portTop(p)
     const col = column(p)
-    const isSource = e.endpoint.side === 'source'
+    const isSource = e.left
     const trunk = isSource ? -18 - j * 7 : device.width + 18 + j * 7
     const start = e.inner
     const direct = isSource ? col === 0 : col === gutters.length

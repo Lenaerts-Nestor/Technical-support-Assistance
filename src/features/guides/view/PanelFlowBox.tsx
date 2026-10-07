@@ -1,5 +1,7 @@
 import { getTemplate } from '../panel/devices'
+import { pointName } from '../panel/scene'
 import type { PanelFlow } from '../panel/usePanelFlow'
+import type { PanelAction } from '../types'
 import { GHOST_BTN, SECTION_LABEL } from '../../../shared/ui/styles'
 import type { PanelPart } from '../types'
 
@@ -10,8 +12,23 @@ import type { PanelPart } from '../types'
 export function PanelFlowBox({ part, flow }: { part: PanelPart; flow: PanelFlow }) {
   if (part.scenarios.length === 0) return null
   const slotLabel = (id: string) => getTemplate(part.deviceId)?.slots.find((s) => s.id === id)?.label ?? id
-  const { scenario, step } = flow
-
+  const { scenario, step, device, endpoints } = flow
+  const name = (id: string) => (device ? pointName(id, device, endpoints) : id)
+  const unitName = (id: string) => name(`ep:${id}`)
+  const describe = (a: PanelAction): string => {
+    switch (a.type) {
+      case 'swap-cards':
+        return `Swap cards: ${slotLabel(a.from)} ⇄ ${slotLabel(a.to)} (cables follow the cards)`
+      case 'swap-units':
+        return `Swap units: ${unitName(a.a)} ⇄ ${unitName(a.b)} (cables stay in place)`
+      case 'unplug': {
+        const c = flow.ghosts.find((g) => g.id === a.cableId)
+        return c ? `Unplug: ${name(c.from)} → ${name(c.to)}` : 'Unplug a cable'
+      }
+      case 'plug':
+        return `Plug in: ${name(a.from)} → ${name(a.to)}`
+    }
+  }
   return (
     <div>
       <p className={`mb-1.5 ${SECTION_LABEL}`}>Troubleshooting</p>
@@ -40,11 +57,17 @@ export function PanelFlowBox({ part, flow }: { part: PanelPart; flow: PanelFlow 
           </p>
           <p className="text-ink mt-1 text-sm leading-relaxed whitespace-pre-line">{step.text}</p>
 
-          {step.move && (
-            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs font-medium text-amber-200">
-              Swap cards: {slotLabel(step.move.from)} ⇄ {slotLabel(step.move.to)}
-              <span className="text-amber-200/70 font-normal">(cables follow the cards)</span>
-            </p>
+          {step.actions.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {step.actions.map((act) => (
+                <li
+                  key={act.id}
+                  className="rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-xs font-medium text-amber-200"
+                >
+                  {describe(act)}
+                </li>
+              ))}
+            </ul>
           )}
 
           {flow.conclusion !== null ? (

@@ -6,6 +6,7 @@ import type {
   GuideSection,
   GuideStep,
   GuidesFile,
+  PanelAction,
   PanelPart,
   SectionBlock,
   StepSubItem,
@@ -128,6 +129,10 @@ function normalizePanel(raw: unknown): PanelPart {
         side: x.side === 'display' ? ('display' as const) : ('source' as const),
         name: asStr(x.name),
         detail: asStr(x.detail),
+        kind: asStr(x.kind) || (x.side === 'display' ? 'display' : 'source'),
+        ...(typeof asObj(x.pos).x === 'number' && typeof asObj(x.pos).y === 'number'
+          ? { pos: { x: asObj(x.pos).x as number, y: asObj(x.pos).y as number } }
+          : {}),
         info: asArr(x.info).map((i) => {
           const y = asObj(i)
           return { id: withId(y.id), key: asStr(y.key), value: asStr(y.value) }
@@ -155,10 +160,23 @@ function normalizePanel(raw: unknown): PanelPart {
         ? x.steps.map((st) => {
             const y = asObj(st)
             const m = asObj(y.move)
+            const actions: PanelAction[] = asArr(y.actions).flatMap((a): PanelAction[] => {
+              const z = asObj(a)
+              const id = withId(z.id)
+              if (z.type === 'swap-cards') return [{ id, type: 'swap-cards', from: asStr(z.from), to: asStr(z.to) }]
+              if (z.type === 'swap-units') return [{ id, type: 'swap-units', a: asStr(z.a), b: asStr(z.b) }]
+              if (z.type === 'unplug') return [{ id, type: 'unplug', cableId: asStr(z.cableId) }]
+              if (z.type === 'plug')
+                return [{ id, type: 'plug', cableId: withId(z.cableId), from: asStr(z.from), to: asStr(z.to), label: asStr(z.label) }]
+              return []
+            })
+            // Older saves had a single `move` (a card swap) per step.
+            if (asStr(m.from) && asStr(m.to) && !actions.length)
+              actions.push({ id: uid(), type: 'swap-cards', from: asStr(m.from), to: asStr(m.to) })
             return {
               id: withId(y.id),
               text: asStr(y.text),
-              ...(asStr(m.from) && asStr(m.to) ? { move: { from: asStr(m.from), to: asStr(m.to) } } : {}),
+              actions,
               portIds: ports(y.portIds),
               links: links(y.links),
               answers: asArr(y.answers).map((a) => {
@@ -167,7 +185,7 @@ function normalizePanel(raw: unknown): PanelPart {
               }),
             }
           })
-        : [{ id: uid(), text: asStr(x.text), portIds: ports(x.portIds), links: links(x.links), answers: [] }]
+        : [{ id: uid(), text: asStr(x.text), actions: [], portIds: ports(x.portIds), links: links(x.links), answers: [] }]
       return { id: withId(x.id), title: asStr(x.title), steps }
     }),
   }
