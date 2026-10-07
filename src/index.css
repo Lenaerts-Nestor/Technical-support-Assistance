@@ -74,3 +74,20 @@ body {
     color: var(--color-ink);
   }
 }
+
+/* Interactive panel block: marching dashes on a troubleshooting link. */
+@keyframes panel-link-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+.panel-link {
+  animation: panel-link-flow 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-link {
+    animation: none;
+  }
+}

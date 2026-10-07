@@ -3,6 +3,7 @@ import { SectionEdit } from './SectionEdit'
 import { TableEdit } from './TableEdit'
 import { CalloutEdit } from './CalloutEdit'
 import { TermEdit } from './TermEdit'
+import { PanelEdit } from './PanelEdit'
 import type { BlockRef, GuideDraftController } from '../useGuideDraft'
 import type { GuidePart } from '../types'
 
@@ -32,6 +33,7 @@ export function GuidePartEdit({ part, index, count, d }: GuidePartEditProps) {
       }
       if (part.type === 'table') return <TableEdit part={part} {...frame} />
       if (part.type === 'callout') return <CalloutEdit part={part} {...frame} />
+      if (part.type === 'panel') return <PanelEdit part={part} {...frame} />
       return <TermEdit part={part} {...frame} />
     }
   }

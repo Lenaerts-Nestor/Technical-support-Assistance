@@ -1,9 +1,10 @@
-import { CalloutIcon, TableIcon, TermIcon } from '../components/icons'
+import { CalloutIcon, PanelIcon, TableIcon, TermIcon } from '../components/icons'
 import { BLOCK_KINDS, PART_TONES } from '../guidesData'
 import { GHOST_BTN } from '../../../shared/ui/styles'
 import { CalloutEdit } from './CalloutEdit'
 import { TableEdit } from './TableEdit'
 import { TermEdit } from './TermEdit'
+import { PanelEdit } from './PanelEdit'
 import type { BlockRef, GuideDraftController, NodeLoc } from '../useGuideDraft'
 import type { SectionBlock, SectionBlockKind } from '../types'
 
@@ -23,6 +24,7 @@ const KIND_ICON: Record<
   table: TableIcon,
   callout: CalloutIcon,
   term: TermIcon,
+  panel: PanelIcon,
 }
 
 /**
@@ -55,6 +57,8 @@ export function SectionBlocksEdit({
               return <TableEdit key={block.id} part={block} {...frame} />
             if (block.type === 'callout')
               return <CalloutEdit key={block.id} part={block} {...frame} />
+            if (block.type === 'panel')
+              return <PanelEdit key={block.id} part={block} {...frame} />
             return <TermEdit key={block.id} part={block} {...frame} />
           })}
         </div>

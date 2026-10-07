@@ -23,7 +23,7 @@ export type GuideSection = {
   heading: string
   body: string
   steps: GuideStep[]
-  /** Tables / callouts / terms belonging to this section, rendered under its steps. */
+  /** Tables / callouts / terms / panels belonging to this section, rendered under its steps. */
   blocks?: SectionBlock[]
 }
 
@@ -70,12 +70,51 @@ export type TermPart = {
   bullets: string[]
 }
 
+/** A note pinned to one port of the panel, shown when that port is clicked. */
+export type PanelAnnotation = {
+  id: string
+  /** Port id from the device template (see `panel/devices.ts`). */
+  portId: string
+  label: string
+  note: string
+}
+
+/**
+ * One troubleshooting check on a panel: a question, what to test, the ports to
+ * light up while it is selected, and optional lines between ports ("move this
+ * cable from here to there").
+ */
+export type PanelScenario = {
+  id: string
+  title: string
+  text: string
+  portIds: string[]
+  links: { id: string; from: string; to: string }[]
+}
+
+/**
+ * Interactive rear-panel diagram. The hardware layout lives in code
+ * (`panel/devices.ts`, keyed by `deviceId`); only the per-guide notes and
+ * troubleshooting checks are stored with the guide.
+ */
+export type PanelPart = {
+  type: 'panel'
+  id: string
+  title: string
+  deviceId: string
+  /** Card installed per slot id, for chassis units. Missing slots use the template default. */
+  cards?: Record<string, string>
+  annotations: PanelAnnotation[]
+  scenarios: PanelScenario[]
+}
+
 export type GuidePart =
   | ChapterPart
   | SectionPart
   | TablePart
   | CalloutPart
   | TermPart
+  | PanelPart
 
 export type GuidePartKind = GuidePart['type']
 
@@ -83,7 +122,7 @@ export type GuidePartKind = GuidePart['type']
  * The part types that can also nest inside a chapter or a section. Chapters and
  * sections themselves cannot nest — the hierarchy stays two levels deep.
  */
-export type SectionBlock = TablePart | CalloutPart | TermPart
+export type SectionBlock = TablePart | CalloutPart | TermPart | PanelPart
 
 export type SectionBlockKind = SectionBlock['type']
 

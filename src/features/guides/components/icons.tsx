@@ -158,3 +158,12 @@ export function XIcon({ className }: IconProps) {
   )
 }
 
+
+export function PanelIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M7 10h.01M11 10h.01M15 10h.01M7 14h.01M11 14h.01M15 14h.01" />
+    </svg>
+  )
+}

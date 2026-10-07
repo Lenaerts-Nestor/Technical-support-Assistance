@@ -1,3 +1,4 @@
+import { DEFAULT_DEVICE_ID } from './panel/devices'
 import type {
   Guide,
   GuideLink,
@@ -5,6 +6,7 @@ import type {
   GuideSection,
   GuideStep,
   GuidesFile,
+  PanelPart,
   SectionBlock,
   StepSubItem,
   SubItemKind,
@@ -78,7 +80,8 @@ function normalizeBlocks(raw: unknown): SectionBlock[] {
   return asArr(raw)
     .map(normalizePart)
     .filter((p): p is SectionBlock =>
-      p !== null && (p.type === 'table' || p.type === 'callout' || p.type === 'term'),
+      p !== null &&
+      (p.type === 'table' || p.type === 'callout' || p.type === 'term' || p.type === 'panel'),
     )
 }
 
@@ -104,6 +107,38 @@ function normalizeTable(raw: unknown): TablePart {
     return cells.slice(0, headers.length)
   })
   return { type: 'table', id: withId(o.id), title: asStr(o.title), table: { headers, rows } }
+}
+
+function normalizePanel(raw: unknown): PanelPart {
+  const o = asObj(raw)
+  return {
+    type: 'panel',
+    id: withId(o.id),
+    title: asStr(o.title),
+    deviceId: asStr(o.deviceId) || DEFAULT_DEVICE_ID,
+    cards: Object.fromEntries(
+      Object.entries(asObj(o.cards)).filter(
+        (e): e is [string, string] => typeof e[1] === 'string' && !!e[1],
+      ),
+    ),
+    annotations: asArr(o.annotations).map((a) => {
+      const x = asObj(a)
+      return { id: withId(x.id), portId: asStr(x.portId), label: asStr(x.label), note: asStr(x.note) }
+    }),
+    scenarios: asArr(o.scenarios).map((s) => {
+      const x = asObj(s)
+      return {
+        id: withId(x.id),
+        title: asStr(x.title),
+        text: asStr(x.text),
+        portIds: asArr(x.portIds).map((p) => asStr(p)).filter(Boolean),
+        links: asArr(x.links).map((l) => {
+          const y = asObj(l)
+          return { id: withId(y.id), from: asStr(y.from), to: asStr(y.to) }
+        }),
+      }
+    }),
+  }
 }
 
 function normalizePart(raw: unknown): GuidePart | null {
@@ -143,6 +178,8 @@ function normalizePart(raw: unknown): GuidePart | null {
         explanation: asStr(o.explanation),
         bullets: asArr(o.bullets).map((b) => asStr(b)).filter(Boolean),
       }
+    case 'panel':
+      return normalizePanel(o)
     default:
       return null
   }

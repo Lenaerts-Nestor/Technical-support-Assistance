@@ -1,3 +1,4 @@
+import { DEFAULT_DEVICE_ID } from './panel/devices'
 import type {
   Guide,
   GuideLink,
@@ -53,6 +54,7 @@ export const PART_KINDS: { kind: GuidePartKind; label: string }[] = [
   { kind: 'table', label: 'Add Table' },
   { kind: 'callout', label: 'Add Callout' },
   { kind: 'term', label: 'Add Term Definition' },
+  { kind: 'panel', label: 'Add Interactive Panel' },
 ]
 
 /** The subset of PART_KINDS that can be added inside a chapter or a section. */
@@ -60,6 +62,7 @@ export const BLOCK_KINDS: { kind: SectionBlockKind; label: string }[] = [
   { kind: 'table', label: 'Table' },
   { kind: 'callout', label: 'Callout' },
   { kind: 'term', label: 'Term' },
+  { kind: 'panel', label: 'Interactive Panel' },
 ]
 
 /**
@@ -94,6 +97,11 @@ export const PART_TONES: Record<
     chip: 'bg-indigo-400/15 text-indigo-200 ring-1 ring-indigo-400/30',
     rule: 'border-l-indigo-400',
     dot: 'bg-indigo-400',
+  },
+  panel: {
+    chip: 'bg-fuchsia-400/15 text-fuchsia-200 ring-1 ring-fuchsia-400/30',
+    rule: 'border-l-fuchsia-400',
+    dot: 'bg-fuchsia-400',
   },
 }
 
@@ -139,7 +147,7 @@ export function blankSection(): GuideSection {
   return { id: uid(), heading: '', body: '', steps: [blankStep()], blocks: [] }
 }
 
-/** A table / callout / term to nest inside a chapter or section. */
+/** A table / callout / term / panel to nest inside a chapter or section. */
 export function blankBlock(kind: SectionBlockKind): SectionBlock {
   return blankPart(kind) as SectionBlock
 }
@@ -185,6 +193,16 @@ export function blankPart(kind: GuidePartKind): GuidePart {
       return { type: 'callout', id: uid(), variant: 'info', text: '' }
     case 'term':
       return { type: 'term', id: uid(), title: '', explanation: '', bullets: [] }
+    case 'panel':
+      return {
+        type: 'panel',
+        id: uid(),
+        title: '',
+        deviceId: DEFAULT_DEVICE_ID,
+        cards: {},
+        annotations: [],
+        scenarios: [],
+      }
   }
 }
 
