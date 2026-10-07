@@ -1,5 +1,5 @@
 import type { DeviceDef, PortDef } from './devices'
-import { getUnitKind, specSide, unitPortSpecs, type PortSpec } from './units'
+import { defaultGroup, getUnitKind, specSide, unitPortSpecs, type PortSpec, type Signal } from './units'
 import type { PanelCable, PanelEndpoint } from '../types'
 
 /**
@@ -12,7 +12,7 @@ import type { PanelCable, PanelEndpoint } from '../types'
  * boxes without ports).
  */
 
-export const EP_W = 220
+export const EP_W = 240
 const EP_BASE_H = 58
 const EP_LINE_H = 13
 const EP_GAP = 14
@@ -20,10 +20,12 @@ const EP_GAP = 14
 const EP_MARGIN = 80
 const COL_GAP = 70
 const MAX_INFO_LINES = 3
-const PORT_W = 92
-const PORT_H = 18
-const PORT_PITCH = 22
+const PORT_W = 108
+const PORT_H = 20
+const PORT_PITCH = 25
 const PORT_INSET = 8
+/** Height of a section heading (VIDEO, NETWORK…) above its ports. */
+const GROUP_H = 16
 
 export type Rect = { x: number; y: number; w: number; h: number }
 export type Pt = { x: number; y: number }
@@ -68,6 +70,8 @@ export type EpItem = {
   outer: Pt
   lines: string[]
   ports: UnitPort[]
+  /** Section headings inside the box, at absolute y. */
+  sections: { label: string; y: number }[]
 }
 
 export type Scene = { items: EpItem[]; bounds: Rect }
@@ -80,23 +84,44 @@ const infoLines = (e: PanelEndpoint) =>
 
 const portCy = (p: PortDef) => p.y + p.h / 2
 
-/** Size of a unit box and where its ports sit relative to its top-left corner. */
+/**
+ * Size of a unit box and where its ports sit relative to its top-left corner.
+ * Ports are listed under section headings (Video, Audio, Network…), inputs on
+ * the left and outputs on the right, so a box reads like the unit's own panel.
+ */
 function unitShape(e: PanelEndpoint, lineCount: number) {
   const specs = unitPortSpecs(e.kind, e.model)
   const top = EP_BASE_H + lineCount * EP_LINE_H + 4
-  if (specs.length === 0)
-    return { h: EP_BASE_H + lineCount * EP_LINE_H, top: 0, ports: [] as { spec: PortSpec; col: 'L' | 'R'; row: number }[] }
-  // A port's own `side` wins; otherwise inputs go left and outputs right.
-  const sideOf = specSide
-  const left: PortSpec[] = specs.filter((s) => sideOf(s) === 'L')
-  const right: PortSpec[] = specs.filter((s) => sideOf(s) === 'R')
-  // Two-way ports with no preference fill whichever column is shorter, starting left.
-  for (const s of specs.filter((x) => !sideOf(x))) (left.length <= right.length ? left : right).push(s)
-  const ports = [
-    ...left.map((spec, row) => ({ spec, col: 'L' as const, row })),
-    ...right.map((spec, row) => ({ spec, col: 'R' as const, row })),
-  ]
-  return { h: top + Math.max(left.length, right.length) * PORT_PITCH + 6, top, ports }
+  type Placed = { spec: PortSpec; col: 'L' | 'R'; y: number }
+  if (specs.length === 0) {
+    return { h: EP_BASE_H + lineCount * EP_LINE_H, top: 0, ports: [] as Placed[], sections: [] as { label: string; y: number }[] }
+  }
+  const order: string[] = []
+  const byGroup = new Map<string, PortSpec[]>()
+  for (const s of specs) {
+    const g = s.group ?? defaultGroup(s.signal)
+    if (!byGroup.has(g)) {
+      byGroup.set(g, [])
+      order.push(g)
+    }
+    byGroup.get(g)!.push(s)
+  }
+  const ports: Placed[] = []
+  const sections: { label: string; y: number }[] = []
+  let y = top
+  for (const g of order) {
+    const list = byGroup.get(g)!
+    sections.push({ label: g, y: y + GROUP_H - 5 })
+    y += GROUP_H
+    // A port's own `side` wins; otherwise inputs go left, outputs right, two-way ports fill the shorter column.
+    const left: PortSpec[] = list.filter((s) => specSide(s) === 'L')
+    const right: PortSpec[] = list.filter((s) => specSide(s) === 'R')
+    for (const s of list.filter((x) => !specSide(x))) (left.length <= right.length ? left : right).push(s)
+    left.forEach((spec, row) => ports.push({ spec, col: 'L', y: y + row * PORT_PITCH }))
+    right.forEach((spec, row) => ports.push({ spec, col: 'R', y: y + row * PORT_PITCH }))
+    y += Math.max(left.length, right.length) * PORT_PITCH + 4
+  }
+  return { h: y + 4, top, ports, sections }
 }
 
 /**
@@ -153,8 +178,8 @@ export function layoutScene(
     const shape = shapes.get(e.id)!
     const leftEdge = { x, y: y + shape.h / 2 }
     const rightEdge = { x: x + EP_W, y: y + shape.h / 2 }
-    const ports: UnitPort[] = shape.ports.map(({ spec, col, row }) => {
-      const py = y + shape.top + row * PORT_PITCH
+    const ports: UnitPort[] = shape.ports.map(({ spec, col, y: relY }) => {
+      const py = y + relY
       const px = col === 'L' ? x + PORT_INSET : x + EP_W - PORT_INSET - PORT_W
       return {
         id: epPointId(e.id, spec.key),
@@ -179,6 +204,7 @@ export function layoutScene(
       outer: isLeft ? leftEdge : rightEdge,
       lines: shape.lines,
       ports,
+      sections: shape.sections.map((sec) => ({ label: sec.label, y: y + sec.y })),
     }
   }
 
@@ -462,6 +488,14 @@ export const CABLE_COLORS = [
   '#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#fb7185', '#f472b6', '#2dd4bf', '#a3e635',
 ]
 export const cableColor = (index: number) => CABLE_COLORS[index % CABLE_COLORS.length]
+
+/** The signal a unit port carries, or undefined for chassis ports and plain boxes. */
+export function pointSignal(id: string, endpoints: PanelEndpoint[]): Signal | undefined {
+  const pt = parsePoint(id)
+  if (!pt?.portKey) return undefined
+  const e = endpoints.find((x) => x.id === pt.unitId)
+  return e ? unitPortSpecs(e.kind, e.model).find((sp) => sp.key === pt.portKey)?.signal : undefined
+}
 
 /** Human name for a point: "Unit name: PORT" for a unit port, the unit's name for a box. */
 export function pointName(id: string, device: DeviceDef, endpoints: PanelEndpoint[]): string {
