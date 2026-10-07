@@ -32,4 +32,6 @@ export type Snippet = {
   id: string
   label: string
   text: string
+  /** Only shown while this language is selected. */
+  language: CaseLanguage
 }

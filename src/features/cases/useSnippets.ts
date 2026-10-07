@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { readSnippetsFile, reviveSnippets, writeSnippetsFile } from './snippetsFile'
-import type { Snippet } from './types'
+import type { CaseLanguage, Snippet } from './types'
 
 const SNIPPETS_KEY = storageKey('cases', 'snippets')
 const FILE_DEBOUNCE_MS = 600
@@ -10,7 +10,7 @@ export type SnippetsController = {
   snippets: Snippet[]
   /** True once the list is mirrored to `cases-snippets.json` in the linked folder. */
   savedToFile: boolean
-  add: (label: string, text: string) => void
+  add: (label: string, text: string, language: CaseLanguage) => void
   remove: (id: string) => void
 }
 
@@ -51,8 +51,8 @@ export function useSnippets(): SnippetsController {
   }, [snippets])
 
   const add = useCallback(
-    (label: string, text: string) =>
-      setSnippets((prev) => [...prev, { id: crypto.randomUUID(), label, text }]),
+    (label: string, text: string, language: CaseLanguage) =>
+      setSnippets((prev) => [...prev, { id: crypto.randomUUID(), label, text, language }]),
     [setSnippets],
   )
 

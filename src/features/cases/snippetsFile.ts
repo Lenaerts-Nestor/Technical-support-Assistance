@@ -1,6 +1,7 @@
 import { loadFolderHandle } from '../guides/storage/handleStore'
 import { isFolderSyncSupported, verifyPermission } from '../guides/storage/guidesFolder'
-import type { Snippet } from './types'
+import { LANGUAGES } from './casesData'
+import type { CaseLanguage, Snippet } from './types'
 
 /** Lives next to `guides.json` in the folder linked from the Guides page. */
 export const SNIPPETS_FILENAME = 'cases-snippets.json'
@@ -14,7 +15,9 @@ export function reviveSnippets(raw: unknown): Snippet[] | null {
     if (!s || typeof s.id !== 'string' || typeof s.label !== 'string' || typeof s.text !== 'string') {
       return []
     }
-    return [{ id: s.id, label: s.label, text: s.text }]
+    // Texts saved before languages existed read as English.
+    const language = LANGUAGES.some((l) => l.id === s.language) ? (s.language as CaseLanguage) : 'en'
+    return [{ id: s.id, label: s.label, text: s.text, language }]
   })
 }
 
