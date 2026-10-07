@@ -9,13 +9,21 @@
  * cable is dropped on a unit.
  */
 
-export type Signal = 'hdmi' | 'dm' | 'lan' | 'usb' | 'audio' | 'serial' | 'ir' | 'poe' | 'power'
+export type Signal = 'hdmi' | 'dm' | 'lan' | 'usb' | 'audio' | 'serial' | 'ir' | 'poe' | 'power' | 'stream'
 
 /** `in` receives, `out` sends, `io` goes both ways (LAN, USB, serial). */
 export type PortDir = 'in' | 'out' | 'io'
 
 /** `side` is the column a port is drawn in (`L` left edge, `R` right); by default inputs go left, outputs right. */
-export type PortSpec = { key: string; label: string; signal: Signal; dir: PortDir; side?: 'L' | 'R' }
+export type PortSpec = {
+  key: string
+  label: string
+  signal: Signal
+  dir: PortDir
+  side?: 'L' | 'R'
+  /** Section heading the port is listed under in the box; defaults from its signal. */
+  group?: string
+}
 
 export type UnitModel = {
   id: string
@@ -54,6 +62,7 @@ export const SIGNAL_LABEL: Record<Signal, string> = {
   ir: 'IR',
   poe: 'PoE',
   power: 'power',
+  stream: 'Stream',
 }
 
 export const SIGNAL_COLOR: Record<Signal, string> = {
@@ -66,15 +75,60 @@ export const SIGNAL_COLOR: Record<Signal, string> = {
   ir: '#fb923c',
   poe: '#fb7185',
   power: '#fb7185',
+  stream: '#f472b6',
 }
 
-const p = (key: string, label: string, signal: Signal, dir: PortDir, side?: 'L' | 'R'): PortSpec => ({
+const p = (
+  key: string,
+  label: string,
+  signal: Signal,
+  dir: PortDir,
+  side?: 'L' | 'R',
+  group?: string,
+): PortSpec => ({
   key,
   label,
   signal,
   dir,
   ...(side ? { side } : {}),
+  ...(group ? { group } : {}),
 })
+
+/** Heading a port is listed under when its spec doesn't name one. */
+export const defaultGroup = (signal: Signal): string =>
+  ({
+    hdmi: 'Video',
+    dm: 'Video',
+    audio: 'Audio',
+    lan: 'Network',
+    poe: 'Network',
+    usb: 'USB',
+    serial: 'Control',
+    ir: 'Control',
+    stream: 'Stream',
+    power: 'Power',
+  })[signal]
+
+/**
+ * DM-NVX-360 connectors as listed on its product page: scaled HDMI in and out,
+ * one analog AUDIO I/O terminal, LAN with PoE+, USB 2.0, a COM (RS-232) port
+ * and two IR ports. A unit can run as encoder or decoder, so both roles get
+ * the full set; only the stream port differs. Counts and directions still need
+ * checking against the page, hence `verified: false`.
+ */
+const nvx360Ports = (role: 'tx' | 'rx'): PortSpec[] => [
+  p('hdmi-in', 'HDMI IN', 'hdmi', 'in', 'L'),
+  p('hdmi-out', 'HDMI OUT', 'hdmi', 'out', 'R'),
+  p('audio', 'AUDIO I/O', 'audio', 'io', 'L'),
+  p('lan', 'LAN (PoE+)', 'lan', 'io', role === 'tx' ? 'R' : 'L'),
+  p('usb', 'USB 2.0', 'usb', 'io', 'R'),
+  p('com', 'COM (RS-232)', 'serial', 'io', 'L'),
+  p('ir-1', 'IR 1', 'ir', 'out', 'R'),
+  p('ir-2', 'IR 2', 'ir', 'out', 'R'),
+  role === 'tx'
+    ? p('stream-out', 'STREAM OUT', 'stream', 'out', 'R')
+    : p('stream-in', 'STREAM IN', 'stream', 'in', 'L'),
+]
 
 /* -- generic stand-ins: replace with checked layouts as units are confirmed -- */
 
@@ -100,7 +154,8 @@ const NVX_DECODER_PORTS: PortSpec[] = [
   p('rs232', 'RS-232', 'serial', 'io', 'L'),
 ]
 
-const nvxModels = (ports: PortSpec[]): UnitModel[] => [
+const nvxModels = (role: 'tx' | 'rx', ports: PortSpec[]): UnitModel[] => [
+  { id: 'dm-nvx-360', name: 'DM-NVX-360', verified: false, ports: nvx360Ports(role) },
   { id: 'dm-md36x', name: 'DM-MD36x', verified: false, ports },
   { id: 'dm-md38x', name: 'DM-MD38x', verified: false, ports },
 ]
@@ -138,8 +193,8 @@ export const UNIT_KINDS: UnitKind[] = [
     side: 'source',
     color: '#a78bfa',
     icon: 'M3 7h12v10H3z M15 12h6 M18 9l3 3-3 3',
-    suggest: ['Mode', 'Stream address', 'IP mode', 'IP address'],
-    models: nvxModels(NVX_ENCODER_PORTS),
+    suggest: ['Mode', 'Stream name', 'Stream address', 'IP mode', 'IP address'],
+    models: nvxModels('tx', NVX_ENCODER_PORTS),
   },
   {
     id: 'nvx-rx',
@@ -147,8 +202,8 @@ export const UNIT_KINDS: UnitKind[] = [
     side: 'display',
     color: '#a78bfa',
     icon: 'M9 7h12v10H9z M3 12h6 M6 9l3 3-3 3',
-    suggest: ['Mode', 'Stream address', 'IP mode', 'IP address'],
-    models: nvxModels(NVX_DECODER_PORTS),
+    suggest: ['Mode', 'Stream name', 'Stream address', 'IP mode', 'IP address'],
+    models: nvxModels('rx', NVX_DECODER_PORTS),
   },
   {
     id: 'switch',

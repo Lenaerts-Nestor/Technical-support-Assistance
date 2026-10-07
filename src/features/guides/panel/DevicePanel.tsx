@@ -5,6 +5,7 @@ import {
   deviceBounds,
   epPointId,
   layoutScene,
+  pointSignal,
   routeCable,
   type Pt,
   type Rect,
@@ -291,7 +292,7 @@ export function DevicePanel({
         </>
       )}
 
-      {items.map(({ endpoint: e, x, y, w, h, lines, ports }) => {
+      {items.map(({ endpoint: e, x, y, w, h, lines, ports, sections }) => {
         const id = epPointId(e.id)
         const isSel = selected === id
         const drop = dropStroke(id)
@@ -337,6 +338,15 @@ export function DevicePanel({
               ))}
             </g>
 
+            {sections.map((sec) => (
+              <g key={sec.label} className="pointer-events-none">
+                <text x={x + 10} y={sec.y} className="fill-ink-faint text-[8px] font-bold tracking-widest uppercase">
+                  {sec.label}
+                </text>
+                <line x1={x + 12 + sec.label.length * 6.2} x2={x + w - 10} y1={sec.y - 3} y2={sec.y - 3} className="stroke-line" strokeWidth={1} />
+              </g>
+            ))}
+
             {ports.map((p) => {
               const color = SIGNAL_COLOR[p.spec.signal]
               const isPortSel = selected === p.id
@@ -377,7 +387,7 @@ export function DevicePanel({
                     x={p.x + p.w / 2 + (left ? 3 : -3)}
                     y={p.y + p.h / 2 + 3.3}
                     textAnchor="middle"
-                    className="fill-ink text-[9px] font-semibold"
+                    className="fill-ink text-[10px] font-semibold"
                   >
                     {p.spec.label}
                   </text>
@@ -405,6 +415,9 @@ export function DevicePanel({
         const color = cableColor(i)
         const emphasised = touches(c)
         const dim = hasFocus && anyTouched && !emphasised
+        // A stream is a logical link over the network, not a wire: dashed and flowing.
+        const isStream = pointSignal(c.from, endpoints ?? NO_ENDPOINTS) === 'stream' || pointSignal(c.to, endpoints ?? NO_ENDPOINTS) === 'stream'
+        const label = c.label || (isStream ? 'Stream' : '')
         return (
           <g
             key={c.id}
@@ -414,10 +427,18 @@ export function DevicePanel({
           >
             <path d={route.d} fill="none" stroke="transparent" strokeWidth={14} />
             <path d={route.d} fill="none" className="stroke-canvas" strokeWidth={emphasised ? 6.5 : 5} strokeLinecap="round" />
-            <path d={route.d} fill="none" stroke={color} strokeWidth={emphasised ? 3.5 : 2.5} strokeLinecap="round" />
+            <path
+              d={route.d}
+              fill="none"
+              stroke={isStream ? SIGNAL_COLOR.stream : color}
+              strokeWidth={emphasised ? 3.5 : 2.5}
+              strokeLinecap="round"
+              strokeDasharray={isStream ? '9 6' : undefined}
+              className={isStream ? 'panel-link' : undefined}
+            />
             <circle cx={route.ends[0].x} cy={route.ends[0].y} r={3.5} fill={color} className="stroke-canvas" strokeWidth={1.2} />
             <circle cx={route.ends[1].x} cy={route.ends[1].y} r={3.5} fill={color} className="stroke-canvas" strokeWidth={1.2} />
-            {c.label && (
+            {label && (
               <text
                 x={route.label.x}
                 y={route.label.y}
@@ -426,7 +447,7 @@ export function DevicePanel({
                 strokeWidth={4}
                 paintOrder="stroke"
               >
-                {clip(c.label, 16)}
+                {clip(label, 16)}
               </text>
             )}
           </g>
