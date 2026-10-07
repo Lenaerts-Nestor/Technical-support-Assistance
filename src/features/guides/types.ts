@@ -102,6 +102,8 @@ export type PanelPart = {
   id: string
   title: string
   deviceId: string
+  /** Card installed per slot id, for chassis units. Missing slots use the template default. */
+  cards?: Record<string, string>
   annotations: PanelAnnotation[]
   scenarios: PanelScenario[]
 }

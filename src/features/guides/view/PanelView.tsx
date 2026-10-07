@@ -11,8 +11,9 @@ import type { PanelPart } from '../types'
  * checks that highlight ports and draw lines between them.
  */
 export function PanelView({ part }: { part: PanelPart }) {
-  const device = getDevice(part.deviceId)
+  const device = useMemo(() => getDevice(part.deviceId, part.cards), [part.deviceId, part.cards])
   const [open, setOpen] = useState(false)
+  const [wide, setWide] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
   const [scenarioId, setScenarioId] = useState<string | null>(null)
 
@@ -60,17 +61,21 @@ export function PanelView({ part }: { part: PanelPart }) {
             </p>
           ) : (
             <>
-              <DevicePanel
-                device={device}
-                annotated={annotated}
-                highlighted={highlighted}
-                links={scenario?.links}
-                selected={selected}
-                onPortClick={(id) => setSelected((s) => (s === id ? null : id))}
-              />
+              <div className="overflow-x-auto">
+                <div style={{ minWidth: wide ? 1500 : undefined }}>
+                  <DevicePanel
+                    device={device}
+                    annotated={annotated}
+                    highlighted={highlighted}
+                    links={scenario?.links}
+                    selected={selected}
+                    onPortClick={(id) => setSelected((s) => (s === id ? null : id))}
+                  />
+                </div>
+              </div>
 
               <div className="text-ink-muted mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
-                {(['input', 'output', 'network', 'control', 'power'] as const)
+                {(['input', 'output', 'audio', 'network', 'control', 'power'] as const)
                   .filter((k) => device.ports.some((p) => p.kind === k))
                   .map((k) => (
                     <span key={k} className="inline-flex items-center gap-1.5">
@@ -78,6 +83,13 @@ export function PanelView({ part }: { part: PanelPart }) {
                       {PORT_KIND_LABEL[k]}
                     </span>
                   ))}
+                <button
+                  type="button"
+                  onClick={() => setWide((w) => !w)}
+                  className="text-ink-muted hover:text-ink ml-auto underline underline-offset-2"
+                >
+                  {wide ? 'Fit to width' : 'Enlarge'}
+                </button>
                 {annotated.size > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <span className="bg-brand h-2 w-2 rounded-full" />

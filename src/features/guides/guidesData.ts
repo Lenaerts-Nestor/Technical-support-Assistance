@@ -199,6 +199,7 @@ export function blankPart(kind: GuidePartKind): GuidePart {
         id: uid(),
         title: '',
         deviceId: DEFAULT_DEVICE_ID,
+        cards: {},
         annotations: [],
         scenarios: [],
       }

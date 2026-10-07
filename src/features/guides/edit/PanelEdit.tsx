@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { PlusIcon, TrashIcon } from '../components/icons'
 import { DevicePanel } from '../panel/DevicePanel'
-import { DEVICES, getDevice } from '../panel/devices'
+import { TEMPLATES, cardIdFor, cardsFor, getDevice, getTemplate, type DeviceDef } from '../panel/devices'
 import {
   DELETE_BTN,
   GHOST_BTN,
@@ -14,6 +14,39 @@ import {
 import { BlockFrame } from './BlockFrame'
 import type { BlockEditProps } from './blockEditProps'
 import type { PanelPart } from '../types'
+
+/** Port `<option>`s grouped by the slot or zone they belong to. */
+function PortOptions({ device }: { device: DeviceDef }) {
+  const groups = new Map<string, DeviceDef['ports']>()
+  for (const p of device.ports) groups.set(p.group, [...(groups.get(p.group) ?? []), p])
+  return (
+    <>
+      {[...groups].map(([group, ports]) => (
+        <optgroup key={group} label={group}>
+          {ports.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  )
+}
+
+/** Drop notes and checks that point at ports the layout no longer has. */
+function pruneTo(p: PanelPart, device: DeviceDef | undefined): PanelPart {
+  const has = (id: string) => !!device?.ports.some((x) => x.id === id)
+  return {
+    ...p,
+    annotations: p.annotations.filter((a) => has(a.portId)),
+    scenarios: p.scenarios.map((s) => ({
+      ...s,
+      portIds: s.portIds.filter(has),
+      links: s.links.filter((l) => has(l.from) && has(l.to)),
+    })),
+  }
+}
 
 const uid = () => crypto.randomUUID()
 
@@ -30,29 +63,26 @@ export function PanelEdit({
   onRemove,
   d,
 }: BlockEditProps<PanelPart>) {
-  const device = getDevice(part.deviceId)
+  const device = useMemo(() => getDevice(part.deviceId, part.cards), [part.deviceId, part.cards])
+  const template = getTemplate(part.deviceId)
   const [target, setTarget] = useState<Target>(null)
   const [selected, setSelected] = useState<string | null>(null)
 
   const set = (fn: (p: PanelPart) => PanelPart) => d.patchPanel(addr, fn)
 
   const changeDevice = (deviceId: string) => {
-    const next = getDevice(deviceId)
-    const has = (id: string) => !!next?.ports.some((p) => p.id === id)
     setTarget(null)
     setSelected(null)
-    // Notes and checks that point at ports the new unit doesn't have would be
-    // invisible but still stored, so drop them with the switch.
-    set((p) => ({
-      ...p,
-      deviceId,
-      annotations: p.annotations.filter((a) => has(a.portId)),
-      scenarios: p.scenarios.map((s) => ({
-        ...s,
-        portIds: s.portIds.filter(has),
-        links: s.links.filter((l) => has(l.from) && has(l.to)),
-      })),
-    }))
+    set((p) => pruneTo({ ...p, deviceId, cards: {} }, getDevice(deviceId)))
+  }
+
+  const changeCard = (slotId: string, cardId: string) => {
+    setTarget(null)
+    setSelected(null)
+    set((p) => {
+      const cards = { ...p.cards, [slotId]: cardId }
+      return pruneTo({ ...p, cards }, getDevice(p.deviceId, cards))
+    })
   }
 
   const annotated = useMemo(() => new Set(part.annotations.map((a) => a.portId)), [part.annotations])
@@ -84,11 +114,7 @@ export function PanelEdit({
     setSelected(portId)
   }
 
-  const portOptions = device?.ports.map((p) => (
-    <option key={p.id} value={p.id}>
-      {p.label}
-    </option>
-  ))
+  const portOptions = device ? <PortOptions device={device} /> : null
 
   const pickBtn = (kind: 'annotation' | 'scenario', id: string) => {
     const on = target?.kind === kind && target.id === id
@@ -122,7 +148,7 @@ export function PanelEdit({
         />
         <select value={part.deviceId} onChange={(e) => changeDevice(e.target.value)} className={SELECT}>
           {!device && <option value={part.deviceId}>Unknown ({part.deviceId})</option>}
-          {DEVICES.map((dev) => (
+          {TEMPLATES.map((dev) => (
             <option key={dev.id} value={dev.id}>
               {dev.name}
             </option>
@@ -147,6 +173,32 @@ export function PanelEdit({
                 : 'Choose “Pick on diagram” on a note or check below, then click ports.'}
             </p>
           </div>
+
+          {template && template.slots.length > 0 && (
+            <details className="border-line bg-surface mt-4 rounded-lg border">
+              <summary className="text-ink-muted px-3 py-2 text-xs font-medium">
+                Cards installed in each slot (defaults match the reference photo)
+              </summary>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 px-3 pb-3 sm:grid-cols-2">
+                {template.slots.map((slot) => (
+                  <label key={slot.id} className="flex items-center gap-2 text-xs">
+                    <span className="text-ink-muted w-24 shrink-0">{slot.label}</span>
+                    <select
+                      value={cardIdFor(slot, part.cards)}
+                      onChange={(ev) => changeCard(slot.id, ev.target.value)}
+                      className={`${SELECT} min-w-0 flex-1`}
+                    >
+                      {cardsFor(slot.family).map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </details>
+          )}
 
           {/* ---- notes ------------------------------------------------ */}
           <div className="mt-4">

@@ -116,6 +116,11 @@ function normalizePanel(raw: unknown): PanelPart {
     id: withId(o.id),
     title: asStr(o.title),
     deviceId: asStr(o.deviceId) || DEFAULT_DEVICE_ID,
+    cards: Object.fromEntries(
+      Object.entries(asObj(o.cards)).filter(
+        (e): e is [string, string] => typeof e[1] === 'string' && !!e[1],
+      ),
+    ),
     annotations: asArr(o.annotations).map((a) => {
       const x = asObj(a)
       return { id: withId(x.id), portId: asStr(x.portId), label: asStr(x.label), note: asStr(x.note) }

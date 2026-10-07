@@ -7,6 +7,7 @@ const KIND_CLASS: Record<PortKind, string> = {
   network: 'fill-violet-400/15 stroke-violet-400/60',
   control: 'fill-amber-400/15 stroke-amber-400/60',
   power: 'fill-rose-400/15 stroke-rose-400/60',
+  audio: 'fill-lime-400/15 stroke-lime-400/60',
 }
 
 type DevicePanelProps = {
@@ -97,10 +98,38 @@ export function DevicePanel({
         </g>
       ))}
 
+      {device.frames.map((f, i) => (
+        <g key={i}>
+          <rect x={f.x} y={f.y} width={f.w} height={f.h} rx={5} className="fill-surface stroke-line" />
+          {f.title && (
+            <text
+              x={f.titleAnchor === 'middle' ? f.x + f.w / 2 : f.x + f.w - 8}
+              y={f.titleY ?? f.y + f.h - 8}
+              textAnchor={f.titleAnchor ?? 'end'}
+              className="fill-ink-faint text-[9px] font-semibold"
+            >
+              {f.title}
+            </text>
+          )}
+        </g>
+      ))}
+
+      {device.texts.map((t, i) => (
+        <text
+          key={i}
+          x={t.x}
+          y={t.y}
+          textAnchor={t.anchor ?? 'start'}
+          fontSize={t.size ?? 10}
+          className="fill-ink-faint font-bold tracking-wider"
+        >
+          {t.text}
+        </text>
+      ))}
+
       {device.ports.map((port) => {
         const isHot = highlighted.has(port.id)
         const isSel = selected === port.id
-        const tall = port.h > 60
         return (
           <g
             key={port.id}
@@ -141,35 +170,14 @@ export function DevicePanel({
               className={isSel ? 'fill-ink/20 stroke-ink' : KIND_CLASS[port.kind]}
               strokeWidth={isSel ? 2.5 : 1.5}
             />
-            {tall ? (
-              <>
-                <rect
-                  x={port.x + port.w / 2 - 10}
-                  y={port.y + 14}
-                  width={20}
-                  height={14}
-                  rx={2}
-                  className="fill-canvas stroke-line-strong"
-                />
-                <text
-                  x={port.x + port.w / 2}
-                  y={port.y + port.h - 14}
-                  textAnchor="middle"
-                  className="fill-ink text-[14px] font-bold"
-                >
-                  {port.short}
-                </text>
-              </>
-            ) : (
-              <text
-                x={port.x + port.w / 2}
-                y={port.y + port.h / 2 + 4}
-                textAnchor="middle"
-                className="fill-ink text-[11px] font-semibold"
-              >
-                {port.short}
-              </text>
-            )}
+            <text
+              x={port.x + port.w / 2}
+              y={port.y + port.h / 2 + 3.5}
+              textAnchor="middle"
+              className="fill-ink text-[10px] font-semibold"
+            >
+              {port.short}
+            </text>
             {annotated.has(port.id) && (
               <circle cx={port.x + port.w - 4} cy={port.y + 4} r={5} className="fill-brand stroke-canvas" strokeWidth={1.5} />
             )}
