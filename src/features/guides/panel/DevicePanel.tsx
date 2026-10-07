@@ -1,5 +1,15 @@
 import { portCenter, type DeviceDef, type PortDef, type PortKind } from './devices'
-
+import {
+  EXT,
+  cableColor,
+  cableGeometry,
+  layoutEquipment,
+  pointLookup,
+  epPointId,
+  sceneBounds,
+  type Rect,
+} from './scene'
+import type { PanelCable, PanelEndpoint } from '../types'
 
 const KIND_CLASS: Record<PortKind, string> = {
   input: 'fill-sky-400/15 stroke-sky-400/60',
@@ -16,15 +26,26 @@ type DevicePanelProps = {
   annotated?: ReadonlySet<string>
   /** Ports a troubleshooting check points at: pulsing ring. */
   highlighted?: ReadonlySet<string>
-  /** Lines drawn between ports for the active check. */
+  /** Arcs drawn between ports for the active troubleshooting check. */
   links?: { from: string; to: string }[]
+  /** Equipment beside the unit and the cables to it. Omit to draw the unit alone. */
+  endpoints?: PanelEndpoint[]
+  cables?: PanelCable[]
+  /** A port id, or `ep:<id>` for equipment. */
   selected?: string | null
-  onPortClick?: (portId: string) => void
+  selectedCable?: string | null
+  onPortClick?: (id: string) => void
+  onCableClick?: (cableId: string) => void
+  /** Visible region. Defaults to the whole scene; the canvas drives it for pan / zoom. */
+  viewBox?: Rect
+  className?: string
 }
 
 const EMPTY_SET: ReadonlySet<string> = new Set()
+const NO_ENDPOINTS: PanelEndpoint[] = []
+const NO_CABLES: PanelCable[] = []
 
-/** A link as a curve that arcs above both ports, so it never cuts across other ports. */
+/** A troubleshooting link as a curve that arcs above both ports. */
 function linkPath(a: PortDef, b: PortDef): string {
   const p = portCenter(a)
   const q = portCenter(b)
@@ -32,23 +53,57 @@ function linkPath(a: PortDef, b: PortDef): string {
   return `M ${p.x} ${p.y} Q ${(p.x + q.x) / 2} ${lift} ${q.x} ${q.y}`
 }
 
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
+
 /** The rear-panel schematic itself. Purely presentational: callers own all state. */
 export function DevicePanel({
   device,
   annotated = EMPTY_SET,
   highlighted = EMPTY_SET,
   links = [],
+  endpoints,
+  cables = NO_CABLES,
   selected = null,
+  selectedCable = null,
   onPortClick,
+  onCableClick,
+  viewBox,
+  className = 'h-auto w-full select-none',
 }: DevicePanelProps) {
   const byId = new Map(device.ports.map((p) => [p.id, p]))
+  const withEquipment = endpoints !== undefined
+  const items = layoutEquipment(device, endpoints ?? NO_ENDPOINTS, cables)
+  const locate = pointLookup(device, items)
+  const vb = viewBox ?? sceneBounds(device, withEquipment)
+
+  // With a selection, cables that don't touch it step back so the one in focus reads.
+  const touches = (c: PanelCable) =>
+    c.id === selectedCable || (selected !== null && (c.from === selected || c.to === selected))
+  const hasFocus = selectedCable !== null || selected !== null
+  const anyTouched = cables.some(touches)
+
+  const press = (id: string) =>
+    onPortClick
+      ? {
+          role: 'button' as const,
+          tabIndex: 0,
+          'aria-pressed': selected === id,
+          onClick: () => onPortClick(id),
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onPortClick(id)
+            }
+          },
+        }
+      : {}
 
   return (
     <svg
-      viewBox={`0 0 ${device.width} ${device.height}`}
+      viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
       role="group"
       aria-label={`${device.name} rear panel`}
-      className="h-auto w-full select-none"
+      className={className}
     >
       <defs>
         <marker
@@ -73,7 +128,7 @@ export function DevicePanel({
         className="fill-canvas stroke-line-strong"
         strokeWidth={2}
       />
-      <text x={24} y={28} className="fill-ink-muted text-[13px] font-semibold">
+      <text x={24} y={26} className="fill-ink-muted text-[13px] font-semibold">
         {device.name} · rear
       </text>
 
@@ -133,21 +188,8 @@ export function DevicePanel({
         return (
           <g
             key={port.id}
-            role={onPortClick ? 'button' : undefined}
-            tabIndex={onPortClick ? 0 : undefined}
             aria-label={port.label}
-            aria-pressed={onPortClick ? isSel : undefined}
-            onClick={onPortClick ? () => onPortClick(port.id) : undefined}
-            onKeyDown={
-              onPortClick
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onPortClick(port.id)
-                    }
-                  }
-                : undefined
-            }
+            {...press(port.id)}
             className={onPortClick ? 'cursor-pointer outline-none [&:focus-visible>rect:first-child]:stroke-ink' : undefined}
           >
             {isHot && (
@@ -180,6 +222,87 @@ export function DevicePanel({
             </text>
             {annotated.has(port.id) && (
               <circle cx={port.x + port.w - 4} cy={port.y + 4} r={5} className="fill-brand stroke-canvas" strokeWidth={1.5} />
+            )}
+          </g>
+        )
+      })}
+
+      {withEquipment && (
+        <>
+          <text x={-EXT + 20} y={24} className="fill-ink-faint text-[11px] font-bold tracking-widest uppercase">
+            Sources
+          </text>
+          <text x={device.width + 80} y={24} className="fill-ink-faint text-[11px] font-bold tracking-widest uppercase">
+            Displays
+          </text>
+          {items.map(({ endpoint: e, x, y, w, h }) => {
+            const id = epPointId(e.id)
+            const isSel = selected === id
+            const tone = e.side === 'source' ? 'stroke-sky-400/70' : 'stroke-emerald-400/70'
+            return (
+              <g
+                key={e.id}
+                aria-label={e.name || e.side}
+                {...press(id)}
+                className={onPortClick ? 'cursor-pointer outline-none' : undefined}
+              >
+                <rect
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={h}
+                  rx={8}
+                  className={`fill-surface ${isSel ? 'stroke-ink' : tone}`}
+                  strokeWidth={isSel ? 2.5 : 1.5}
+                />
+                <text x={x + 12} y={y + 14} className="fill-ink-faint text-[8px] font-bold tracking-widest uppercase">
+                  {e.side}
+                </text>
+                <text x={x + 12} y={y + 31} className="fill-ink text-[13px] font-semibold">
+                  {clip(e.name || 'Unnamed', 26)}
+                </text>
+                {e.detail && (
+                  <text x={x + 12} y={y + 45} className="fill-ink-muted text-[10px]">
+                    {clip(e.detail, 36)}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+        </>
+      )}
+
+      {cables.map((c, i) => {
+        const a = locate(c.from)
+        const b = locate(c.to)
+        if (!a || !b) return null
+        const { d, mid } = cableGeometry(a, b)
+        const color = cableColor(i)
+        const emphasised = touches(c)
+        const dim = hasFocus && anyTouched && !emphasised
+        return (
+          <g
+            key={c.id}
+            opacity={dim ? 0.18 : 1}
+            className={onCableClick ? 'cursor-pointer' : undefined}
+            onClick={onCableClick ? () => onCableClick(c.id) : undefined}
+          >
+            <path d={d} fill="none" stroke="transparent" strokeWidth={14} />
+            <path d={d} fill="none" className="stroke-canvas" strokeWidth={emphasised ? 6.5 : 5} strokeLinecap="round" />
+            <path d={d} fill="none" stroke={color} strokeWidth={emphasised ? 3.5 : 2.5} strokeLinecap="round" />
+            <circle cx={a.x} cy={a.y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
+            <circle cx={b.x} cy={b.y} r={4} fill={color} className="stroke-canvas" strokeWidth={1.5} />
+            {c.label && (
+              <text
+                x={mid.x}
+                y={mid.y - 6}
+                textAnchor="middle"
+                className="fill-ink stroke-canvas text-[11px] font-semibold"
+                strokeWidth={4}
+                paintOrder="stroke"
+              >
+                {c.label}
+              </text>
             )}
           </g>
         )

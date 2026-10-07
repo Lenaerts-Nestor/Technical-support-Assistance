@@ -1,11 +1,14 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useFocusMode } from '../../../app/focusMode'
 import { formatCardDate } from '../guidesData'
 import { ChevronLeftIcon } from '../components/icons'
 import { DANGER_BTN, EMPTY, GHOST_BTN_MD } from '../../../shared/ui/styles'
 import { GuideMasonry } from './GuideMasonry'
 import { GuidePartView } from './GuidePartView'
 import { GuideRail, type TocEntry } from './GuideRail'
-import type { Guide, GuidePart } from '../types'
+import { PanelWorkspace } from './PanelWorkspace'
+import { PanelWorkspaceProvider } from './panelWorkspaceContext'
+import type { Guide, GuidePart, PanelPart } from '../types'
 
 type GuideViewProps = {
   guide: Guide
@@ -18,6 +21,20 @@ type GuideViewProps = {
 const isStructural = (p: GuidePart) =>
   p.type === 'chapter' || p.type === 'section' || p.type === 'table'
 
+/** Every panel block in the guide, wherever it is nested, in reading order. */
+function collectPanels(parts: GuidePart[]): PanelPart[] {
+  const out: PanelPart[] = []
+  for (const p of parts) {
+    if (p.type === 'panel') out.push(p)
+    else if (p.type === 'section') out.push(...(p.blocks ?? []).filter((b) => b.type === 'panel'))
+    else if (p.type === 'chapter') {
+      for (const s of p.sections) out.push(...(s.blocks ?? []).filter((b) => b.type === 'panel'))
+      out.push(...(p.blocks ?? []).filter((b) => b.type === 'panel'))
+    }
+  }
+  return out
+}
+
 export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
   const { lead, body } = useMemo(() => {
     const first = guide.parts.findIndex(isStructural)
@@ -29,6 +46,11 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
     () => body.filter((p) => p.type === 'chapter').map((p) => p.id),
     [body],
   )
+
+  const panels = useMemo(() => collectPanels(guide.parts), [guide.parts])
+  const [tab, setTab] = useState<'guide' | string>('guide')
+  const activePanel = panels.find((p) => p.id === tab)
+  useFocusMode(!!activePanel)
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const allCollapsed =
@@ -123,23 +145,57 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
         </button>
       </header>
 
-      <div className="mx-auto grid max-w-[1600px] grid-cols-[1fr_300px] items-start gap-6 px-8 pt-6 pb-8">
-        <div className="min-w-0 space-y-4">
-          {lead.map((part) => (
-            <GuidePartView key={part.id} part={part} />
-          ))}
-
-          {items.length > 0 ? (
-            <GuideMasonry items={items} />
-          ) : lead.length === 0 ? (
-            <p className={EMPTY}>
-              This guide has no steps yet — just reference links.
-            </p>
-          ) : null}
+      {panels.length > 0 && (
+        <div
+          role="tablist"
+          className="border-line bg-canvas sticky top-14 z-10 flex h-10 items-end gap-1 border-b px-8"
+        >
+          {[{ id: 'guide', label: 'Guide' }, ...panels.map((p) => ({ id: p.id, label: p.title || 'Panel diagram' }))].map(
+            (t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={(activePanel?.id ?? 'guide') === t.id}
+                onClick={() => setTab(t.id)}
+                className={`-mb-px max-w-60 truncate rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-medium transition-colors ${
+                  (activePanel?.id ?? 'guide') === t.id
+                    ? 'border-line-strong bg-surface text-ink'
+                    : 'text-ink-muted hover:text-ink border-transparent'
+                }`}
+              >
+                {t.label}
+              </button>
+            ),
+          )}
         </div>
+      )}
 
-        <GuideRail toc={toc} links={guide.links} />
-      </div>
+      {activePanel ? (
+        <div className="h-[calc(100vh-6rem)]">
+          <PanelWorkspace key={activePanel.id} part={activePanel} />
+        </div>
+      ) : (
+        <PanelWorkspaceProvider value={panels.length > 0 ? setTab : null}>
+        <div className="mx-auto grid max-w-[1600px] grid-cols-[1fr_300px] items-start gap-6 px-8 pt-6 pb-8">
+          <div className="min-w-0 space-y-4">
+            {lead.map((part) => (
+              <GuidePartView key={part.id} part={part} />
+            ))}
+
+            {items.length > 0 ? (
+              <GuideMasonry items={items} />
+            ) : lead.length === 0 ? (
+              <p className={EMPTY}>
+                This guide has no steps yet — just reference links.
+              </p>
+            ) : null}
+          </div>
+
+          <GuideRail toc={toc} links={guide.links} />
+        </div>
+        </PanelWorkspaceProvider>
+      )}
     </div>
   )
 }

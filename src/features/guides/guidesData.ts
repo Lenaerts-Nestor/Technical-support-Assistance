@@ -200,6 +200,8 @@ export function blankPart(kind: GuidePartKind): GuidePart {
         title: '',
         deviceId: DEFAULT_DEVICE_ID,
         cards: {},
+        endpoints: [],
+        cables: [],
         annotations: [],
         scenarios: [],
       }

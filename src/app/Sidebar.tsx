@@ -22,40 +22,62 @@ const ICONS: Record<PageId, React.ReactElement> = {
 type SidebarProps = {
   current: PageId
   onNavigate: (page: PageId) => void
+  /** Icons only, to give the page beside it more room. */
+  compact?: boolean
 }
 
-export function Sidebar({ current, onNavigate }: SidebarProps) {
+export function Sidebar({ current, onNavigate, compact = false }: SidebarProps) {
   return (
-    <aside className="border-line-strong bg-surface flex w-60 shrink-0 flex-col border-r px-3 py-5">
-      <div className="px-3 pb-5">
-        <h1 className="text-ink text-base font-semibold tracking-tight">
-          Support Hub
-        </h1>
-        <p className="text-ink-faint mt-0.5 text-xs">Case Dashboard</p>
-      </div>
+    <aside
+      className={`border-line-strong bg-surface flex shrink-0 flex-col border-r py-5 transition-[width] duration-200 ${
+        compact ? 'w-16 px-2' : 'w-60 px-3'
+      }`}
+    >
+      {compact ? (
+        <div
+          className="text-brand-strong mx-auto pb-5 text-sm font-bold tracking-tight"
+          title="Support Hub"
+        >
+          SH
+        </div>
+      ) : (
+        <div className="px-3 pb-5">
+          <h1 className="text-ink text-base font-semibold tracking-tight">
+            Support Hub
+          </h1>
+          <p className="text-ink-faint mt-0.5 text-xs">Case Dashboard</p>
+        </div>
+      )}
 
       <nav className="border-line-soft flex flex-col gap-0.5 border-t pt-4">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !item.hidden).map((item) => {
           const active = item.id === current
           return (
             <button
               key={item.id}
               type="button"
               onClick={() => onNavigate(item.id)}
-              className={`relative flex items-center gap-3 rounded-lg py-2 pr-3 pl-4 text-sm font-medium transition-colors ${
+              title={compact ? item.label : undefined}
+              aria-label={compact ? item.label : undefined}
+              aria-current={active ? 'page' : undefined}
+              className={`relative flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+                compact ? 'justify-center px-0' : 'gap-3 pr-3 pl-4'
+              } ${
                 active
-                  ? 'bg-brand-soft text-brand-strong before:bg-brand before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-[""]'
+                  ? `bg-brand-soft text-brand-strong before:bg-brand before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-[""] ${
+                      compact ? 'ring-brand-line ring-1' : ''
+                    }`
                   : 'text-ink-muted hover:bg-subtle hover:text-ink'
               }`}
             >
               <svg
                 viewBox="0 0 24 24"
-                className={`h-4 w-4 fill-current ${active ? '' : 'text-ink-faint'}`}
+                className={`fill-current ${compact ? 'h-5 w-5' : 'h-4 w-4'} ${active ? '' : 'text-ink-faint'}`}
                 aria-hidden="true"
               >
                 {ICONS[item.id]}
               </svg>
-              {item.label}
+              {!compact && item.label}
             </button>
           )
         })}
