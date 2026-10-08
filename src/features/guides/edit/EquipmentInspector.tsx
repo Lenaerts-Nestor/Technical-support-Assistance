@@ -2,7 +2,8 @@ import { TrashIcon, XIcon } from '../components/icons'
 import { parsePoint, pointName } from '../panel/scene'
 import { UNIT_KINDS, getUnitKind, getUnitModel } from '../panel/units'
 import type { DeviceDef } from '../panel/devices'
-import { DELETE_BTN, GHOST_BTN, INPUT, INPUT_HEADING, SELECT } from '../../../shared/ui/styles'
+import { DELETE_BTN, GHOST_BTN } from '../../../shared/ui/styles'
+import { Field, INPUT, INPUT_HEADING, SELECT } from './fields'
 import { UnitIcon } from './UnitPicker'
 import type { PanelCable, PanelEndpoint } from '../types'
 
@@ -84,18 +85,22 @@ export function UnitInspector({
         </p>
       )}
 
-      <input
-        value={unit.name}
-        onChange={(e) => onChange({ name: e.target.value })}
-        placeholder="Name…"
-        className={`${INPUT_HEADING} mt-2`}
-      />
-      <input
-        value={unit.detail}
-        onChange={(e) => onChange({ detail: e.target.value })}
-        placeholder="Room or location (optional)…"
-        className={`${INPUT} mt-1.5`}
-      />
+      <Field label="Name" className="mt-3">
+        <input
+          value={unit.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          placeholder="e.g. Boardroom TX"
+          className={INPUT_HEADING}
+        />
+      </Field>
+      <Field label="Room or location" hint="optional" className="mt-2.5">
+        <input
+          value={unit.detail}
+          onChange={(e) => onChange({ detail: e.target.value })}
+          placeholder="e.g. Rack 1"
+          className={INPUT}
+        />
+      </Field>
 
       {!device.freestyle && (
         <div className="border-line mt-2 inline-flex overflow-hidden rounded-md border text-xs font-medium">
@@ -193,7 +198,8 @@ export function CableInspector({
   removeLabel = 'Remove cable',
 }: Omit<Common, 'cables'> & {
   cable: PanelCable
-  onLabel: (label: string) => void
+  /** Omit when the cable's label is not editable here (a cable in a troubleshooting step). */
+  onLabel?: (label: string) => void
   onRemove: () => void
   removeLabel?: string
 }) {
@@ -209,12 +215,18 @@ export function CableInspector({
           <XIcon className="h-4 w-4" />
         </button>
       </div>
-      <input
-        value={cable.label}
-        onChange={(e) => onLabel(e.target.value)}
-        placeholder="Cable label (optional)…"
-        className={`${INPUT} mt-2`}
-      />
+      {onLabel ? (
+        <Field label="Cable label" hint="optional" className="mt-2.5">
+          <input
+            value={cable.label}
+            onChange={(e) => onLabel(e.target.value)}
+            placeholder="e.g. HDMI 1.8 m"
+            className={INPUT}
+          />
+        </Field>
+      ) : (
+        cable.label && <p className="text-ink-muted mt-2 text-xs">{cable.label}</p>
+      )}
       <button type="button" onClick={onRemove} className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-medium text-rose-300">
         <TrashIcon className="h-3.5 w-3.5" />
         {removeLabel}

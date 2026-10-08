@@ -1,5 +1,5 @@
 import type { DeviceDef } from './devices'
-import { parsePoint, pointName } from './scene'
+import { epPointId, parsePoint, pointName } from './scene'
 import { SIGNAL_LABEL, getUnitKind, specSide, unitPortSpecs, type PortDir, type Signal } from './units'
 import type { PanelCable, PanelEndpoint } from '../types'
 
@@ -86,7 +86,93 @@ const cableCount = (id: string, cables: PanelCable[]) => cables.filter((c) => c.
 /** A port with a known signal takes one cable at a time. */
 const taken = (info: PointInfo, ctx: Ctx) => !!info.signal && cableCount(info.id, ctx.cables) > 0
 
-export type Resolution = { ok: true; to: string } | { ok: false; reason: string; to: string | null }
+/**
+ * `from` is only set when the drop changes where the cable starts: dragging out
+ * of one of a switch's ports joins the switch itself (see `resolveSwitchLink`).
+ */
+export type Resolution =
+  | { ok: true; to: string; from?: string }
+  | { ok: false; reason: string; to: string | null }
+
+/**
+ * Network switches take links without a port. A unit's LAN cable only needs to
+ * say "this goes through that switch": which of the eight ports it is plugged
+ * into is rarely known or interesting, and picking one made every link look as
+ * if it mattered. A link like that ends on the switch's box, drawn as a path.
+ */
+export const isSwitchUnit = (e: PanelEndpoint | undefined) => e?.kind === 'switch'
+
+/** The switch a point id belongs to (its box, or one of its ports), if any. */
+function switchOf(id: string, ctx: Ctx): PanelEndpoint | undefined {
+  const pt = parsePoint(id)
+  const unit = pt ? ctx.endpoints.find((e) => e.id === pt.unitId) : undefined
+  return isSwitchUnit(unit) ? unit : undefined
+}
+
+/** What the switch box counts as when checking a cable against a unit's port: a two-way LAN connection. */
+function hubInfo(sw: PanelEndpoint, ctx: Ctx): PointInfo {
+  const id = epPointId(sw.id)
+  return { id, label: pointName(id, ctx.device, ctx.endpoints), unitId: sw.id, signal: 'lan', dir: 'io' }
+}
+
+/**
+ * A cable between a unit and a switch, resolved to the switch box instead of a
+ * switch port. Returns null for every other pairing (switch to switch, chassis
+ * to switch, anything without a switch), which keep their usual port-to-port rules.
+ */
+function resolveSwitchLink(from: PointInfo, drop: PointInfo, ctx: Ctx): Resolution | null {
+  const swFrom = switchOf(from.id, ctx)
+  const swDrop = switchOf(drop.id, ctx)
+  if (!swFrom === !swDrop) return null
+  const sw = (swFrom ?? swDrop)!
+  const other = swFrom ? drop : from
+  // Only units: a chassis port keeps cabling to a real switch port.
+  if (!other.unitId) return null
+
+  const hub = hubInfo(sw, ctx)
+  // The unit side is either a specific port, or a box to find a free LAN port on.
+  let unitSide: PointInfo | null = other
+  const pt = parsePoint(other.id)
+  const otherUnit = ctx.endpoints.find((e) => e.id === other.unitId)
+  if (pt && !pt.portKey && otherUnit && unitPortSpecs(otherUnit.kind, otherUnit.model).length > 0) {
+    unitSide = autoPort(otherUnit.id, hub, ctx)
+    if (!unitSide) {
+      return {
+        ok: false,
+        to: other.id,
+        reason: `${otherUnit.name || getUnitKind(otherUnit.kind).label} has no free LAN port for ${hub.label}.`,
+      }
+    }
+  }
+
+  const check = checkConnection(unitSide, hub)
+  if (!check.ok) return { ok: false, to: hub.id, reason: check.reason }
+  if (ctx.cables.some((c) => (c.from === unitSide.id && c.to === hub.id) || (c.from === hub.id && c.to === unitSide.id))) {
+    return { ok: false, to: hub.id, reason: `${unitSide.label} is already linked to ${hub.label}.` }
+  }
+  if (taken(unitSide, ctx)) return { ok: false, to: hub.id, reason: `${unitSide.label} already has a cable.` }
+
+  // Keep the drag's own direction: from the unit to the switch, or from the switch out to the unit.
+  return swFrom ? { ok: true, from: hub.id, to: unitSide.id } : { ok: true, to: hub.id }
+}
+
+/**
+ * The cable that joins a freshly added unit to the point it was added from:
+ * port to port as usual, except that anything between a unit and a switch
+ * attaches to the switch box.
+ */
+export function cableToNewUnit(unit: PanelEndpoint, fromId: string, ctx: Ctx): { from: string; to: string } | null {
+  const fromInfo = infoFor(fromId, ctx)
+  if (!fromInfo) return null
+  const fromSwitch = switchOf(fromId, ctx)
+  if (fromSwitch && !isSwitchUnit(unit)) {
+    return { from: epPointId(fromSwitch.id), to: firstPortFor(unit, hubInfo(fromSwitch, ctx)) }
+  }
+  if (isSwitchUnit(unit) && !fromSwitch && fromInfo.unitId) {
+    return { from: fromId, to: epPointId(unit.id) }
+  }
+  return { from: fromId, to: firstPortFor(unit, fromInfo) }
+}
 
 /**
  * Work out where a cable dragged from `fromId` ends up when dropped on `dropId`:
@@ -96,6 +182,9 @@ export function resolveDrop(fromId: string, dropId: string, ctx: Ctx): Resolutio
   const from = infoFor(fromId, ctx)
   const drop = infoFor(dropId, ctx)
   if (!from || !drop || fromId === dropId) return { ok: false, to: null, reason: '' }
+
+  const viaSwitch = resolveSwitchLink(from, drop, ctx)
+  if (viaSwitch) return viaSwitch
 
   let target: PointInfo | null = drop
   const pt = parsePoint(dropId)

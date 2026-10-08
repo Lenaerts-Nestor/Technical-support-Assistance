@@ -34,7 +34,7 @@ export function GuidePartView({
       )
     case 'section':
       return (
-        <section id={part.id} className={`${CARD} scroll-mt-20 px-4 py-4`}>
+        <section id={part.id} className={`${CARD} scroll-mt-20 px-5 py-5`}>
           <SectionBlockView
             heading={part.heading || 'Section'}
             body={part.body}

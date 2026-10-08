@@ -1,4 +1,4 @@
-import type { KeyboardEvent, RefObject } from "react";
+import type { ClipboardEvent, KeyboardEvent, RefObject } from "react";
 import { TrashIcon, CopyIcon } from "./icons";
 import { FlaggedBar } from "./FlaggedBar";
 import { FormatToolbar } from "./FormatToolbar";
@@ -15,15 +15,20 @@ type EditorProps = {
   value: string;
   editorRef: RefObject<HTMLTextAreaElement | null>;
   justCopied: boolean;
+  justCopiedPlain: boolean;
   flagged: FlaggedMatch[];
   onChange: (value: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
   onClear: () => void;
   onCopy: () => void;
+  onCopyPlain: () => void;
   onJumpToFlagged: () => void;
   onRemoveFlagged: () => void;
   onBold: () => void;
   onBullets: () => void;
+  onIndent: () => void;
+  onOutdent: () => void;
   className?: string;
 };
 
@@ -32,15 +37,20 @@ export function Editor({
   value,
   editorRef,
   justCopied,
+  justCopiedPlain,
   flagged,
   onChange,
   onKeyDown,
+  onPaste,
   onClear,
   onCopy,
+  onCopyPlain,
   onJumpToFlagged,
   onRemoveFlagged,
   onBold,
   onBullets,
+  onIndent,
+  onOutdent,
   className,
 }: EditorProps) {
   return (
@@ -64,7 +74,17 @@ export function Editor({
           </button>
           <button
             type="button"
+            onClick={onCopyPlain}
+            disabled={!value}
+            title="Copy as plain text only, without list formatting"
+            className={GHOST_BTN}
+          >
+            {justCopiedPlain ? "Copied" : "Plain text"}
+          </button>
+          <button
+            type="button"
             onClick={onCopy}
+            title="Copy with real bullet lists for Salesforce, Notes and email — plain fields get tidy • lines"
             className={`text-on-brand inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
               justCopied ? "bg-emerald-400" : "bg-brand hover:bg-brand-strong"
             }`}
@@ -74,7 +94,7 @@ export function Editor({
           </button>
         </div>
       </div>
-      <FormatToolbar onBold={onBold} onBullets={onBullets} />
+      <FormatToolbar onBold={onBold} onBullets={onBullets} onIndent={onIndent} onOutdent={onOutdent} />
       <FlaggedBar
         matches={flagged}
         onJump={onJumpToFlagged}
@@ -85,6 +105,7 @@ export function Editor({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
+        onPaste={onPaste}
         placeholder="Start typing your email here…"
         className="text-ink placeholder:text-ink-faint w-full flex-1 resize-none px-5 py-4 text-[15px] leading-relaxed focus:outline-none"
       />

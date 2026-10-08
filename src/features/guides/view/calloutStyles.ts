@@ -18,3 +18,15 @@ export const CALLOUT_LABEL: Record<CalloutVariant, string> = {
 
 export const calloutLabel = (variant: CalloutVariant): string =>
   variant === 'warning' ? 'Warning' : 'Info'
+
+/** Icon tint for the note glyph beside the label. */
+export const CALLOUT_ICON: Record<CalloutVariant, string> = {
+  info: 'text-sky-300',
+  warning: 'text-rose-300',
+}
+
+/** The coloured "INFO" / "WARNING" word that leads a note. */
+export const CALLOUT_WORD: Record<CalloutVariant, string> = {
+  info: 'text-sky-200',
+  warning: 'text-rose-200',
+}

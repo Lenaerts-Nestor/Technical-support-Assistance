@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
-import { PlusIcon, TrashIcon } from '../components/icons'
-import { PanelCanvas } from '../panel/PanelCanvas'
+import { useMemo, useRef, useState } from 'react'
+import { PlusIcon } from '../components/icons'
+import { PanelCanvas, type PanelCanvasHandle } from '../panel/PanelCanvas'
 import { stateAfter, stepMoves } from '../panel/flow'
 import { EP_W, epPointId, isEpPoint, layoutScene, parsePoint, pointName } from '../panel/scene'
-import { firstPortFor, infoFor, kindAccepts, resolveDrop, type Ctx } from '../panel/connect'
+import { cableToNewUnit, infoFor, kindAccepts, resolveDrop, type Ctx } from '../panel/connect'
 import {
   TEMPLATES,
   cardIdFor,
@@ -13,17 +13,14 @@ import {
   type DeviceDef,
 } from '../panel/devices'
 import { getUnitKind, getUnitModel, unitPortSpecs } from '../panel/units'
-import {
-  DELETE_BTN,
-  GHOST_BTN,
-  INPUT,
-  INPUT_HEADING,
-  SELECT,
-  TEXTAREA,
-} from '../../../shared/ui/styles'
+import { GHOST_BTN } from '../../../shared/ui/styles'
 import { BlockFrame } from './BlockFrame'
 import { CableInspector, UnitInspector } from './EquipmentInspector'
-import { StepActionsEdit } from './StepActionsEdit'
+import { Field, INPUT_HEADING, SELECT } from './fields'
+import { useFresh } from './editorUi'
+import { PanelNotesTab } from './PanelNotesTab'
+import { PanelTroubleTab, type ActiveStep } from './PanelTroubleTab'
+import { PanelUnitsTab } from './PanelUnitsTab'
 import { UnitPicker } from './UnitPicker'
 import type { BlockEditProps } from './blockEditProps'
 import type { PanelEndpoint, PanelPart, PanelScenario, PanelStep } from '../types'
@@ -31,12 +28,16 @@ import type { PanelEndpoint, PanelPart, PanelScenario, PanelStep } from '../type
 const uid = () => crypto.randomUUID()
 
 type Tab = 'layout' | 'equipment' | 'notes' | 'trouble'
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'equipment', label: 'Units & cables' },
-  { id: 'layout', label: 'Cards' },
-  { id: 'notes', label: 'Port notes' },
-  { id: 'trouble', label: 'Troubleshooting' },
-]
+
+/** What each tab is for, shown under the tab bar so nobody has to guess. */
+const TAB_HELP: Record<Tab, string> = {
+  equipment:
+    'Build the setup: add units, then drag from a port onto another port or a unit to cable them. A unit joined to a switch links to the switch itself, so there is no port to pick.',
+  layout: 'Choose which card is installed in each slot of the chassis.',
+  notes: 'Click a port on the diagram to attach a note to it. Readers see the note when they click that port.',
+  trouble:
+    'Each check is a short flowchart. Select a step to see the setup as it is at that step, change it (plug or unplug cables, swap units) and pick the ports to look at.',
+}
 
 /** Port `<option>`s grouped by the slot or zone they belong to. */
 function PortOptions({ device, endpoints }: { device: DeviceDef; endpoints: PanelEndpoint[] }) {
@@ -61,11 +62,14 @@ function PortOptions({ device, endpoints }: { device: DeviceDef; endpoints: Pane
             {specs.length === 0 ? (
               <option value={epPointId(e.id)}>{name}</option>
             ) : (
-              specs.map((s) => (
-                <option key={s.key} value={epPointId(e.id, s.key)}>
-                  {name}: {s.label}
-                </option>
-              ))
+              <>
+                {e.kind === 'switch' && <option value={epPointId(e.id)}>{name} (any port)</option>}
+                {specs.map((s) => (
+                  <option key={s.key} value={epPointId(e.id, s.key)}>
+                    {name}: {s.label}
+                  </option>
+                ))}
+              </>
             )}
           </optgroup>
         )
@@ -111,17 +115,21 @@ export function PanelEdit({
   index,
   count,
   nested,
+  reorder,
   onMove,
   onRemove,
   d,
 }: BlockEditProps<PanelPart>) {
   const template = getTemplate(part.deviceId)
+  const fresh = useFresh(part.id)
+  const canvas = useRef<PanelCanvasHandle>(null)
+  const canvasWrap = useRef<HTMLDivElement>(null)
   const [tab, setTab] = useState<Tab>('equipment')
   const [selected, setSelected] = useState<string | null>(null)
   const [selectedCable, setSelectedCable] = useState<string | null>(null)
   const [activeNote, setActiveNote] = useState<string | null>(null)
   /** The step being edited: the diagram shows the setup as it is at that step. */
-  const [active, setActive] = useState<{ scenarioId: string; stepId: string } | null>(null)
+  const [active, setActive] = useState<ActiveStep | null>(null)
   const [picking, setPicking] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
 
@@ -216,13 +224,21 @@ export function PanelEdit({
     }
 
     const unit: PanelEndpoint = { id, side, kind: kindId, model, name: '', detail: '', info: [], ...(pos ? { pos } : {}) }
-    const to = from && fromInfo ? firstPortFor(unit, fromInfo) : undefined
+    const link = from && ctx ? cableToNewUnit(unit, from, ctx) : null
     set((p) => ({
       ...p,
       endpoints: [...p.endpoints, unit],
-      cables: from && to ? [...p.cables, { id: uid(), from, to, label: '' }] : p.cables,
+      cables: link ? [...p.cables, { id: uid(), from: link.from, to: link.to, label: '' }] : p.cables,
     }))
     return id
+  }
+
+  /** Select a unit from a list: open its details and bring it into view on the diagram. */
+  const locateUnit = (unitId: string) => {
+    setSelectedCable(null)
+    setSelected(epPointId(unitId))
+    canvas.current?.focusUnit(unitId)
+    canvasWrap.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }
 
   /** A cable the editor has already checked (see `resolveConnection`). */
@@ -248,7 +264,6 @@ export function PanelEdit({
     set((p) => ({ ...p, scenarios: p.scenarios.map((s) => (s.id === id ? fn(s) : s)) }))
   const patchStep = (sid: string, stepId: string, fn: (s: PanelStep) => PanelStep) =>
     patchScenario(sid, (s) => ({ ...s, steps: s.steps.map((st) => (st.id === stepId ? fn(st) : st)) }))
-  const newStep = (): PanelStep => ({ id: uid(), text: '', actions: [], portIds: [], links: [], answers: [] })
 
   const onPortClick = (id: string) => {
     setSelectedCable(null)
@@ -287,7 +302,7 @@ export function PanelEdit({
         ? 'Click a port to add or edit its note.'
         : tab === 'trouble'
           ? picking
-            ? 'Click ports to light them up in this step. Click “Done” when finished.'
+            ? 'Click ports to light them up in this step, then press “Done picking”.'
             : activeStep
               ? 'Drag a + to plug a cable in this step · click a cable to unplug it.'
               : 'Select a step below to see the setup as it is at that step.'
@@ -370,11 +385,22 @@ export function PanelEdit({
     }
     const level = new Map(part.endpoints.map((e) => [e.id, 0]))
     const order = new Map(part.endpoints.map((e, i) => [e.id, i]))
+    const unitById = new Map(part.endpoints.map((e) => [e.id, e]))
     // Edges point from what sends to what receives; two-way links go from the older unit to the newer.
     const edges = part.cables.flatMap((c) => {
       const a = ctx ? infoFor(c.from, ctx) : null
       const b = ctx ? infoFor(c.to, ctx) : null
       if (!a?.unitId || !b?.unitId || a.unitId === b.unitId) return []
+      // A link to a switch as a whole has no port direction: the unit's own side decides
+      // (a source feeds the switch, the switch feeds a display), so a chain reads left to right.
+      const aHub = unitById.get(a.unitId)?.kind === 'switch' && !parsePoint(c.from)?.portKey
+      const bHub = unitById.get(b.unitId)?.kind === 'switch' && !parsePoint(c.to)?.portKey
+      if (aHub !== bHub) {
+        const unit = unitById.get(aHub ? b.unitId : a.unitId)
+        const unitSends = unit ? getUnitKind(unit.kind).side !== 'display' : true
+        const [unitId, hubId] = aHub ? [b.unitId, a.unitId] : [a.unitId, b.unitId]
+        return [unitSends ? ([unitId, hubId] as const) : ([hubId, unitId] as const)]
+      }
       const aSends = a.dir === 'out' || b.dir === 'in' || (a.dir === 'io' && b.dir === 'io' && (order.get(a.unitId) ?? 0) <= (order.get(b.unitId) ?? 0))
       return [aSends ? ([a.unitId, b.unitId] as const) : ([b.unitId, a.unitId] as const)]
     })
@@ -448,7 +474,6 @@ export function PanelEdit({
         cable={cable}
         device={device}
         endpoints={endpoints}
-        onLabel={() => {}}
         removeLabel="Unplug in this step"
         onRemove={() => {
           patchStep(active.scenarioId, active.stepId, (st) => ({
@@ -461,68 +486,53 @@ export function PanelEdit({
       />
     ) : undefined
 
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
+    { id: 'equipment', label: 'Units & cables', badge: part.endpoints.length },
+    ...((template?.slots.length ?? 0) > 0 ? [{ id: 'layout' as const, label: 'Cards' }] : []),
+    { id: 'notes', label: 'Port notes', badge: part.annotations.length },
+    { id: 'trouble', label: 'Troubleshooting', badge: part.scenarios.length },
+  ]
+
   return (
     <BlockFrame
+      id={part.id}
       kind="panel"
       chip="Panel"
+      summary={part.title || 'Interactive panel'}
       index={index}
       count={count}
       nested={nested}
+      reorder={reorder}
       onMove={onMove}
       onRemove={onRemove}
     >
-      <div className="flex flex-wrap gap-2">
-        <input
-          value={part.title}
-          onChange={(e) => set((p) => ({ ...p, title: e.target.value }))}
-          placeholder="Panel title (optional)…"
-          className={`${INPUT_HEADING} min-w-48 flex-1`}
-        />
-        <select value={part.deviceId} onChange={(e) => changeDevice(e.target.value)} className={SELECT}>
-          {!template && <option value={part.deviceId}>Unknown ({part.deviceId})</option>}
-          {TEMPLATES.map((dev) => (
-            <option key={dev.id} value={dev.id}>
-              {dev.name}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Panel title" hint="optional" className="min-w-48 flex-1">
+          <input
+            value={part.title}
+            onChange={(e) => set((p) => ({ ...p, title: e.target.value }))}
+            autoFocus={fresh}
+            placeholder="e.g. Boardroom signal path"
+            className={INPUT_HEADING}
+          />
+        </Field>
+        <Field label="Device">
+          <select value={part.deviceId} onChange={(e) => changeDevice(e.target.value)} className={SELECT}>
+            {!template && <option value={part.deviceId}>Unknown ({part.deviceId})</option>}
+            {TEMPLATES.map((dev) => (
+              <option key={dev.id} value={dev.id}>
+                {dev.name}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
 
       {device && (
         <>
-          <div className="mt-3 flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-            <PanelCanvas
-              height={620}
-              device={device}
-              endpoints={endpoints}
-              cables={state.cables}
-              annotated={annotated}
-              highlighted={highlighted}
-              links={showStep ? activeStep?.links : undefined}
-              moves={showStep ? stepMoves(activeStep) : undefined}
-              ghostCables={showStep ? state.ghosts : undefined}
-              freshCables={showStep ? state.fresh : undefined}
-              selected={selected}
-              selectedCable={selectedCable}
-              onPortClick={onPortClick}
-              onCableClick={(id) => {
-                setSelected(null)
-                setSelectedCable((c) => (c === id ? null : id))
-              }}
-              onConnect={tab === 'equipment' || (tab === 'trouble' && !!active) ? connect : undefined}
-              resolveConnection={resolveConnection}
-              onMoveUnit={tab === 'equipment' ? (id, pos) => patchUnit(id, { pos }) : undefined}
-              renderMenu={tab === 'equipment' ? renderMenu : undefined}
-              toolbar={toolbar}
-            />
-            <p className="text-ink-faint mt-1 text-[11px]">{hint}</p>
-            </div>
-            {overlay && <div className="max-h-[620px] w-72 shrink-0">{overlay}</div>}
-          </div>
-
-          <div role="tablist" className="border-line mt-3 flex gap-1 border-b">
-            {TABS.filter((t) => t.id !== 'layout' || (template?.slots.length ?? 0) > 0).map((t) => (
+          {/* The tabs sit above the diagram: they decide what the diagram does, so they stay in view with it. */}
+          <div role="tablist" className="border-line mt-4 flex flex-wrap gap-1 border-b">
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -534,36 +544,84 @@ export function PanelEdit({
                   setAddOpen(false)
                   setSelectedCable(null)
                 }}
-                className={`-mb-px rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-medium transition-colors ${
+                className={`-mb-px flex items-center gap-2 rounded-t-md border border-b-0 px-3.5 py-2 text-sm font-medium transition-colors ${
                   tab === t.id
                     ? 'border-line-strong bg-surface text-ink'
                     : 'text-ink-muted hover:text-ink border-transparent'
                 }`}
               >
                 {t.label}
+                {t.badge !== undefined && t.badge > 0 && (
+                  <span className="bg-subtle text-ink-muted rounded px-1.5 text-[11px] font-semibold">{t.badge}</span>
+                )}
               </button>
             ))}
           </div>
+          <p className="text-ink-muted bg-subtle mt-2.5 rounded-lg px-3 py-2 text-xs leading-relaxed">{TAB_HELP[tab]}</p>
 
-          <div className="pt-3">
+          <div ref={canvasWrap} className="mt-3 flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <PanelCanvas
+                ref={canvas}
+                height={620}
+                device={device}
+                endpoints={endpoints}
+                cables={state.cables}
+                annotated={annotated}
+                highlighted={highlighted}
+                links={showStep ? activeStep?.links : undefined}
+                moves={showStep ? stepMoves(activeStep) : undefined}
+                ghostCables={showStep ? state.ghosts : undefined}
+                freshCables={showStep ? state.fresh : undefined}
+                selected={selected}
+                selectedCable={selectedCable}
+                onPortClick={onPortClick}
+                onCableClick={(id) => {
+                  setSelected(null)
+                  setSelectedCable((c) => (c === id ? null : id))
+                }}
+                onConnect={tab === 'equipment' || (tab === 'trouble' && !!active) ? connect : undefined}
+                resolveConnection={resolveConnection}
+                onMoveUnit={tab === 'equipment' ? (id, pos) => patchUnit(id, { pos }) : undefined}
+                renderMenu={tab === 'equipment' ? renderMenu : undefined}
+                toolbar={toolbar}
+              />
+              <p className="text-ink-muted mt-1.5 text-xs">{hint}</p>
+            </div>
+            {overlay && <div className="max-h-[620px] w-72 shrink-0">{overlay}</div>}
+          </div>
+
+          <div className="pt-4">
             {tab === 'equipment' && (
-              <p className="text-ink-faint text-sm">
-                {part.endpoints.length === 0
-                  ? 'Start with “Add unit” on the diagram, or click a port or a + to add something already cabled to it.'
-                  : `${part.endpoints.length} unit${part.endpoints.length === 1 ? '' : 's'}, ${part.cables.length} cable${part.cables.length === 1 ? '' : 's'}. Click a unit or a cable on the diagram to edit it.`}
-              </p>
+              <PanelUnitsTab
+                device={device}
+                endpoints={part.endpoints}
+                cables={part.cables}
+                selectedUnitId={selectedUnitId}
+                selectedCableId={selectedCable}
+                onSelectUnit={locateUnit}
+                onSelectCable={(id) => {
+                  setSelected(null)
+                  setSelectedCable(id)
+                  canvasWrap.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+                }}
+                onRemoveCable={removeCable}
+                onAddUnit={(kind) => {
+                  const nid = addUnit(kind)
+                  locateUnit(nid)
+                }}
+              />
             )}
 
             {tab === 'layout' &&
               (template && template.slots.length > 0 ? (
-                <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                   {template.slots.map((slot) => (
-                    <label key={slot.id} className="flex items-center gap-2 text-xs">
-                      <span className="text-ink-muted w-24 shrink-0">{slot.label}</span>
+                    <Field key={slot.id} label={slot.label}>
                       <select
                         value={cardIdFor(slot, part.cards)}
                         onChange={(ev) => changeCard(slot.id, ev.target.value)}
-                        className={`${SELECT} min-w-0 flex-1`}
+                        className={`${SELECT} w-full`}
                       >
                         {cardsFor(slot.family).map((c) => (
                           <option key={c.id} value={c.id}>
@@ -571,7 +629,7 @@ export function PanelEdit({
                           </option>
                         ))}
                       </select>
-                    </label>
+                    </Field>
                   ))}
                 </div>
               ) : (
@@ -579,267 +637,39 @@ export function PanelEdit({
               ))}
 
             {tab === 'notes' && (
-              <div className="space-y-2">
-                {part.annotations.length === 0 && (
-                  <p className="text-ink-faint text-sm">No notes yet. Click a port on the diagram to add one.</p>
-                )}
-                {part.annotations.map((a) => {
-                  const patchNote = (fields: Partial<typeof a>) =>
-                    set((p) => ({ ...p, annotations: p.annotations.map((x) => (x.id === a.id ? { ...x, ...fields } : x)) }))
-                  return (
-                    <div
-                      key={a.id}
-                      className={`bg-surface space-y-2 rounded-lg border p-2.5 ${activeNote === a.id ? 'border-fuchsia-400/60' : 'border-line'}`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-ink w-48 shrink-0 text-xs font-semibold">{portName(a.portId)}</span>
-                        <input
-                          value={a.label}
-                          onChange={(ev) => patchNote({ label: ev.target.value })}
-                          placeholder="Short label (e.g. Boardroom display)…"
-                          className={`${INPUT} flex-1`}
-                        />
-                        <button
-                          type="button"
-                          aria-label="Delete note"
-                          onClick={() => set((p) => ({ ...p, annotations: p.annotations.filter((x) => x.id !== a.id) }))}
-                          className={`${DELETE_BTN} p-1`}
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <textarea
-                        value={a.note}
-                        onChange={(ev) => patchNote({ note: ev.target.value })}
-                        placeholder="What to know about this port: cable type, what's plugged in, common problems…"
-                        rows={2}
-                        className={TEXTAREA}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
+              <PanelNotesTab
+                annotations={part.annotations}
+                activeNote={activeNote}
+                portName={portName}
+                onPatch={(id, fields) =>
+                  set((p) => ({ ...p, annotations: p.annotations.map((x) => (x.id === id ? { ...x, ...fields } : x)) }))
+                }
+                onRemove={(id) => set((p) => ({ ...p, annotations: p.annotations.filter((x) => x.id !== id) }))}
+                onLocate={(portId) => {
+                  const unit = parsePoint(portId)?.unitId
+                  setSelected(portId)
+                  if (unit) canvas.current?.focusUnit(unit)
+                  canvasWrap.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+                }}
+              />
             )}
 
             {tab === 'trouble' && (
-              <div className="space-y-3">
-                {part.scenarios.map((sc) => (
-                  <div key={sc.id} className="border-line bg-surface rounded-lg border p-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={sc.title}
-                        onChange={(ev) => patchScenario(sc.id, (s) => ({ ...s, title: ev.target.value }))}
-                        placeholder="Check title, e.g. No picture on one input"
-                        className={`${INPUT_HEADING} flex-1`}
-                      />
-                      <button
-                        type="button"
-                        aria-label="Delete check"
-                        onClick={() => {
-                          if (active?.scenarioId === sc.id) setActive(null)
-                          set((p) => ({ ...p, scenarios: p.scenarios.filter((x) => x.id !== sc.id) }))
-                        }}
-                        className={`${DELETE_BTN} p-1`}
-                      >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <ol className="mt-3 space-y-2.5">
-                      {sc.steps.map((st, si) => {
-                        const isActive = active?.stepId === st.id
-                        const patch = (fn: (s: PanelStep) => PanelStep) => patchStep(sc.id, st.id, fn)
-                        const others = sc.steps.filter((x) => x.id !== st.id)
-                        const before = stateAfter(part, sc.steps.slice(0, si))
-                        return (
-                          <li
-                            key={st.id}
-                            className={`bg-canvas rounded-lg border p-2.5 ${isActive ? 'border-fuchsia-400/60' : 'border-line'}`}
-                          >
-                            <div className="mb-1.5 flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActive({ scenarioId: sc.id, stepId: st.id })
-                                  setPicking(false)
-                                }}
-                                className={`rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wide uppercase ${
-                                  isActive ? 'bg-fuchsia-400/20 text-fuchsia-200' : 'bg-subtle text-ink-muted hover:text-ink'
-                                }`}
-                              >
-                                Step {si + 1}
-                              </button>
-                              <span className="flex-1" />
-                              <button
-                                type="button"
-                                aria-label="Delete step"
-                                onClick={() => {
-                                  if (isActive) setActive(null)
-                                  patchScenario(sc.id, (s) => ({
-                                    ...s,
-                                    steps: s.steps
-                                      .filter((x) => x.id !== st.id)
-                                      .map((x) => ({
-                                        ...x,
-                                        answers: x.answers.map((a) => (a.next === st.id ? { ...a, next: '' } : a)),
-                                      })),
-                                  }))
-                                }}
-                                className={`${DELETE_BTN} p-1`}
-                              >
-                                <TrashIcon className="h-4 w-4" />
-                              </button>
-                            </div>
-                            <textarea
-                              value={st.text}
-                              onFocus={() => setActive({ scenarioId: sc.id, stepId: st.id })}
-                              onChange={(ev) => patch((s) => ({ ...s, text: ev.target.value }))}
-                              placeholder="What to do or ask, e.g. “Move the card from Input 12 to Input 9. Does the problem follow the card?”"
-                              rows={2}
-                              className={TEXTAREA}
-                            />
-
-                            {device && (
-                              <StepActionsEdit
-                                actions={st.actions}
-                                onChange={(actions) => patch((s) => ({ ...s, actions }))}
-                                device={device}
-                                endpoints={before.endpoints}
-                                inputSlots={inputSlots}
-                                cablesBefore={before.cables}
-                                portOptions={portOptions}
-                              />
-                            )}
-
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActive({ scenarioId: sc.id, stepId: st.id })
-                                  setPicking((p) => !(p && isActive))
-                                }}
-                                className={`${GHOST_BTN} ${picking && isActive ? 'border-fuchsia-400/60 text-fuchsia-200' : ''}`}
-                              >
-                                {picking && isActive ? 'Done' : 'Light up ports'}
-                              </button>
-                              {st.portIds.map((id) => (
-                                <button
-                                  key={id}
-                                  type="button"
-                                  title="Remove"
-                                  onClick={() => patch((s) => ({ ...s, portIds: s.portIds.filter((x) => x !== id) }))}
-                                  className="border-line bg-subtle text-ink-muted hover:text-ink rounded-md border px-1.5 py-0.5"
-                                >
-                                  {portName(id)} ×
-                                </button>
-                              ))}
-                            </div>
-
-                            <div className="mt-2.5 space-y-1.5">
-                              {st.answers.map((a) => (
-                                <div key={a.id} className="flex flex-wrap items-start gap-2">
-                                  <div className="w-32 shrink-0">
-                                    <input
-                                      value={a.label}
-                                      onChange={(ev) =>
-                                        patch((s) => ({ ...s, answers: s.answers.map((x) => (x.id === a.id ? { ...x, label: ev.target.value } : x)) }))
-                                      }
-                                      placeholder="Answer (e.g. Yes)"
-                                      className={INPUT}
-                                    />
-                                  </div>
-                                  <select
-                                    value={a.next}
-                                    onChange={(ev) =>
-                                      patch((s) => ({ ...s, answers: s.answers.map((x) => (x.id === a.id ? { ...x, next: ev.target.value } : x)) }))
-                                    }
-                                    className={SELECT}
-                                  >
-                                    <option value="">Finish with a conclusion</option>
-                                    {others.map((o) => (
-                                      <option key={o.id} value={o.id}>
-                                        Go to step {sc.steps.indexOf(o) + 1}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  {!a.next && (
-                                    <div className="min-w-48 flex-1">
-                                      <input
-                                        value={a.result}
-                                        onChange={(ev) =>
-                                          patch((s) => ({ ...s, answers: s.answers.map((x) => (x.id === a.id ? { ...x, result: ev.target.value } : x)) }))
-                                        }
-                                        placeholder="Conclusion, e.g. Slot issue: replace the chassis"
-                                        className={INPUT}
-                                      />
-                                    </div>
-                                  )}
-                                  <button
-                                    type="button"
-                                    aria-label="Delete answer"
-                                    onClick={() => patch((s) => ({ ...s, answers: s.answers.filter((x) => x.id !== a.id) }))}
-                                    className={`${DELETE_BTN} p-1`}
-                                  >
-                                    <TrashIcon className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              ))}
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    patch((s) => ({
-                                      ...s,
-                                      answers: [
-                                        ...s.answers,
-                                        { id: uid(), label: s.answers.length === 0 ? 'Yes' : s.answers.length === 1 ? 'No' : '', next: '', result: '' },
-                                      ],
-                                    }))
-                                  }
-                                  className={GHOST_BTN}
-                                >
-                                  <PlusIcon className="h-3.5 w-3.5" />
-                                  Add answer
-                                </button>
-                                {st.answers.length === 0 && (
-                                  <span className="text-ink-faint text-[11px]">No answers: this step ends the check.</span>
-                                )}
-                              </div>
-                            </div>
-                          </li>
-                        )
-                      })}
-                    </ol>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const step = newStep()
-                        patchScenario(sc.id, (s) => ({ ...s, steps: [...s.steps, step] }))
-                        setActive({ scenarioId: sc.id, stepId: step.id })
-                      }}
-                      className={`${GHOST_BTN} mt-2.5`}
-                    >
-                      <PlusIcon className="h-3.5 w-3.5" />
-                      Add step
-                    </button>
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const step = newStep()
-                    const sc: PanelScenario = { id: uid(), title: '', steps: [step] }
-                    set((p) => ({ ...p, scenarios: [...p.scenarios, sc] }))
-                    setActive({ scenarioId: sc.id, stepId: step.id })
-                  }}
-                  className={GHOST_BTN}
-                >
-                  <PlusIcon className="h-3.5 w-3.5" />
-                  Add troubleshooting check
-                </button>
-              </div>
+              <PanelTroubleTab
+                part={part}
+                device={device}
+                active={active}
+                picking={picking}
+                inputSlots={inputSlots}
+                portOptions={portOptions}
+                portName={portName}
+                setActive={setActive}
+                setPicking={setPicking}
+                patchScenario={patchScenario}
+                patchStep={patchStep}
+                onAddScenario={(sc) => set((p) => ({ ...p, scenarios: [...p.scenarios, sc] }))}
+                onRemoveScenario={(id) => set((p) => ({ ...p, scenarios: p.scenarios.filter((x) => x.id !== id) }))}
+              />
             )}
           </div>
         </>

@@ -6,7 +6,7 @@ import { PanelView } from './PanelView'
 import type { GuideStep, SectionBlock } from '../types'
 
 type SectionBlockViewProps = {
-  /** When set, this block becomes a scroll-spy anchor target. */
+  /** When set, this block becomes a scroll anchor target. */
   anchorId?: string
   heading: string
   body: string
@@ -31,24 +31,22 @@ export function SectionBlockView({
   return (
     <div id={anchorId} className={anchorId ? 'scroll-mt-20' : undefined}>
       {heading && (
-        <h4 className="text-ink border-l-2 border-l-violet-400 pl-2.5 text-sm font-semibold tracking-tight">
+        <h4 className="text-ink border-l-[3px] border-l-violet-400 pl-3 text-base leading-snug font-semibold tracking-tight">
           {heading}
         </h4>
       )}
       {body && (
-        <p className="text-ink-muted mt-1.5 text-sm leading-relaxed whitespace-pre-line">
-          {body}
-        </p>
+        <p className="text-ink-muted mt-2 text-[15px] leading-relaxed whitespace-pre-line">{body}</p>
       )}
       {steps.length > 0 && (
-        <ol className="mt-3 space-y-3">
+        <ol className="mt-4">
           {steps.map((step, i) => (
-            <StepView key={step.id} step={step} index={i} />
+            <StepView key={step.id} step={step} index={i} last={i === steps.length - 1} />
           ))}
         </ol>
       )}
       {blocks && blocks.length > 0 && (
-        <div className="mt-3 space-y-2.5">
+        <div className="mt-4 space-y-3">
           {blocks.map((block) => (
             <SectionBlockItem key={block.id} block={block} />
           ))}

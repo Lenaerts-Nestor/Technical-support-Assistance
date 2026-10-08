@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ComponentProps, ReactNode } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import type { ComponentProps, ReactNode, Ref } from 'react'
 import { GHOST_BTN } from '../../../shared/ui/styles'
 import type { Resolution } from './connect'
 import { DevicePanel, type Pending } from './DevicePanel'
@@ -27,6 +27,13 @@ type PanelCanvasProps = Omit<
   renderMenu?: (pointId: string, close: () => void) => ReactNode
   /** Extra controls pinned top-left. */
   toolbar?: ReactNode
+  /** Lets the editor drive the view, e.g. from a list of units. */
+  ref?: Ref<PanelCanvasHandle>
+}
+
+export type PanelCanvasHandle = {
+  /** Pan to a unit's box, zooming in a little if the whole scene is showing. */
+  focusUnit: (unitId: string) => void
 }
 
 type View = { cx: number; cy: number; scale: number }
@@ -52,6 +59,7 @@ export function PanelCanvas({
   onMoveUnit,
   renderMenu,
   toolbar,
+  ref,
   ...panel
 }: PanelCanvasProps) {
   const { device, endpoints, cables, onPortClick } = panel
@@ -97,6 +105,23 @@ export function PanelCanvas({
     // Also follows container resizes (e.g. the sidebar collapsing) until the user takes over.
     if (!touched.current) fit()
   }, [sceneKey, fitScale, fit])
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusUnit: (unitId) => {
+        const item = scene.items.find((i) => i.endpoint.id === unitId)
+        if (!item || fitScale === 0) return
+        touched.current = true
+        setView((v) => ({
+          cx: item.x + item.w / 2,
+          cy: item.y + item.h / 2,
+          scale: Math.max(v?.scale ?? fitScale, fitScale * 1.15),
+        }))
+      },
+    }),
+    [scene, fitScale],
+  )
 
   useEffect(() => {
     if (!notice) return
@@ -199,7 +224,7 @@ export function PanelCanvas({
       const drop = pointAt(ev.clientX, ev.clientY)
       if (!drop || drop === fromId) return
       const res = resolveConnection ? resolveConnection(fromId, drop) : ({ ok: true, to: drop } as Resolution)
-      if (res.ok) onConnect?.(fromId, res.to)
+      if (res.ok) onConnect?.(res.from ?? fromId, res.to)
       else if (res.reason) setNotice(res.reason)
     }
     window.addEventListener('pointermove', move)

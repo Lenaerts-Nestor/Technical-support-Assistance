@@ -1,8 +1,18 @@
-import { useCallback, useMemo, useRef } from 'react'
-import type { KeyboardEvent } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import type { ClipboardEvent, KeyboardEvent } from 'react'
 import { FLAGGED_PHRASES, LANGUAGES, TEMPLATE_BODIES, TEMPLATE_GROUPS } from './casesData'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { useCopyToClipboard } from '../../shared/hooks/useCopyToClipboard'
+import {
+  formatBullet,
+  htmlToText,
+  normalizeBullets,
+  normalizePasted,
+  parseBullet,
+  shiftBulletLines,
+  textToHtml,
+  toggleBulletLines,
+} from './bullets'
 import type { CaseLanguage, FlaggedMatch, TemplateButton } from './types'
 
 const ALL_BUTTONS: TemplateButton[] = TEMPLATE_GROUPS.flatMap((g) => g.buttons)
@@ -168,34 +178,12 @@ function cutMatch(text: string, match: FlaggedMatch): string {
   return text.slice(0, start) + gap + text.slice(end)
 }
 
-const BULLET = '• '
-
 /** Expand a [start, end] offset pair out to the full lines they touch. */
 function lineRange(text: string, start: number, end: number) {
   const lineStart = text.lastIndexOf('\n', start - 1) + 1
   const nextBreak = text.indexOf('\n', end)
   const lineEnd = nextBreak === -1 ? text.length : nextBreak
   return { lineStart, lineEnd }
-}
-
-/**
- * Bullet toggle for a block of whole lines: adds "• " to every non-blank line
- * that's missing it, unless they all already have it, in which case it strips
- * it instead. Blank lines are left alone unless the block is nothing but
- * blank lines (starting a fresh bullet on an empty draft).
- */
-function toggleBulletLines(block: string): string {
-  const lines = block.split('\n')
-  const content = lines.filter((line) => line.trim())
-  const skipBlanks = content.length > 0
-  const allBulleted = skipBlanks && content.every((line) => line.startsWith(BULLET))
-  return lines
-    .map((line) => {
-      if (skipBlanks && !line.trim()) return line
-      if (allBulleted) return line.slice(BULLET.length)
-      return line.startsWith(BULLET) ? line : BULLET + line
-    })
-    .join('\n')
 }
 
 /** How many discrete edits (a typed burst, a template insert, a formatting
@@ -212,8 +200,31 @@ export function useCases() {
     () => 'en',
     reviveLanguage,
   )
-  const { copied, copy: copyToClipboard } = useCopyToClipboard()
+  const { copied, copy: copyToClipboard } = useCopyToClipboard<'rich' | 'plain'>()
   const editorRef = useRef<HTMLTextAreaElement>(null)
+
+  // --- selection after an edit ------------------------------------------
+  // A controlled textarea loses its caret when React writes a new value into it,
+  // so every edit made here says where the selection should end up. It is applied
+  // in a layout effect, right after the commit and before the next keystroke —
+  // a timer (requestAnimationFrame) can fire after fast typing has already moved on.
+  const pendingSelection = useRef<[number, number] | null>(null)
+  useLayoutEffect(() => {
+    const sel = pendingSelection.current
+    const el = editorRef.current
+    pendingSelection.current = null
+    if (!sel || !el) return
+    el.focus()
+    el.setSelectionRange(sel[0], sel[1])
+  }, [draft])
+
+  const placeSelection = useCallback((start: number, end = start) => {
+    pendingSelection.current = [start, end]
+    // If the edit left the draft unchanged there is no commit to apply it on; don't keep it for later typing.
+    requestAnimationFrame(() => {
+      pendingSelection.current = null
+    })
+  }, [])
 
   // --- undo / redo -----------------------------------------------------
   // A controlled textarea whose value is ever set programmatically (template
@@ -258,9 +269,26 @@ export function useCases() {
       }
       window.clearTimeout(typingTimer.current)
       typingTimer.current = window.setTimeout(stopTypingBurst, TYPING_PAUSE_MS)
+
+      // "- " or "* " typed at the start of a line becomes a real bullet, as in Notes.
+      const el = editorRef.current
+      if (el && next.length === draft.length + 1) {
+        const caret = el.selectionStart
+        const lineStart = next.lastIndexOf('\n', caret - 1) + 1
+        const typed = next.slice(lineStart, caret)
+        if (/^[ \t]*[-*] $/.test(typed)) {
+          const bullet = parseBullet(typed)
+          if (bullet) {
+            const marker = formatBullet(bullet.level, '')
+            setDraft(next.slice(0, lineStart) + marker + next.slice(caret))
+            placeSelection(lineStart + marker.length)
+            return
+          }
+        }
+      }
       setDraft(next)
     },
-    [checkpoint, setDraft, stopTypingBurst],
+    [checkpoint, draft, placeSelection, setDraft, stopTypingBurst],
   )
 
   const undo = useCallback(() => {
@@ -311,16 +339,11 @@ export function useCases() {
     withCheckpoint(() =>
       setDraft((text) => {
         const bolded = toggleBoldText(text.slice(start, end))
-        if (el) {
-          requestAnimationFrame(() => {
-            el.focus()
-            el.setSelectionRange(start, start + bolded.length)
-          })
-        }
+        placeSelection(start, start + bolded.length)
         return text.slice(0, start) + bolded + text.slice(end)
       }),
     )
-  }, [withCheckpoint, setDraft])
+  }, [withCheckpoint, setDraft, placeSelection])
 
   const applyBullets = useCallback(() => {
     const el = editorRef.current
@@ -329,22 +352,106 @@ export function useCases() {
     withCheckpoint(() =>
       setDraft((text) => {
         const { lineStart, lineEnd } = lineRange(text, start, end)
-        const bulleted = toggleBulletLines(text.slice(lineStart, lineEnd))
-        if (el) {
-          requestAnimationFrame(() => {
-            el.focus()
-            el.setSelectionRange(lineStart, lineStart + bulleted.length)
-          })
+        const before = text.slice(lineStart, lineEnd)
+        const bulleted = toggleBulletLines(before)
+        if (start === end) {
+          // Just a caret: keep it in the line, after the marker, ready to type.
+          placeSelection(Math.max(lineStart, start + bulleted.length - before.length))
+        } else {
+          // A selection: keep the touched lines selected so the toggle can be undone with a click.
+          placeSelection(lineStart, lineStart + bulleted.length)
         }
         return text.slice(0, lineStart) + bulleted + text.slice(lineEnd)
       }),
     )
-  }, [withCheckpoint, setDraft])
+  }, [withCheckpoint, setDraft, placeSelection])
 
-  /** Ctrl/Cmd+Z (Shift = redo), Ctrl/Cmd+Y, and Ctrl/Cmd+B on the textarea. */
+  /**
+   * Replace [start, end) of the draft as one undo step and put the selection at
+   * [caretStart, caretEnd] afterwards — what Enter, Tab, Backspace and paste do.
+   */
+  const edit = useCallback(
+    (start: number, end: number, insert: string, caretStart: number, caretEnd = caretStart) => {
+      withCheckpoint(() => setDraft((text) => text.slice(0, start) + insert + text.slice(end)))
+      placeSelection(caretStart, caretEnd)
+    },
+    [withCheckpoint, setDraft, placeSelection],
+  )
+
+  /** Move the bullet lines under the selection one level in (+1) or out (-1). False if there are none. */
+  const shiftBullets = useCallback(
+    (dir: 1 | -1): boolean => {
+      const el = editorRef.current
+      if (!el) return false
+      const start = el.selectionStart
+      const end = el.selectionEnd
+      const { lineStart, lineEnd } = lineRange(draft, start, end)
+      const moved = shiftBulletLines(draft.slice(lineStart, lineEnd), dir)
+      if (!moved) return false
+      if (moved.block !== draft.slice(lineStart, lineEnd)) {
+        const total = moved.deltas.reduce((a, b) => a + b, 0)
+        const newStart = Math.max(lineStart, start + moved.deltas[0])
+        edit(lineStart, lineEnd, moved.block, newStart, Math.max(newStart, end + total))
+      }
+      return true
+    },
+    [draft, edit],
+  )
+
+  /**
+   * List behaviour on a bullet line: Enter starts the next bullet (an empty one
+   * ends the list, or steps out a level), Backspace right after the marker takes
+   * the bullet off. Returns true when it handled the key.
+   */
+  const handleListKey = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+      if (e.nativeEvent.isComposing || e.altKey || e.ctrlKey || e.metaKey) return false
+      const el = e.currentTarget
+      const start = el.selectionStart
+      const end = el.selectionEnd
+      const lineStart = draft.lastIndexOf('\n', start - 1) + 1
+      const nextBreak = draft.indexOf('\n', start)
+      const lineEnd = nextBreak === -1 ? draft.length : nextBreak
+      const bullet = parseBullet(draft.slice(lineStart, lineEnd))
+      if (!bullet || start - lineStart < bullet.prefixLength) return false
+
+      if (e.key === 'Enter' && !e.shiftKey) {
+        if (!bullet.text.trim() && start === end) {
+          const outdented = bullet.level > 0 ? formatBullet(bullet.level - 1, '') : ''
+          edit(lineStart, lineEnd, outdented, lineStart + outdented.length)
+        } else {
+          const marker = `\n${formatBullet(bullet.level, '')}`
+          edit(start, end, marker, start + marker.length)
+        }
+        return true
+      }
+      if (e.key === 'Backspace' && start === end && start - lineStart === bullet.prefixLength) {
+        const plain = bullet.level > 0 ? formatBullet(bullet.level - 1, bullet.text) : bullet.text
+        edit(lineStart, lineEnd, plain, lineStart + plain.length - bullet.text.length)
+        return true
+      }
+      return false
+    },
+    [draft, edit],
+  )
+
+  /** Ctrl/Cmd+Z (Shift = redo), Ctrl/Cmd+Y, Ctrl/Cmd+B, Ctrl/Cmd+Shift+8 and Tab / Enter / Backspace in a list. */
   const handleEditorKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (shiftBullets(e.shiftKey ? -1 : 1)) e.preventDefault()
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Backspace') {
+        if (handleListKey(e)) e.preventDefault()
+        return
+      }
       if (!(e.ctrlKey || e.metaKey)) return
+      if (e.shiftKey && e.code === 'Digit8') {
+        e.preventDefault()
+        applyBullets()
+        return
+      }
       switch (e.key.toLowerCase()) {
         case 'z':
           e.preventDefault()
@@ -361,7 +468,31 @@ export function useCases() {
           break
       }
     },
-    [undo, redo, applyBold],
+    [shiftBullets, handleListKey, applyBullets, undo, redo, applyBold],
+  )
+
+  /**
+   * Paste with lists intact. Browsers leave the bullet markers out of the
+   * plain-text flavour of a copy from a rich editor, so when the HTML flavour
+   * holds a list it is read instead; either way, foreign markers (`-`, `*`,
+   * tab-separated bullets…) are folded into the editor's own.
+   */
+  const handlePaste = useCallback(
+    (e: ClipboardEvent<HTMLTextAreaElement>) => {
+      const el = e.currentTarget
+      const start = el.selectionStart
+      const end = el.selectionEnd
+      const lineStart = draft.lastIndexOf('\n', start - 1) + 1
+      const startsLine = !draft.slice(lineStart, start).trim()
+      const html = e.clipboardData.getData('text/html')
+      const plain = e.clipboardData.getData('text/plain')
+      const fromHtml = html ? htmlToText(html) : null
+      const incoming = normalizePasted(fromHtml ?? plain, startsLine)
+      if (fromHtml === null && incoming === plain) return // nothing to fix: the browser's paste is fine
+      e.preventDefault()
+      edit(start, end, incoming, start + incoming.length)
+    },
+    [draft, edit],
   )
 
   /** Splice raw text into the draft at the caret (or over the selection). */
@@ -373,17 +504,12 @@ export function useCases() {
           const start = el?.selectionStart ?? text.length
           const end = el?.selectionEnd ?? text.length
           const { value, caret } = spliceBlock(text, start, end, insert)
-          if (el) {
-            requestAnimationFrame(() => {
-              el.focus()
-              el.setSelectionRange(caret, caret)
-            })
-          }
+          placeSelection(caret)
           return value
         }),
       )
     },
-    [withCheckpoint, setDraft],
+    [withCheckpoint, setDraft, placeSelection],
   )
 
   const insertTemplate = useCallback(
@@ -396,7 +522,20 @@ export function useCases() {
     editorRef.current?.focus()
   }, [withCheckpoint, setDraft])
 
-  const copy = useCallback(() => copyToClipboard(draft), [copyToClipboard, draft])
+  /**
+   * Copy as both flavours: the HTML one carries real lists for rich editors
+   * (Salesforce, Notes, Outlook), the plain one tidy "• " lines for everything else.
+   */
+  const copy = useCallback(() => {
+    const plain = normalizeBullets(draft)
+    return copyToClipboard(plain, 'rich', textToHtml(plain))
+  }, [copyToClipboard, draft])
+
+  /** Plain text only, for a destination that misbehaves with the rich flavour. */
+  const copyPlain = useCallback(
+    () => copyToClipboard(normalizeBullets(draft), 'plain'),
+    [copyToClipboard, draft],
+  )
 
   return {
     draft,
@@ -408,12 +547,16 @@ export function useCases() {
     insertText,
     clear,
     copy,
-    justCopied: copied !== null,
+    copyPlain,
+    justCopied: copied === 'rich',
+    justCopiedPlain: copied === 'plain',
     flagged,
     jumpToFlagged,
     removeFlagged,
     applyBold,
     applyBullets,
+    indentBullets: shiftBullets,
     handleEditorKeyDown,
+    handlePaste,
   }
 }

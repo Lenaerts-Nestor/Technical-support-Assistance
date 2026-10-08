@@ -3,7 +3,7 @@ import { PanelIcon } from '../components/icons'
 import { infoFor } from '../panel/connect'
 import { DevicePanel } from '../panel/DevicePanel'
 import { KIND_DOT, PORT_KIND_LABEL } from '../panel/devices'
-import { pointName } from '../panel/scene'
+import { isHubLink, pointName } from '../panel/scene'
 import { SIGNAL_COLOR, SIGNAL_LABEL, unitPortSpecs } from '../panel/units'
 import { usePanelFlow } from '../panel/usePanelFlow'
 import { GHOST_BTN } from '../../../shared/ui/styles'
@@ -124,6 +124,14 @@ export function PanelView({ part }: { part: PanelPart }) {
                           {PORT_KIND_LABEL[k]}
                         </span>
                       ))}
+                {flow.cables.some((c) => isHubLink(c, flow.endpoints)) && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg width="22" height="6" aria-hidden>
+                      <line x1="1" y1="3" x2="21" y2="3" stroke={SIGNAL_COLOR.lan} strokeWidth="2.5" strokeLinecap="round" strokeDasharray="2 5" />
+                    </svg>
+                    Path through a switch
+                  </span>
+                )}
                 {annotated.size > 0 && (
                   <span className="inline-flex items-center gap-1.5">
                     <span className="bg-brand h-2 w-2 rounded-full" />

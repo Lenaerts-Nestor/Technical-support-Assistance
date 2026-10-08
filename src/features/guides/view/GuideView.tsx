@@ -1,14 +1,18 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useFocusMode } from '../../../app/focusMode'
+import { storageKey, usePersistentState } from '../../../shared/storage/usePersistentState'
 import { formatCardDate } from '../guidesData'
-import { ChevronLeftIcon } from '../components/icons'
+import { ChevronLeftIcon, ColumnsIcon, RowsIcon } from '../components/icons'
 import { DANGER_BTN, EMPTY, GHOST_BTN_MD } from '../../../shared/ui/styles'
 import { GuideMasonry } from './GuideMasonry'
 import { GuidePartView } from './GuidePartView'
-import { GuideRail, type TocEntry } from './GuideRail'
+import { QuickLinksMenu } from './QuickLinks'
 import { PanelWorkspace } from './PanelWorkspace'
 import { PanelWorkspaceProvider } from './panelWorkspaceContext'
 import type { Guide, GuidePart, PanelPart } from '../types'
+
+type GuideLayout = 'columns' | 'single'
+const LAYOUT_KEY = storageKey('guides', 'layout')
 
 type GuideViewProps = {
   guide: Guide
@@ -17,7 +21,7 @@ type GuideViewProps = {
   onDelete: () => void
 }
 
-/** Term / callout parts render above the navigable body; these three drive the rail. */
+/** Term / callout parts render above the body, which starts at the first chapter, section or table. */
 const isStructural = (p: GuidePart) =>
   p.type === 'chapter' || p.type === 'section' || p.type === 'table'
 
@@ -52,6 +56,12 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
   const activePanel = panels.find((p) => p.id === tab)
   useFocusMode(!!activePanel)
 
+  const [layout, setLayout] = usePersistentState<GuideLayout>(
+    LAYOUT_KEY,
+    () => 'columns',
+    (raw) => (raw === 'single' || raw === 'columns' ? raw : null),
+  )
+
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const allCollapsed =
     chapterIds.length > 0 && chapterIds.every((id) => collapsed.has(id))
@@ -68,23 +78,6 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
   )
   const toggleAll = () =>
     setCollapsed(allCollapsed ? new Set() : new Set(chapterIds))
-
-  const toc = useMemo<TocEntry[]>(() => {
-    const entries: TocEntry[] = []
-    for (const part of body) {
-      if (part.type === 'chapter') {
-        entries.push({ id: part.id, label: part.subtitle || 'Chapter', level: 0 })
-        for (const s of part.sections) {
-          if (s.heading) entries.push({ id: s.id, label: s.heading, level: 1 })
-        }
-      } else if (part.type === 'section') {
-        entries.push({ id: part.id, label: part.heading || 'Section', level: 0 })
-      } else if (part.type === 'table') {
-        entries.push({ id: part.id, label: part.title || 'Table', level: 0 })
-      }
-    }
-    return entries
-  }, [body])
 
   const items = useMemo(() => {
     const accentByChapter = new Map<string, number>()
@@ -126,6 +119,18 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
             updated {formatCardDate(guide.updatedAt)}
           </span>
         </div>
+        <QuickLinksMenu links={guide.links} />
+        {items.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setLayout(layout === 'columns' ? 'single' : 'columns')}
+            title={layout === 'columns' ? 'Show one column' : 'Show two columns'}
+            aria-label={layout === 'columns' ? 'Show one column' : 'Show two columns'}
+            className={GHOST_BTN_MD}
+          >
+            {layout === 'columns' ? <RowsIcon className="h-4 w-4" /> : <ColumnsIcon className="h-4 w-4" />}
+          </button>
+        )}
         {chapterIds.length > 0 && (
           <button type="button" onClick={toggleAll} className={GHOST_BTN_MD}>
             {allCollapsed ? 'Expand all' : 'Collapse all'}
@@ -178,8 +183,8 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
       ) : (
         <PanelWorkspaceProvider value={panels.length > 0 ? setTab : null}>
         <div
-          className={`mx-auto grid max-w-[1600px] items-start gap-6 px-8 pt-6 pb-8 ${
-            toc.length > 0 || guide.links.length > 0 ? 'grid-cols-[1fr_300px]' : 'grid-cols-1'
+          className={`mx-auto px-8 pt-6 pb-10 ${
+            layout === 'single' ? 'max-w-3xl' : 'max-w-[1600px]'
           }`}
         >
           <div className="min-w-0 space-y-4">
@@ -188,15 +193,21 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
             ))}
 
             {items.length > 0 ? (
-              <GuideMasonry items={items} />
+              layout === 'single' ? (
+                <div className="space-y-4">
+                  {items.map((item) => (
+                    <div key={item.id}>{item.node}</div>
+                  ))}
+                </div>
+              ) : (
+                <GuideMasonry items={items} />
+              )
             ) : lead.length === 0 ? (
               <p className={EMPTY}>
                 This guide has no steps yet — just reference links.
               </p>
             ) : null}
           </div>
-
-            {(toc.length > 0 || guide.links.length > 0) && <GuideRail toc={toc} links={guide.links} />}
         </div>
         </PanelWorkspaceProvider>
       )}

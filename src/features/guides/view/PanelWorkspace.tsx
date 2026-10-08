@@ -3,8 +3,8 @@ import { usePanelFlow } from '../panel/usePanelFlow'
 import { PanelFlowBox } from './PanelFlowBox'
 import { PanelCanvas } from '../panel/PanelCanvas'
 import { PORT_KIND_LABEL } from '../panel/devices'
-import { SIGNAL_LABEL, getUnitKind, getUnitModel, unitPortSpecs } from '../panel/units'
-import { cableColor, isEpPoint, parsePoint, pointName } from '../panel/scene'
+import { SIGNAL_COLOR, SIGNAL_LABEL, getUnitKind, getUnitModel, unitPortSpecs } from '../panel/units'
+import { cableColor, isEpPoint, isHubLink, parsePoint, pointName } from '../panel/scene'
 import { SECTION_LABEL } from '../../../shared/ui/styles'
 import type { PanelPart } from '../types'
 
@@ -185,7 +185,7 @@ export function PanelWorkspace({ part }: { part: PanelPart }) {
                   >
                     <span
                       className="mt-1 h-2 w-2 shrink-0 rounded-full"
-                      style={{ background: cableColor(cableIndex.get(c.id) ?? 0) }}
+                      style={{ background: isHubLink(c, endpoints) ? SIGNAL_COLOR.lan : cableColor(cableIndex.get(c.id) ?? 0) }}
                     />
                     <span className="min-w-0">
                       {c.label && <strong className="text-ink block">{c.label}</strong>}

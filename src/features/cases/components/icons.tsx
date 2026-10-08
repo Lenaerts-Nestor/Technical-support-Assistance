@@ -32,3 +32,21 @@ export function BulletListIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function IndentIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} className={className}>
+      <path d="M4 5h16M12 10h8M12 15h8M4 20h16" />
+      <path d="m4 9 3 3-3 3" />
+    </svg>
+  )
+}
+
+export function OutdentIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} className={className}>
+      <path d="M4 5h16M12 10h8M12 15h8M4 20h16" />
+      <path d="m7 9-3 3 3 3" />
+    </svg>
+  )
+}

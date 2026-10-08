@@ -1,40 +1,11 @@
-import { INPUT, INPUT_HEADING, SECTION_LABEL } from '../../../shared/ui/styles'
+import { Fragment } from 'react'
+import { PlusIcon, XIcon } from '../components/icons'
+import { DELETE_BTN, GHOST_BTN } from '../../../shared/ui/styles'
+import { AutoTextarea, Field, GroupLabel, INPUT, INPUT_HEADING } from './fields'
 import { BlockFrame } from './BlockFrame'
+import { useFresh } from './editorUi'
 import type { BlockEditProps } from './blockEditProps'
 import type { TablePart } from '../types'
-
-const STEPPER_BTN =
-  'border-line bg-surface text-ink-muted hover:border-line-strong hover:bg-subtle hover:text-ink h-6 w-6 rounded-md border transition-colors disabled:opacity-30'
-
-function Stepper({
-  label,
-  value,
-  onChange,
-  min,
-}: {
-  label: string
-  value: number
-  onChange: (n: number) => void
-  min: number
-}) {
-  return (
-    <span className="text-ink-muted inline-flex items-center gap-1.5 text-xs font-medium">
-      {label}
-      <button
-        type="button"
-        onClick={() => onChange(value - 1)}
-        disabled={value <= min}
-        className={STEPPER_BTN}
-      >
-        −
-      </button>
-      <span className="text-ink w-4 text-center font-semibold">{value}</span>
-      <button type="button" onClick={() => onChange(value + 1)} className={STEPPER_BTN}>
-        +
-      </button>
-    </span>
-  )
-}
 
 export function TableEdit({
   part,
@@ -42,70 +13,128 @@ export function TableEdit({
   index,
   count,
   nested,
+  reorder,
   onMove,
   onRemove,
   d,
 }: BlockEditProps<TablePart>) {
   const { headers, rows } = part.table
+  const fresh = useFresh(part.id)
+  const cols = headers.length
 
   return (
     <BlockFrame
+      id={part.id}
       kind="table"
       chip="TBL · Table"
+      summary={`${part.title || 'Untitled table'} · ${cols} × ${rows.length}`}
       index={index}
       count={count}
       nested={nested}
+      reorder={reorder}
       onMove={onMove}
       onRemove={onRemove}
     >
-      <label className={`mb-1.5 block ${SECTION_LABEL}`}>Table title</label>
-      <input
-        value={part.title}
-        onChange={(e) => d.setTableTitle(addr, e.target.value)}
-        placeholder="Table title (optional)…"
-        className={INPUT_HEADING}
-      />
+      <Field label="Table title" hint="optional">
+        <input
+          value={part.title}
+          onChange={(e) => d.setTableTitle(addr, e.target.value)}
+          autoFocus={fresh}
+          placeholder="e.g. LED meanings"
+          className={INPUT_HEADING}
+        />
+      </Field>
 
-      <div className="border-line bg-subtle mt-3 flex gap-5 rounded-lg border px-3 py-2">
-        <Stepper
-          label="Cols"
-          value={headers.length}
-          min={1}
-          onChange={(n) => d.setTableCols(addr, n)}
-        />
-        <Stepper
-          label="Rows"
-          value={rows.length}
-          min={0}
-          onChange={(n) => d.setTableRows(addr, n)}
-        />
+      <div className="mt-4 flex items-center gap-2">
+        <GroupLabel>
+          Cells · {cols} column{cols === 1 ? '' : 's'}, {rows.length} row{rows.length === 1 ? '' : 's'}
+        </GroupLabel>
+        <span className="flex-1" />
+        <button type="button" onClick={() => d.insertTableCol(addr, cols)} className={GHOST_BTN}>
+          <PlusIcon className="h-3.5 w-3.5" />
+          Add column
+        </button>
+        <button type="button" onClick={() => d.insertTableRow(addr, rows.length)} className={GHOST_BTN}>
+          <PlusIcon className="h-3.5 w-3.5" />
+          Add row
+        </button>
       </div>
 
-      <div className="mt-3 overflow-x-auto">
-        <div className="min-w-full space-y-1">
-          <div className="flex gap-1">
-            {headers.map((h, c) => (
-              <input
-                key={c}
-                value={h}
-                onChange={(e) => d.setTableHeader(addr, c, e.target.value)}
-                placeholder={`Column ${c + 1}`}
-                className={`${INPUT} min-w-[140px] flex-1 font-semibold`}
-              />
-            ))}
-          </div>
+      <div className="mt-2 overflow-x-auto pb-1">
+        <div
+          className="grid min-w-full items-start gap-1.5"
+          style={{ gridTemplateColumns: `1.5rem repeat(${cols}, minmax(9.5rem, 1fr)) 4rem` }}
+        >
+          {/* Column controls */}
+          <span />
+          {headers.map((_, c) => (
+            <div key={c} className="flex items-center justify-between px-0.5">
+              <span className="text-ink-faint text-[10px] font-semibold tracking-wide uppercase">
+                Column {c + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => d.removeTableCol(addr, c)}
+                disabled={cols <= 1}
+                aria-label={`Delete column ${c + 1}`}
+                title="Delete this column"
+                className={`${DELETE_BTN} p-0.5 disabled:pointer-events-none disabled:opacity-30`}
+              >
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          <span />
+
+          {/* Header row */}
+          <span className="text-ink-faint pt-2.5 text-center text-[10px] font-bold">H</span>
+          {headers.map((h, c) => (
+            <input
+              key={c}
+              value={h}
+              onChange={(e) => d.setTableHeader(addr, c, e.target.value)}
+              aria-label={`Column ${c + 1} header`}
+              placeholder={`Column ${c + 1}`}
+              className={`${INPUT} bg-subtle font-semibold`}
+            />
+          ))}
+          <span />
+
+          {/* Body rows */}
           {rows.map((row, r) => (
-            <div key={r} className="flex gap-1">
+            <Fragment key={r}>
+              <span className="text-ink-faint pt-2.5 text-center text-[11px] font-medium">{r + 1}</span>
               {row.map((cell, c) => (
-                <input
+                <AutoTextarea
                   key={c}
                   value={cell}
                   onChange={(e) => d.setTableCell(addr, r, c, e.target.value)}
+                  aria-label={`Row ${r + 1}, ${headers[c] || `column ${c + 1}`}`}
                   placeholder="…"
-                  className={`${INPUT} min-w-[140px] flex-1`}
+                  className={`${INPUT} resize-none`}
                 />
               ))}
-            </div>
+              <div className="flex items-center gap-0.5 pt-1.5">
+                <button
+                  type="button"
+                  onClick={() => d.insertTableRow(addr, r + 1)}
+                  aria-label={`Insert a row below row ${r + 1}`}
+                  title="Insert a row below"
+                  className="text-ink-faint hover:text-ink hover:bg-subtle rounded-md p-1"
+                >
+                  <PlusIcon className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => d.removeTableRow(addr, r)}
+                  aria-label={`Delete row ${r + 1}`}
+                  title="Delete this row"
+                  className={`${DELETE_BTN} p-1`}
+                >
+                  <XIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </Fragment>
           ))}
         </div>
       </div>
