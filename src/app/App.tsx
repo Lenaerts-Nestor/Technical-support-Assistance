@@ -8,6 +8,7 @@ import { VoiceCallPage } from '../features/voiceCall/VoiceCallPage'
 import { RmaPage } from '../features/rma/RmaPage'
 import { CasesPage } from '../features/cases/CasesPage'
 import { GuidesPage } from '../features/guides/GuidesPage'
+import { TerminalPage } from '../features/terminal/TerminalPage'
 import { KevinGuidePage } from '../features/kevinGuide/KevinGuidePage'
 
 const PAGES: Record<PageId, () => React.ReactElement> = {
@@ -15,6 +16,7 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
   rma: RmaPage,
   cases: CasesPage,
   guides: GuidesPage,
+  terminal: TerminalPage,
   kevinGuide: KevinGuidePage,
 }
 
