@@ -4,6 +4,7 @@ import {
   cableColor,
   deviceBounds,
   epPointId,
+  isHubLink,
   layoutScene,
   pointSignal,
   routeCable,
@@ -417,6 +418,9 @@ export function DevicePanel({
         const dim = hasFocus && anyTouched && !emphasised
         // A stream is a logical link over the network, not a wire: dashed and flowing.
         const isStream = pointSignal(c.from, endpoints ?? NO_ENDPOINTS) === 'stream' || pointSignal(c.to, endpoints ?? NO_ENDPOINTS) === 'stream'
+        // A link to a switch as a whole is a network path rather than a wire: dashed, in the LAN colour.
+        const isPath = !isStream && isHubLink(c, endpoints ?? NO_ENDPOINTS)
+        const stroke = isStream ? SIGNAL_COLOR.stream : isPath ? SIGNAL_COLOR.lan : color
         const label = c.label || (isStream ? 'Stream' : '')
         return (
           <g
@@ -430,14 +434,14 @@ export function DevicePanel({
             <path
               d={route.d}
               fill="none"
-              stroke={isStream ? SIGNAL_COLOR.stream : color}
+              stroke={stroke}
               strokeWidth={emphasised ? 3.5 : 2.5}
               strokeLinecap="round"
-              strokeDasharray={isStream ? '9 6' : undefined}
+              strokeDasharray={isStream ? '9 6' : isPath ? '2 7' : undefined}
               className={isStream ? 'panel-link' : undefined}
             />
-            <circle cx={route.ends[0].x} cy={route.ends[0].y} r={3.5} fill={color} className="stroke-canvas" strokeWidth={1.2} />
-            <circle cx={route.ends[1].x} cy={route.ends[1].y} r={3.5} fill={color} className="stroke-canvas" strokeWidth={1.2} />
+            <circle cx={route.ends[0].x} cy={route.ends[0].y} r={3.5} fill={stroke} className="stroke-canvas" strokeWidth={1.2} />
+            <circle cx={route.ends[1].x} cy={route.ends[1].y} r={3.5} fill={stroke} className="stroke-canvas" strokeWidth={1.2} />
             {label && (
               <text
                 x={route.label.x}

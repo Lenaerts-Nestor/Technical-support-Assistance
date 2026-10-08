@@ -34,7 +34,7 @@ export function UtilitiesPanel({
         <h3 className="text-ink text-sm font-semibold">Utilities</h3>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-6 overflow-y-auto p-4">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_15rem] gap-6 overflow-y-auto p-4">
         <div className="flex flex-col gap-5">
         <div>
           <h4 className={`mb-2 ${SECTION_LABEL}`}>Language</h4>
@@ -46,7 +46,7 @@ export function UtilitiesPanel({
         ))}
         </div>
 
-        <div className="border-line-soft border-l pl-6">
+        <div className="border-line-soft min-w-0 border-l pl-5">
           <SnippetsGroup snippets={snippets} language={language} onInsert={onInsertText} />
         </div>
       </div>

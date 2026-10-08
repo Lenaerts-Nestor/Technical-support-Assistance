@@ -23,33 +23,47 @@ type ChapterViewProps = {
   onToggle: () => void
 }
 
-/** One chapter (H2) as a distinct card with a tinted, collapsible heading band. */
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/** One chapter as a distinct card with a tinted, collapsible heading band. */
 export function ChapterView({ part, accentIndex, collapsed, onToggle }: ChapterViewProps) {
   const accent = accentFor(accentIndex)
+  const steps = part.sections.reduce((n, s) => n + s.steps.length, 0)
+  const meta = [
+    part.sections.length > 1 && plural(part.sections.length, 'section'),
+    steps > 0 && plural(steps, 'step'),
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <section id={part.id} className={`${CARD} scroll-mt-20 overflow-hidden`}>
       <button
         type="button"
         onClick={onToggle}
-        className={`flex w-full items-center gap-2.5 border-b px-4 py-3 text-left ${accent.band}`}
+        aria-expanded={!collapsed}
+        className={`flex w-full items-center gap-3 border-b px-4 py-3.5 text-left ${accent.band}`}
       >
-        <span className={`h-4 w-1 shrink-0 rounded-full ${accent.dot}`} />
-        <span className="rounded-md bg-black/25 px-1.5 py-0.5 text-[10px] font-bold tracking-[0.06em] uppercase">
-          H2
+        <span
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-black/25 text-sm font-bold`}
+        >
+          {accentIndex + 1}
         </span>
-        <span className="flex-1 text-base font-semibold tracking-tight">
-          {part.subtitle || 'Chapter'}
+        <span className="min-w-0 flex-1">
+          <span className="block text-lg leading-snug font-semibold tracking-tight">
+            {part.subtitle || 'Chapter'}
+          </span>
+          {meta && <span className="block text-xs opacity-70">{meta}</span>}
         </span>
         <ChevronDownIcon
-          className={`h-4 w-4 shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+          className={`h-5 w-5 shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`}
         />
       </button>
 
       {!collapsed && (
-        <div className="divide-line-soft divide-y px-4">
+        <div className="divide-line-soft divide-y px-5">
           {part.sections.map((section) => (
-            <div key={section.id} className="py-4 first:pt-4 last:pb-5">
+            <div key={section.id} className="py-5">
               <SectionBlockView
                 anchorId={section.id}
                 heading={section.heading}
@@ -60,7 +74,7 @@ export function ChapterView({ part, accentIndex, collapsed, onToggle }: ChapterV
             </div>
           ))}
           {part.blocks && part.blocks.length > 0 && (
-            <div className="space-y-2.5 py-4">
+            <div className="space-y-3 py-5">
               {part.blocks.map((block) => (
                 <ChapterBlock key={block.id} block={block} />
               ))}

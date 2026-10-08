@@ -167,3 +167,39 @@ export function PanelIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function WarningIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3l-8.5-14.1a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4M12 17h.01" />
+    </svg>
+  )
+}
+
+/** Six dots in two columns: the "grab here to drag" handle. */
+export function GripIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} strokeWidth={3}>
+      <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
+    </svg>
+  )
+}
+
+export function ColumnsIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M12 4v16" />
+    </svg>
+  )
+}
+
+export function RowsIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 12h18" />
+    </svg>
+  )
+}

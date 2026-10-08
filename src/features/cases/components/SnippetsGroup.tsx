@@ -75,7 +75,7 @@ export function SnippetsGroup({ snippets, language, onInsert }: SnippetsGroupPro
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <select
               className={SELECT}
               value={textLanguage}
@@ -110,15 +110,18 @@ export function SnippetsGroup({ snippets, language, onInsert }: SnippetsGroupPro
                 type="button"
                 title={s.text}
                 onClick={() => onInsert(s.text)}
-                className={`border-line bg-canvas text-ink-muted w-full truncate rounded-md border px-2.5 py-1.5 pr-7 text-left text-xs font-medium transition-colors ${tone.hover}`}
+                className={`border-line bg-canvas w-full rounded-md border px-2.5 py-2 pr-7 text-left transition-colors ${tone.hover}`}
               >
-                {s.label}
+                <span className="text-ink block text-xs leading-snug font-semibold">{s.label}</span>
+                <span className="text-ink-faint mt-0.5 line-clamp-2 block text-[11px] leading-snug">
+                  {s.text.replace(/\s+/g, ' ').trim()}
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => snippets.remove(s.id)}
                 aria-label={`Delete ${s.label}`}
-                className="text-ink-faint absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-rose-300 focus-visible:opacity-100"
+                className="text-ink-faint absolute top-1.5 right-1.5 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-rose-300 focus-visible:opacity-100"
               >
                 <TrashIcon className="h-3 w-3" />
               </button>

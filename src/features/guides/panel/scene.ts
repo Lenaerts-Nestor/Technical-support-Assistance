@@ -26,6 +26,8 @@ const PORT_PITCH = 25
 const PORT_INSET = 8
 /** Height of a section heading (VIDEO, NETWORK…) above its ports. */
 const GROUP_H = 16
+/** Where a link to a unit as a whole arrives, from the box's top: level with its name, above any port. */
+const HUB_ATTACH_Y = 30
 
 export type Rect = { x: number; y: number; w: number; h: number }
 export type Pt = { x: number; y: number }
@@ -311,7 +313,15 @@ export type CableRoute = {
 
 type End =
   | { type: 'chassis'; port: PortDef }
-  | { type: 'unit'; item: EpItem; anchor: Pt; dir: 1 | -1; legacy: boolean }
+  | {
+      type: 'unit'
+      item: EpItem
+      anchor: Pt
+      dir: 1 | -1
+      legacy: boolean
+      /** The box of a unit that has ports, not one of its ports: a link to the unit as a whole. */
+      hub: boolean
+    }
 
 /** Resolve a point id to where it is and which way a cable leaves it. */
 export function endOf(device: DeviceDef, items: EpItem[], id: string): End | null {
@@ -322,9 +332,9 @@ export function endOf(device: DeviceDef, items: EpItem[], id: string): End | nul
   if (!pt || !item) return null
   if (pt.portKey) {
     const port = item.ports.find((p) => p.id === id)
-    return port ? { type: 'unit', item, anchor: port.anchor, dir: port.dir, legacy: false } : null
+    return port ? { type: 'unit', item, anchor: port.anchor, dir: port.dir, legacy: false, hub: false } : null
   }
-  return { type: 'unit', item, anchor: item.inner, dir: item.left ? 1 : -1, legacy: true }
+  return { type: 'unit', item, anchor: item.inner, dir: item.left ? 1 : -1, legacy: true, hub: item.ports.length > 0 }
 }
 
 /** Where a cable attaches and which way it leaves, for drawing a cable still being dragged. */
@@ -399,6 +409,17 @@ export function routeCable(
   const { gutters, top, bottom } = device.routing
 
   if (a.type === 'unit' && b.type === 'unit') {
+    // A unit's port to a switch as a whole: leave from the port, arrive on the side of the
+    // switch that faces it, up in the title band, so it reads as "through the switch", not "into port 3".
+    if ((a.hub && !b.legacy) || (b.hub && !a.legacy)) {
+      const port = a.hub ? b : a
+      const hub = a.hub ? a : b
+      const item = hub.item
+      const onLeft = port.anchor.x <= item.x + item.w / 2
+      const hubPt = { x: onLeft ? item.x : item.x + item.w, y: item.y + HUB_ATTACH_Y + (j - 2) * 5 }
+      const c = curve(port.anchor, port.dir, hubPt, onLeft ? -1 : 1)
+      return { d: c.d, ends: a.hub ? [hubPt, port.anchor] : [port.anchor, hubPt], label: { x: c.mid.x, y: c.mid.y - 6, anchor: 'middle' } }
+    }
     // Two plain boxes: whichever sides face each other.
     if (a.legacy && b.legacy) {
       const ea = a.item
@@ -482,6 +503,18 @@ function routeToChassis(
     ends: [start, t],
     label: { x: start.x + (isSource ? 8 : -8), y: start.y - 7, anchor: isSource ? 'start' : 'end' },
   }
+}
+
+/**
+ * A cable that runs between a unit's port and a network switch as a whole
+ * (the switch's box rather than one of its ports): drawn as a path, not a wire.
+ */
+export function isHubLink(cable: PanelCable, endpoints: PanelEndpoint[]): boolean {
+  const kindOf = (id: string) => {
+    const pt = parsePoint(id)
+    return pt && !pt.portKey ? endpoints.find((e) => e.id === pt.unitId)?.kind : undefined
+  }
+  return kindOf(cable.from) === 'switch' || kindOf(cable.to) === 'switch'
 }
 
 export const CABLE_COLORS = [

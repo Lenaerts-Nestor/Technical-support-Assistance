@@ -19,21 +19,26 @@ export function CasesPage() {
     <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
       <ComposerHeader />
 
-      <div className="grid grid-cols-[minmax(0,1fr)_780px] items-start gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)_700px] items-start gap-6">
         <Editor
           className={COLUMN_HEIGHT}
           value={cases.draft}
           editorRef={cases.editorRef}
           justCopied={cases.justCopied}
+          justCopiedPlain={cases.justCopiedPlain}
           flagged={cases.flagged}
           onChange={cases.updateDraft}
           onKeyDown={cases.handleEditorKeyDown}
+          onPaste={cases.handlePaste}
           onClear={cases.clear}
           onCopy={cases.copy}
+          onCopyPlain={cases.copyPlain}
           onJumpToFlagged={cases.jumpToFlagged}
           onRemoveFlagged={cases.removeFlagged}
           onBold={cases.applyBold}
           onBullets={cases.applyBullets}
+          onIndent={() => cases.indentBullets(1)}
+          onOutdent={() => cases.indentBullets(-1)}
         />
         <UtilitiesPanel
           className={COLUMN_HEIGHT}

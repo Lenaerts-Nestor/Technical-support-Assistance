@@ -42,6 +42,33 @@ export type BlockRef =
 const isBlock = (p: GuidePart): p is SectionBlock =>
   p.type === 'table' || p.type === 'callout' || p.type === 'term' || p.type === 'panel'
 
+/** Where a dragged item lands relative to the one it is dropped on. */
+export type DropPos = 'before' | 'after'
+
+/** `item` inserted at `index`, or appended when there is no usable index. */
+function insertAt<T>(arr: T[], item: T, index?: number): T[] {
+  if (index === undefined || index < 0 || index >= arr.length) return [...arr, item]
+  const copy = arr.slice()
+  copy.splice(index, 0, item)
+  return copy
+}
+
+/** Move `id` to just before / after `targetId`. */
+export function moveRelative<T extends { id: string }>(
+  arr: T[],
+  id: string,
+  targetId: string,
+  pos: DropPos,
+): T[] {
+  if (id === targetId) return arr
+  const item = arr.find((x) => x.id === id)
+  if (!item || !arr.some((x) => x.id === targetId)) return arr
+  const rest = arr.filter((x) => x.id !== id)
+  const t = rest.findIndex((x) => x.id === targetId)
+  rest.splice(pos === 'before' ? t : t + 1, 0, item)
+  return rest
+}
+
 function moveById<T extends { id: string }>(arr: T[], id: string, dir: -1 | 1): T[] {
   const idx = arr.findIndex((x) => x.id === id)
   const to = idx + dir
@@ -78,11 +105,12 @@ export function useGuideDraft(
 
   /* ---- parts --------------------------------------------------------- */
 
-  const addPart = useCallback(
-    (kind: GuidePartKind) =>
-      setDraft((d) => ({ ...d, parts: [...d.parts, blankPart(kind)] })),
-    [],
-  )
+  /** Add a block at `index` (default: the end). Returns its id. */
+  const addPart = useCallback((kind: GuidePartKind, index?: number): string => {
+    const part = blankPart(kind)
+    setDraft((d) => ({ ...d, parts: insertAt(d.parts, part, index) }))
+    return part.id
+  }, [])
   const removePart = useCallback(
     (id: string) =>
       setDraft((d) => ({ ...d, parts: d.parts.filter((p) => p.id !== id) })),
@@ -91,6 +119,11 @@ export function useGuideDraft(
   const movePart = useCallback(
     (id: string, dir: -1 | 1) =>
       setDraft((d) => ({ ...d, parts: moveById(d.parts, id, dir) })),
+    [],
+  )
+  const movePartTo = useCallback(
+    (id: string, targetId: string, pos: DropPos) =>
+      setDraft((d) => ({ ...d, parts: moveRelative(d.parts, id, targetId, pos) })),
     [],
   )
 
@@ -103,10 +136,13 @@ export function useGuideDraft(
   )
 
   const addSection = useCallback(
-    (chapterId: string) =>
+    (chapterId: string, index?: number): string => {
+      const section = blankSection()
       updatePart(chapterId, (p) =>
-        p.type === 'chapter' ? { ...p, sections: [...p.sections, blankSection()] } : p,
-      ),
+        p.type === 'chapter' ? { ...p, sections: insertAt(p.sections, section, index) } : p,
+      )
+      return section.id
+    },
     [updatePart],
   )
 
@@ -145,6 +181,16 @@ export function useGuideDraft(
     [updatePart],
   )
 
+  const moveSectionTo = useCallback(
+    (chapterId: string, sectionId: string, targetId: string, pos: DropPos) =>
+      updatePart(chapterId, (p) =>
+        p.type === 'chapter'
+          ? { ...p, sections: moveRelative(p.sections, sectionId, targetId, pos) }
+          : p,
+      ),
+    [updatePart],
+  )
+
   /* ---- standalone section part fields ------------------------------ */
 
   const updateSectionPart = useCallback(
@@ -173,7 +219,11 @@ export function useGuideDraft(
   )
 
   const addStep = useCallback(
-    (loc: StepLoc) => updateSteps(loc, (steps) => [...steps, blankStep()]),
+    (loc: StepLoc, index?: number): string => {
+      const step = blankStep()
+      updateSteps(loc, (steps) => insertAt(steps, step, index))
+      return step.id
+    },
     [updateSteps],
   )
   const updateStep = useCallback(
@@ -197,6 +247,11 @@ export function useGuideDraft(
       updateSteps(loc, (steps) => moveById(steps, stepId, dir)),
     [updateSteps],
   )
+  const moveStepTo = useCallback(
+    (loc: StepLoc, stepId: string, targetId: string, pos: DropPos) =>
+      updateSteps(loc, (steps) => moveRelative(steps, stepId, targetId, pos)),
+    [updateSteps],
+  )
 
   /* ---- sub-items ------------------------------------------------ */
 
@@ -209,8 +264,11 @@ export function useGuideDraft(
   )
 
   const addSubItem = useCallback(
-    (loc: StepLoc, stepId: string, kind: SubItemKind) =>
-      updateSubItems(loc, stepId, (items) => [...items, blankSubItem(kind)]),
+    (loc: StepLoc, stepId: string, kind: SubItemKind, index?: number): string => {
+      const item = blankSubItem(kind)
+      updateSubItems(loc, stepId, (items) => insertAt(items, item, index))
+      return item.id
+    },
     [updateSubItems],
   )
   const updateSubItem = useCallback(
@@ -233,6 +291,11 @@ export function useGuideDraft(
   const moveSubItem = useCallback(
     (loc: StepLoc, stepId: string, subId: string, dir: -1 | 1) =>
       updateSubItems(loc, stepId, (items) => moveById(items, subId, dir)),
+    [updateSubItems],
+  )
+  const moveSubItemTo = useCallback(
+    (loc: StepLoc, stepId: string, subId: string, targetId: string, pos: DropPos) =>
+      updateSubItems(loc, stepId, (items) => moveRelative(items, subId, targetId, pos)),
     [updateSubItems],
   )
 
@@ -259,8 +322,11 @@ export function useGuideDraft(
   )
 
   const addBlock = useCallback(
-    (loc: NodeLoc, kind: SectionBlockKind) =>
-      updateBlocks(loc, (blocks) => [...blocks, blankBlock(kind)]),
+    (loc: NodeLoc, kind: SectionBlockKind, index?: number): string => {
+      const block = blankBlock(kind)
+      updateBlocks(loc, (blocks) => insertAt(blocks, block, index))
+      return block.id
+    },
     [updateBlocks],
   )
   const removeBlock = useCallback(
@@ -271,6 +337,11 @@ export function useGuideDraft(
   const moveBlock = useCallback(
     (loc: NodeLoc, blockId: string, dir: -1 | 1) =>
       updateBlocks(loc, (blocks) => moveById(blocks, blockId, dir)),
+    [updateBlocks],
+  )
+  const moveBlockTo = useCallback(
+    (loc: NodeLoc, blockId: string, targetId: string, pos: DropPos) =>
+      updateBlocks(loc, (blocks) => moveRelative(blocks, blockId, targetId, pos)),
     [updateBlocks],
   )
 
@@ -299,34 +370,49 @@ export function useGuideDraft(
       updateBlockNode(ref, (b) => (b.type === 'table' ? { ...b, title } : b)),
     [updateBlockNode],
   )
-  const setTableCols = useCallback(
-    (ref: BlockRef, n: number) =>
+  /** A blank column at `at` (0 = before the first). */
+  const insertTableCol = useCallback(
+    (ref: BlockRef, at: number) =>
       updateBlockNode(ref, (b) => {
         if (b.type !== 'table') return b
-        const count = Math.max(1, n)
-        const headers = Array.from(
-          { length: count },
-          (_, i) => b.table.headers[i] ?? `Column ${i + 1}`,
-        )
-        const rows = b.table.rows.map((r) =>
-          Array.from({ length: count }, (_, i) => r[i] ?? ''),
-        )
+        const i = Math.min(Math.max(at, 0), b.table.headers.length)
+        const headers = insertAt(b.table.headers, `Column ${b.table.headers.length + 1}`, i)
+        const rows = b.table.rows.map((r) => insertAt(r, '', i))
         return { ...b, table: { headers, rows } }
       }),
     [updateBlockNode],
   )
-  const setTableRows = useCallback(
-    (ref: BlockRef, n: number) =>
+  const removeTableCol = useCallback(
+    (ref: BlockRef, at: number) =>
+      updateBlockNode(ref, (b) => {
+        if (b.type !== 'table' || b.table.headers.length <= 1) return b
+        return {
+          ...b,
+          table: {
+            headers: b.table.headers.filter((_, i) => i !== at),
+            rows: b.table.rows.map((r) => r.filter((_, i) => i !== at)),
+          },
+        }
+      }),
+    [updateBlockNode],
+  )
+  /** A blank row at `at` (rows.length = after the last). */
+  const insertTableRow = useCallback(
+    (ref: BlockRef, at: number) =>
       updateBlockNode(ref, (b) => {
         if (b.type !== 'table') return b
-        const count = Math.max(0, n)
-        const width = b.table.headers.length
-        const rows = Array.from(
-          { length: count },
-          (_, i) => b.table.rows[i] ?? Array.from({ length: width }, () => ''),
-        )
-        return { ...b, table: { ...b.table, rows } }
+        const blank = Array.from({ length: b.table.headers.length }, () => '')
+        return { ...b, table: { ...b.table, rows: insertAt(b.table.rows, blank, at) } }
       }),
+    [updateBlockNode],
+  )
+  const removeTableRow = useCallback(
+    (ref: BlockRef, at: number) =>
+      updateBlockNode(ref, (b) =>
+        b.type === 'table'
+          ? { ...b, table: { ...b.table, rows: b.table.rows.filter((_, i) => i !== at) } }
+          : b,
+      ),
     [updateBlockNode],
   )
   const setTableHeader = useCallback(
@@ -381,10 +467,11 @@ export function useGuideDraft(
 
   /* ---- links ------------------------------------------- */
 
-  const addLink = useCallback(
-    () => setDraft((d) => ({ ...d, links: [...d.links, blankLink()] })),
-    [],
-  )
+  const addLink = useCallback((): string => {
+    const link = blankLink()
+    setDraft((d) => ({ ...d, links: [...d.links, link] }))
+    return link.id
+  }, [])
   const updateLink = useCallback(
     (id: string, fields: Partial<Omit<GuideLink, 'id'>>) =>
       setDraft((d) => ({
@@ -403,6 +490,11 @@ export function useGuideDraft(
       setDraft((d) => ({ ...d, links: moveById(d.links, id, dir) })),
     [],
   )
+  const moveLinkTo = useCallback(
+    (id: string, targetId: string, pos: DropPos) =>
+      setDraft((d) => ({ ...d, links: moveRelative(d.links, id, targetId, pos) })),
+    [],
+  )
 
   /* ---- commit ----------------------------------------- */
 
@@ -415,26 +507,33 @@ export function useGuideDraft(
     addPart,
     removePart,
     movePart,
+    movePartTo,
     setChapterSubtitle,
     addSection,
     updateSection,
     removeSection,
     moveSection,
+    moveSectionTo,
     updateSectionPart,
     addStep,
     updateStep,
     removeStep,
     moveStep,
+    moveStepTo,
     addSubItem,
     updateSubItem,
     removeSubItem,
     moveSubItem,
+    moveSubItemTo,
     addBlock,
     removeBlock,
     moveBlock,
+    moveBlockTo,
     setTableTitle,
-    setTableCols,
-    setTableRows,
+    insertTableCol,
+    removeTableCol,
+    insertTableRow,
+    removeTableRow,
     setTableHeader,
     setTableCell,
     updateCallout,
@@ -445,6 +544,7 @@ export function useGuideDraft(
     updateLink,
     removeLink,
     moveLink,
+    moveLinkTo,
     save,
     cancel,
   }

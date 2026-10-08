@@ -2,7 +2,8 @@ import { XIcon } from '../components/icons'
 import { epPointId, pointName } from '../panel/scene'
 import { unitPortSpecs } from '../panel/units'
 import type { DeviceDef, SlotDef } from '../panel/devices'
-import { DELETE_BTN, GHOST_BTN, INPUT, SELECT } from '../../../shared/ui/styles'
+import { DELETE_BTN, GHOST_BTN } from '../../../shared/ui/styles'
+import { INPUT, SELECT } from './fields'
 import type { PanelAction, PanelCable, PanelEndpoint } from '../types'
 
 const uid = () => crypto.randomUUID()
