@@ -207,7 +207,15 @@ function FolderBody({ folder }: { folder: GuidesFolderController }) {
   return (
     <>
       <StatusPill tone={status.tone}>{status.text}</StatusPill>
-      <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+      <button
+        type="button"
+        onClick={() => void folder.backupZip()}
+        className={`${GHOST_BTN} mt-2.5 w-full`}
+      >
+        <DownloadIcon className="h-3.5 w-3.5" />
+        Download folder as .zip
+      </button>
+      <div className="mt-1.5 grid grid-cols-3 gap-1.5">
         <button type="button" onClick={() => void folder.saveNow()} className={GHOST_BTN}>
           Save now
         </button>

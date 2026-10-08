@@ -13,6 +13,7 @@ import {
   verifyPermission,
   writeGuidesJson,
 } from './storage/guidesFolder'
+import { downloadBlob, zipFolder } from './storage/folderZip'
 import type { GuideAssets } from './view/GuideAssetsContext'
 import type { Guide } from './types'
 
@@ -56,6 +57,8 @@ export type GuidesFolderController = {
   unlink: () => Promise<void>
   /** Write `guides.json` now, skipping the debounce. */
   saveNow: () => Promise<void>
+  /** Download the folder's contents (images + JSON files) as one zip. */
+  backupZip: () => Promise<void>
 }
 
 /** Every image filename referenced by a step, across all guides. */
@@ -314,6 +317,25 @@ export function useGuidesFolder({
     [flush],
   )
 
+  const backupZip = useCallback(async () => {
+    const handle = handleRef.current
+    if (!handle || !linkedRef.current) return
+    // Make sure the latest edits are in guides.json before it is archived.
+    await flush(JSON.stringify(guidesRef.current))
+    try {
+      const { blob, count } = await zipFolder(handle)
+      if (count === 0) {
+        setError('The linked folder is empty — nothing to back up.')
+        return
+      }
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadBlob(blob, `${handle.name || 'support-hub'}-backup-${stamp}.zip`)
+      setError(null)
+    } catch {
+      setError('Could not read the folder to build the zip.')
+    }
+  }, [flush])
+
   const resolveImage = useCallback(
     (name: string) => imageUrls.get(name),
     [imageUrls],
@@ -369,5 +391,6 @@ export function useGuidesFolder({
     reconnect,
     unlink,
     saveNow,
+    backupZip,
   }
 }
