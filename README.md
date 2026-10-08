@@ -1,24 +1,3 @@
-# Support Hub
-
-## Terminal (SSH to a unit)
-
-The **Terminal** page keeps a card per unit (name + IP + port) and opens SSH
-terminals to them in tabs. Run the app on a laptop that is on the units' network:
-
-```
-npm install
-npm run dev        # or: npm run build && npm run preview
-```
-
-- A small bridge built into the Vite server (`bridge/sshBridge.ts`) makes the SSH
-  connection; the browser cannot. It only accepts connections from this machine.
-- Unit cards (names + addresses only) are saved in `.tsa-data/units.json`, which is
-  git-ignored. **Usernames and passwords are never saved** — you type them each time
-  you open a terminal.
-- Up / Down arrows recall earlier commands typed in that terminal tab.
-
----
-
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

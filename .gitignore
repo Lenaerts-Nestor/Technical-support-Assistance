@@ -27,6 +27,3 @@ claude.md
 
 # Guide data lives in the linked local folder, never in the repo
 guides-backup*.json
-
-# Saved terminal units (names + addresses) live on the local machine only
-.tsa-data/
