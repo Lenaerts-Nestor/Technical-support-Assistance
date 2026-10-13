@@ -321,23 +321,6 @@ Procederemos a crear una RMA para este dispositivo.
 
 Una vez que la RMA haya sido creada, este caso se actualizará con la información de la RMA y se enviará un documento de confirmación de la RMA directamente a su correo electrónico.`,
   },
-  'rma.direct': {
-    en: `Hi {!Contact.FirstName},
-
-We will proceed with getting an RMA created for this device.
-
-Once the RMA has been created this case will be updated with the RMA information as well as an RMA confirmation document sent directly to your email`,
-    nl: `Beste {!Contact.FirstName},
-
-We zullen doorgaan met het aanmaken van een RMA voor dit apparaat.
-
-Zodra de RMA is aangemaakt, wordt deze case bijgewerkt met de RMA-informatie en ontvangt u een RMA-bevestigingsdocument rechtstreeks in uw e-mail.`,
-    es: `Hola {!Contact.FirstName},
-
-procederemos a crear un RMA para este dispositivo.
-
-Una vez que se haya creado el RMA, esta caso se actualizará con la información del RMA y se le enviará un documento de confirmación del RMA directamente a su correo electrónico.`,
-  },
   'rma.outOfWarrantyPreCost': {
     en: ` We don't work with a preset cost for repairs, we can however note the below estimation.
 
@@ -394,9 +377,9 @@ Alternativamente, envíenos su aprobación para devolver la unidad en su estado 
 Gracias.`,
   },
   'rma.avoidNpf': {
-    en: `We want to avoid an NPF (No Problem Found) and thus reduce costs on your side. For this reason, we ask so many questions.`,
-    nl: `We willen een NPF (No Problem Found) vermijden en zo de kosten aan uw kant verminderen. Daarom stellen we zoveel vragen.`,
-    es: `Queremos evitar un NPF (No Problem Found) y así disminuir gastos por su parte. Por esta razón hacemos tantas preguntas.`,
+    en: `Our troubleshooting questions are intended to help confirm the issue with the unit before proceeding. This allows us to rule out any potential causes and helps avoid unnecessary costs should the unit be found to have no fault (NPF – No Problem Found).`,
+    nl: `Onze troubleshootingvragen zijn bedoeld om het probleem met het toestel te bevestigen alvorens verder te gaan. Zo kunnen we mogelijke oorzaken uitsluiten en onnodige kosten vermijden indien er geen defect aan het toestel wordt vastgesteld (NPF – No Problem Found).`,
+    es: `Nuestras preguntas de diagnóstico tienen como objetivo ayudar a confirmar el problema de la unidad antes de continuar. Esto nos permite descartar posibles causas y ayuda a evitar costes innecesarios en caso de que la unidad no presente ningún fallo (NPF – No Problem Found).`,
   },
 
   // ---- Follow Up ----
@@ -518,5 +501,15 @@ If you have any further questions, please do not hesitate to contact us.`,
     es: `Buenas,
 Entendido. Quedamos atentos a sus respuestas. Gracias por informarnos.
 Si tiene alguna otra pregunta, no dude en contactarnos.`,
+  },
+  'followUp.escalationUpdate': {
+    en: `I wanted to let you know that we are still working on this case and that it has been forwarded further internally for review. We will get back to you with feedback as soon as we can.`,
+    nl: `Ik wilde u laten weten dat we nog steeds aan deze case werken en dat deze intern verder is doorgestuurd voor nazicht. We komen bij u terug met feedback zodra we kunnen.`,
+    es: `Quería informarle de que seguimos trabajando en este caso y de que se ha trasladado internamente para su revisión. Nos pondremos en contacto con usted con novedades lo antes posible.`,
+  },
+  'followUp.timeSensitive': {
+    en: `I understand that this is a time-sensitive situation for your client, and please be assured that we are doing our best to move this forward as quickly as possible.`,
+    nl: `Ik begrijp dat dit een tijdsgevoelige situatie is voor uw klant, en u kunt erop rekenen dat we ons best doen om dit zo snel mogelijk vooruit te helpen.`,
+    es: `Entiendo que se trata de una situación urgente para su cliente, y le aseguro que estamos haciendo todo lo posible para avanzar lo antes posible.`,
   },
 }

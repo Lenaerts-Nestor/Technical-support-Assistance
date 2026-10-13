@@ -115,7 +115,6 @@ export const TEMPLATE_GROUPS: TemplateGroup[] = [
     buttons: [
       { id: 'rma.option1Asking', label: 'Asking RMA Info' },
       { id: 'rma.approving', label: 'Approving RMA' },
-      { id: 'rma.direct', label: 'Direct RMA' },
       { id: 'rma.outOfWarrantyPreCost', label: 'Out of Warranty – Cost' },
       { id: 'rma.npf', label: 'NPF' },
       { id: 'rma.avoidNpf', label: 'Avoid NPF' },
@@ -132,6 +131,8 @@ export const TEMPLATE_GROUPS: TemplateGroup[] = [
       { id: 'followUp.closeAnswered', label: 'Close (Answered)' },
       { id: 'followUp.closeOoo', label: 'Close (OOO)' },
       { id: 'followUp.clientWorking', label: 'Client Working' },
+      { id: 'followUp.escalationUpdate', label: 'Escalation Client Update' },
+      { id: 'followUp.timeSensitive', label: 'Time-Sensitive Reassurance' },
     ],
   },
 ]
