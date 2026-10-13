@@ -112,10 +112,7 @@ export function SnippetsGroup({ snippets, language, onInsert }: SnippetsGroupPro
                 onClick={() => onInsert(s.text)}
                 className={`border-line bg-canvas w-full rounded-md border px-2.5 py-2 pr-7 text-left transition-colors ${tone.hover}`}
               >
-                <span className="text-ink block text-xs leading-snug font-semibold">{s.label}</span>
-                <span className="text-ink-faint mt-0.5 line-clamp-2 block text-[11px] leading-snug">
-                  {s.text.replace(/\s+/g, ' ').trim()}
-                </span>
+                <span className="text-ink block truncate text-xs leading-snug font-semibold">{s.label}</span>
               </button>
               <button
                 type="button"
