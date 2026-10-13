@@ -50,3 +50,11 @@ export function OutdentIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
