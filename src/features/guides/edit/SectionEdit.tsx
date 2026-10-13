@@ -1,6 +1,7 @@
 import { AutoTextarea, Field, INPUT_HEADING } from './fields'
 import { BlockFrame, type Reorder } from './BlockFrame'
 import { useEditorUi } from './editorUi'
+import { ProjectZipField } from './ProjectZipField'
 import { SectionBlocksEdit } from './SectionBlocksEdit'
 import { StepsEdit } from './StepsEdit'
 import type { GuideDraftController } from '../useGuideDraft'
@@ -48,6 +49,10 @@ export function SectionEdit({ part, index, count, reorder, d }: SectionEditProps
             rows={2}
           />
         </Field>
+        <ProjectZipField
+          value={part.projectZip}
+          onChange={(projectZip) => d.updateSectionPart(part.id, { projectZip })}
+        />
         <StepsEdit loc={loc} steps={part.steps} d={d} />
         <SectionBlocksEdit loc={loc} blocks={part.blocks ?? []} d={d} />
       </div>

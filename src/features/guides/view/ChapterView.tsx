@@ -6,6 +6,7 @@ import { SectionBlockView } from './SectionBlockView'
 import { TableView } from './TableView'
 import { TermView } from './TermView'
 import { PanelView } from './PanelView'
+import { ProjectDownloadButton } from './ProjectDownloadButton'
 import type { ChapterPart, SectionBlock } from '../types'
 
 /** A table / callout / term attached to the chapter rather than one section. */
@@ -38,27 +39,40 @@ export function ChapterView({ part, accentIndex, collapsed, onToggle }: ChapterV
 
   return (
     <section id={part.id} className={`${CARD} scroll-mt-20 overflow-hidden`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-        className={`flex w-full items-center gap-3 border-b px-4 py-3.5 text-left ${accent.band}`}
-      >
-        <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-black/25 text-sm font-bold`}
+      {/* The band is a div so the download button can sit beside the toggle
+          (a button can't nest inside a button). */}
+      <div className={`flex items-center gap-3 border-b pr-4 ${accent.band}`}>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          className="flex min-w-0 flex-1 items-center gap-3 py-3.5 pl-4 text-left"
         >
-          {accentIndex + 1}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-lg leading-snug font-semibold tracking-tight">
-            {part.subtitle || 'Chapter'}
+          <span
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-black/25 text-sm font-bold`}
+          >
+            {accentIndex + 1}
           </span>
-          {meta && <span className="block text-xs opacity-70">{meta}</span>}
-        </span>
-        <ChevronDownIcon
-          className={`h-5 w-5 shrink-0 transition-transform ${collapsed ? '-rotate-90' : ''}`}
-        />
-      </button>
+          <span className="min-w-0 flex-1">
+            <span className="block text-lg leading-snug font-semibold tracking-tight">
+              {part.subtitle || 'Chapter'}
+            </span>
+            {meta && <span className="block text-xs opacity-70">{meta}</span>}
+          </span>
+        </button>
+        <ProjectDownloadButton path={part.projectZip} />
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={collapsed ? 'Expand chapter' : 'Collapse chapter'}
+          aria-expanded={!collapsed}
+          className="shrink-0 py-3.5"
+        >
+          <ChevronDownIcon
+            className={`h-5 w-5 transition-transform ${collapsed ? '-rotate-90' : ''}`}
+          />
+        </button>
+      </div>
 
       {!collapsed && (
         <div className="divide-line-soft divide-y px-5">
@@ -70,6 +84,7 @@ export function ChapterView({ part, accentIndex, collapsed, onToggle }: ChapterV
                 body={section.body}
                 steps={section.steps}
                 blocks={section.blocks}
+                projectZip={section.projectZip}
               />
             </div>
           ))}

@@ -62,28 +62,49 @@ const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.av
 const isImageName = (name: string) =>
   IMAGE_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext))
 
+const isZipName = (name: string) => name.toLowerCase().endsWith('.zip')
+
+/** Folder that picked project zips are copied into. */
+export const PROJECTS_DIR = 'projects'
+
 /**
  * Every image file in the linked folder, as paths relative to it — top level
  * plus one level of sub-folders (`screens/step-1.png`), which is as deep as
  * {@link readImageFile} is expected to resolve in practice. Sorted, and capped
  * so a folder full of assets can't stall the editor.
  */
-export async function listImageFiles(
+export function listImageFiles(
   dir: FileSystemDirectoryHandle,
   max = 500,
+): Promise<string[]> {
+  return listFiles(dir, isImageName, max)
+}
+
+/** Every `.zip` in the linked folder — same scan depth as {@link listImageFiles}. */
+export function listZipFiles(
+  dir: FileSystemDirectoryHandle,
+  max = 200,
+): Promise<string[]> {
+  return listFiles(dir, isZipName, max)
+}
+
+async function listFiles(
+  dir: FileSystemDirectoryHandle,
+  match: (name: string) => boolean,
+  max: number,
 ): Promise<string[]> {
   const found: string[] = []
   try {
     for await (const [name, handle] of dir.entries()) {
       if (found.length >= max) break
       if (handle.kind === 'file') {
-        if (isImageName(name)) found.push(name)
+        if (match(name)) found.push(name)
         continue
       }
       try {
         for await (const [childName, child] of handle.entries()) {
           if (found.length >= max) break
-          if (child.kind === 'file' && isImageName(childName)) {
+          if (child.kind === 'file' && match(childName)) {
             found.push(`${name}/${childName}`)
           }
         }
@@ -102,10 +123,18 @@ export async function listImageFiles(
  * sub-folders (`screens/step-1.png`). Returns `null` if anything along the way
  * is missing.
  */
-export async function readImageFile(
+export function readImageFile(
   dir: FileSystemDirectoryHandle,
   path: string,
 ): Promise<Blob | null> {
+  return readFileFromFolder(dir, path)
+}
+
+/** Any file in the folder by (possibly nested) path, or `null` if it isn't there. */
+export async function readFileFromFolder(
+  dir: FileSystemDirectoryHandle,
+  path: string,
+): Promise<File | null> {
   const parts = path.split('/').filter(Boolean)
   if (parts.length === 0) return null
   try {
@@ -117,5 +146,38 @@ export async function readImageFile(
     return await fileHandle.getFile()
   } catch {
     return null
+  }
+}
+
+/**
+ * Copy a file the author picked from elsewhere into `projects/` in the linked
+ * folder so it travels with it. An existing name is never overwritten
+ * (`app.zip` -> `app (2).zip`). Resolves to the path relative to the folder.
+ */
+export async function importIntoFolder(
+  dir: FileSystemDirectoryHandle,
+  file: File,
+  subfolder: string = PROJECTS_DIR,
+): Promise<string> {
+  const target = await dir.getDirectoryHandle(subfolder, { create: true })
+  const dot = file.name.lastIndexOf('.')
+  const stem = dot > 0 ? file.name.slice(0, dot) : file.name
+  const ext = dot > 0 ? file.name.slice(dot) : ''
+
+  let name = file.name
+  for (let n = 2; await hasFile(target, name); n++) name = `${stem} (${n})${ext}`
+
+  const fileHandle = await target.getFileHandle(name, { create: true })
+  const writable = await fileHandle.createWritable()
+  await file.stream().pipeTo(writable) // streams, so a big zip is never held in memory
+  return `${subfolder}/${name}`
+}
+
+async function hasFile(dir: FileSystemDirectoryHandle, name: string): Promise<boolean> {
+  try {
+    await dir.getFileHandle(name)
+    return true
+  } catch {
+    return false
   }
 }

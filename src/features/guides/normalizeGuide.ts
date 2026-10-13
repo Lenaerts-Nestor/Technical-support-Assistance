@@ -86,6 +86,12 @@ function normalizeBlocks(raw: unknown): SectionBlock[] {
     )
 }
 
+/** `{ projectZip }` when the entry names a zip, else nothing — keeps old files unchanged. */
+function zipField(o: Record<string, unknown>): { projectZip?: string } {
+  const projectZip = asStr(o.projectZip).trim()
+  return projectZip ? { projectZip } : {}
+}
+
 function normalizeSection(raw: unknown): GuideSection {
   const o = asObj(raw)
   return {
@@ -94,6 +100,7 @@ function normalizeSection(raw: unknown): GuideSection {
     body: asStr(o.body),
     steps: asArr(o.steps).map(normalizeStep),
     blocks: normalizeBlocks(o.blocks),
+    ...zipField(o),
   }
 }
 
@@ -202,6 +209,7 @@ function normalizePart(raw: unknown): GuidePart | null {
         subtitle: asStr(o.subtitle),
         sections: asArr(o.sections).map(normalizeSection),
         blocks: normalizeBlocks(o.blocks),
+        ...zipField(o),
       }
     case 'section':
       return {
@@ -211,6 +219,7 @@ function normalizePart(raw: unknown): GuidePart | null {
         body: asStr(o.body),
         steps: asArr(o.steps).map(normalizeStep),
         blocks: normalizeBlocks(o.blocks),
+        ...zipField(o),
       }
     case 'table':
       return normalizeTable(o)

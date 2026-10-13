@@ -25,6 +25,8 @@ export type GuideSection = {
   steps: GuideStep[]
   /** Tables / callouts / terms / panels belonging to this section, rendered under its steps. */
   blocks?: SectionBlock[]
+  /** Project zip in the synced folder (path relative to it) offered as a download on this heading. */
+  projectZip?: string
 }
 
 export type ChapterPart = {
@@ -34,6 +36,8 @@ export type ChapterPart = {
   sections: GuideSection[]
   /** Chapter-level blocks, rendered under all of its sections. */
   blocks?: SectionBlock[]
+  /** Project zip in the synced folder (path relative to it) offered as a download on this heading. */
+  projectZip?: string
 }
 
 export type SectionPart = {
@@ -43,6 +47,8 @@ export type SectionPart = {
   body: string
   steps: GuideStep[]
   blocks?: SectionBlock[]
+  /** Project zip in the synced folder (path relative to it) offered as a download on this heading. */
+  projectZip?: string
 }
 
 export type TablePart = {

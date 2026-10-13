@@ -6,8 +6,11 @@ import {
   saveFolderHandle,
 } from './storage/handleStore'
 import {
+  importIntoFolder,
   isFolderSyncSupported,
   listImageFiles,
+  listZipFiles,
+  readFileFromFolder,
   readGuidesJson,
   readImageFile,
   verifyPermission,
@@ -99,6 +102,8 @@ export function useGuidesFolder({
   )
   /** Image filenames present in the linked folder, for the step image picker. */
   const [imageNames, setImageNames] = useState<readonly string[]>([])
+  /** Project zips present in the linked folder, for the zip picker and download buttons. */
+  const [zipNames, setZipNames] = useState<readonly string[]>([])
 
   const handleRef = useRef<FileSystemDirectoryHandle | null>(null)
   const linkedRef = useRef(false)
@@ -122,6 +127,7 @@ export function useGuidesFolder({
     requestedImagesRef.current.clear()
     setImageUrls(new Map())
     setImageNames([])
+    setZipNames([])
   }, [])
 
   /** Read the folder's guides into state, or seed the file if it's not there yet. */
@@ -156,6 +162,7 @@ export function useGuidesFolder({
       setStatus('ready')
       setSyncEpoch((n) => n + 1)
       setImageNames(await listImageFiles(handle))
+      setZipNames(await listZipFiles(handle))
     },
     [],
   )
@@ -375,9 +382,73 @@ export function useGuidesFolder({
     return name
   }, [])
 
+  const hasZip = useCallback((path: string) => zipNames.includes(path), [zipNames])
+
+  const addZipName = useCallback(
+    (name: string) =>
+      setZipNames((prev) => (prev.includes(name) ? prev : [...prev, name].sort())),
+    [],
+  )
+
+  /**
+   * Open the OS file picker for a project zip. A file already inside the linked
+   * folder is referenced where it is; anything else is copied into `projects/`
+   * so the folder stays self-contained when it is handed to someone else.
+   */
+  const pickZip = useCallback(async (): Promise<string | null> => {
+    const dir = handleRef.current
+    if (!dir || typeof window.showOpenFilePicker !== 'function') return null
+    let handle: FileSystemFileHandle
+    try {
+      ;[handle] = await window.showOpenFilePicker({
+        id: 'support-hub-guide-zip',
+        startIn: dir,
+        multiple: false,
+        types: [{ description: 'Zip archives', accept: { 'application/zip': ['.zip'] } }],
+      })
+    } catch {
+      return null // cancelled
+    }
+    const segments = await dir.resolve(handle).catch(() => null)
+    if (segments && segments.length > 0) {
+      const inside = segments.join('/')
+      addZipName(inside)
+      return inside
+    }
+    try {
+      const path = await importIntoFolder(dir, await handle.getFile())
+      addZipName(path)
+      setError(null)
+      return path
+    } catch {
+      setError('Could not copy that zip into the linked folder.')
+      return null
+    }
+  }, [addZipName])
+
+  const downloadZip = useCallback(async (path: string): Promise<boolean> => {
+    const dir = handleRef.current
+    const file = dir ? await readFileFromFolder(dir, path) : null
+    if (!file) {
+      setError(`"${path}" is not in the linked folder.`)
+      return false
+    }
+    downloadBlob(file, path.split('/').pop() || path)
+    setError(null)
+    return true
+  }, [])
+
   const assets = useMemo<GuideAssets>(
-    () => ({ resolveImage, imageNames, pickImage }),
-    [imageNames, pickImage, resolveImage],
+    () => ({
+      resolveImage,
+      imageNames,
+      pickImage,
+      zipNames,
+      hasZip,
+      pickZip,
+      downloadZip,
+    }),
+    [imageNames, pickImage, resolveImage, zipNames, hasZip, pickZip, downloadZip],
   )
 
   return {

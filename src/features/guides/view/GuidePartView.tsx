@@ -40,6 +40,7 @@ export function GuidePartView({
             body={part.body}
             steps={part.steps}
             blocks={part.blocks}
+            projectZip={part.projectZip}
           />
         </section>
       )
