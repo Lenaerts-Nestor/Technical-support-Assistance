@@ -13,6 +13,7 @@ import { AutoTextarea, Field, GroupLabel, INPUT, INPUT_TITLE } from './fields'
 import { useEditorUi } from './editorUi'
 import { GripHandle } from './GripHandle'
 import { InsertBar } from './InsertBar'
+import { ProjectZipField } from './ProjectZipField'
 import { SectionBlocksEdit } from './SectionBlocksEdit'
 import { StepsEdit } from './StepsEdit'
 import { dropLineClass, useSortable } from './sortable'
@@ -146,6 +147,10 @@ function SectionRow({
             rows={2}
           />
         </Field>
+        <ProjectZipField
+          value={section.projectZip}
+          onChange={(projectZip) => d.updateSection(chapter.id, section.id, { projectZip })}
+        />
         <StepsEdit loc={loc} steps={section.steps} d={d} />
         <SectionBlocksEdit loc={loc} blocks={section.blocks ?? []} d={d} />
       </div>
@@ -180,6 +185,13 @@ export function ChapterEdit({ part, index, count, reorder, d }: ChapterEditProps
           className={INPUT_TITLE}
         />
       </Field>
+
+      <div className="mt-4">
+        <ProjectZipField
+          value={part.projectZip}
+          onChange={(zip) => d.setChapterProjectZip(part.id, zip)}
+        />
+      </div>
 
       <div className="mt-5">
         <GroupLabel>Sections ({part.sections.length})</GroupLabel>

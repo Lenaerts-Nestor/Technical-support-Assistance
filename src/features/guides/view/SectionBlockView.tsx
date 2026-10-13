@@ -3,6 +3,7 @@ import { StepView } from './StepView'
 import { TableView } from './TableView'
 import { TermView } from './TermView'
 import { PanelView } from './PanelView'
+import { ProjectDownloadButton } from './ProjectDownloadButton'
 import type { GuideStep, SectionBlock } from '../types'
 
 type SectionBlockViewProps = {
@@ -13,6 +14,8 @@ type SectionBlockViewProps = {
   steps: GuideStep[]
   /** Tables / callouts / terms belonging to this section, shown under its steps. */
   blocks?: SectionBlock[]
+  /** Project zip offered as a download at the right of the heading. */
+  projectZip?: string
 }
 
 /**
@@ -27,13 +30,21 @@ export function SectionBlockView({
   body,
   steps,
   blocks,
+  projectZip,
 }: SectionBlockViewProps) {
   return (
     <div id={anchorId} className={anchorId ? 'scroll-mt-20' : undefined}>
-      {heading && (
-        <h4 className="text-ink border-l-[3px] border-l-violet-400 pl-3 text-base leading-snug font-semibold tracking-tight">
-          {heading}
-        </h4>
+      {(heading || projectZip) && (
+        <div className="flex items-start justify-between gap-3">
+          {heading ? (
+            <h4 className="text-ink border-l-[3px] border-l-violet-400 pl-3 text-base leading-snug font-semibold tracking-tight">
+              {heading}
+            </h4>
+          ) : (
+            <span />
+          )}
+          <ProjectDownloadButton path={projectZip} />
+        </div>
       )}
       {body && (
         <p className="text-ink-muted mt-2 text-[15px] leading-relaxed whitespace-pre-line">{body}</p>

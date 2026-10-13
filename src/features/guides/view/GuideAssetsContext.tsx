@@ -13,12 +13,24 @@ export type GuideAssets = {
   imageNames: readonly string[]
   /** Open a file picker in the linked folder; resolves to the chosen path, or null. */
   pickImage: () => Promise<string | null>
+  /** `.zip` paths available in the linked folder, relative to it. */
+  zipNames: readonly string[]
+  /** True when `path` is a zip that exists in the linked folder. */
+  hasZip: (path: string) => boolean
+  /** Pick a zip; one from outside the folder is copied into it. Resolves to its path, or null. */
+  pickZip: () => Promise<string | null>
+  /** Save the zip at `path` through the browser. Resolves to false if it can't be read. */
+  downloadZip: (path: string) => Promise<boolean>
 }
 
 const GuideAssetsContext = createContext<GuideAssets>({
   resolveImage: () => undefined,
   imageNames: [],
   pickImage: async () => null,
+  zipNames: [],
+  hasZip: () => false,
+  pickZip: async () => null,
+  downloadZip: async () => false,
 })
 
 export const GuideAssetsProvider = GuideAssetsContext.Provider
@@ -33,4 +45,19 @@ export function useGuideImage(name?: string): string | undefined {
 export function useGuideImagePicker(): Pick<GuideAssets, 'imageNames' | 'pickImage'> {
   const { imageNames, pickImage } = useContext(GuideAssetsContext)
   return { imageNames, pickImage }
+}
+
+/** What a heading's download button needs: is the zip there, and a way to save it. */
+export function useGuideZip(path?: string): { available: boolean; download: () => Promise<boolean> } {
+  const { hasZip, downloadZip } = useContext(GuideAssetsContext)
+  return {
+    available: !!path && hasZip(path),
+    download: () => (path ? downloadZip(path) : Promise.resolve(false)),
+  }
+}
+
+/** The folder's zip list plus its picker, for the zip field in the editor. */
+export function useGuideZipPicker(): Pick<GuideAssets, 'zipNames' | 'pickZip'> {
+  const { zipNames, pickZip } = useContext(GuideAssetsContext)
+  return { zipNames, pickZip }
 }

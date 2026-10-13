@@ -69,6 +69,13 @@ export function moveRelative<T extends { id: string }>(
   return rest
 }
 
+/** Merge `fields` into `item`; an emptied `projectZip` is dropped rather than saved as ''. */
+function withZip<T extends { projectZip?: string }>(item: T, fields: Partial<T>): T {
+  const next = { ...item, ...fields }
+  if ('projectZip' in fields) next.projectZip = fields.projectZip || undefined
+  return next
+}
+
 function moveById<T extends { id: string }>(arr: T[], id: string, dir: -1 | 1): T[] {
   const idx = arr.findIndex((x) => x.id === id)
   const to = idx + dir
@@ -135,6 +142,14 @@ export function useGuideDraft(
     [updatePart],
   )
 
+  const setChapterProjectZip = useCallback(
+    (chapterId: string, projectZip: string) =>
+      updatePart(chapterId, (p) =>
+        p.type === 'chapter' ? { ...p, projectZip: projectZip || undefined } : p,
+      ),
+    [updatePart],
+  )
+
   const addSection = useCallback(
     (chapterId: string, index?: number): string => {
       const section = blankSection()
@@ -147,13 +162,17 @@ export function useGuideDraft(
   )
 
   const updateSection = useCallback(
-    (chapterId: string, sectionId: string, fields: { heading?: string; body?: string }) =>
+    (
+      chapterId: string,
+      sectionId: string,
+      fields: { heading?: string; body?: string; projectZip?: string },
+    ) =>
       updatePart(chapterId, (p) =>
         p.type === 'chapter'
           ? {
               ...p,
               sections: p.sections.map((s) =>
-                s.id === sectionId ? { ...s, ...fields } : s,
+                s.id === sectionId ? withZip(s, fields) : s,
               ),
             }
           : p,
@@ -194,8 +213,8 @@ export function useGuideDraft(
   /* ---- standalone section part fields ------------------------------ */
 
   const updateSectionPart = useCallback(
-    (partId: string, fields: { heading?: string; body?: string }) =>
-      updatePart(partId, (p) => (p.type === 'section' ? { ...p, ...fields } : p)),
+    (partId: string, fields: { heading?: string; body?: string; projectZip?: string }) =>
+      updatePart(partId, (p) => (p.type === 'section' ? withZip(p, fields) : p)),
     [updatePart],
   )
 
@@ -509,6 +528,7 @@ export function useGuideDraft(
     movePart,
     movePartTo,
     setChapterSubtitle,
+    setChapterProjectZip,
     addSection,
     updateSection,
     removeSection,
