@@ -6,11 +6,25 @@ export type TemplateButton = {
   label: string
 }
 
+/**
+ * One button in the panel that opens a small menu of related templates
+ * (1st / 2nd / 3rd follow up, the close variants, ...) instead of inserting
+ * anything itself. Keeps the panel short as the number of texts grows.
+ */
+export type TemplateMenu = {
+  id: string
+  label: string
+  options: TemplateButton[]
+}
+
+/** What a group can hold: a plain button, or a menu of buttons. */
+export type TemplateItem = TemplateButton | TemplateMenu
+
 /** A labelled group of template buttons (Opening, Diagnostics, RMA, Follow Up). */
 export type TemplateGroup = {
   id: string
   label: string
-  buttons: TemplateButton[]
+  items: TemplateItem[]
 }
 
 /**

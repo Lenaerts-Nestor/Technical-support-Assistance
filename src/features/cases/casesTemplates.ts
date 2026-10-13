@@ -31,31 +31,6 @@ El caso {!Case.CaseNumber} ha sido creado para este problema.
 
 No dude en contactarnos si tiene más preguntas. Muchas gracias.`,
   },
-  'opening.mailCall': {
-    en: `Hi {!Contact.FirstName},
-
-Thank you for contacting Crestron's True Blue Support Team!
-Case {!Case.CaseNumber} has been created for this issue.
-
-As discussed during our call,
-
-Should you have any other query, please do not hesitate to contact us. Thank you.`,
-    nl: `Beste {!Contact.FirstName},
-
-Bedankt om contact op te nemen met Crestron's True Blue Support Team!
-Case {!Case.CaseNumber} werd aangemaakt voor dit probleem.
-
-Zoals besproken aan de telefoon/Zoals telefonisch besproken,
-
-Twijfel zeker niet om ons te contacteren indien u verdere vragen heeft. Alvast bedankt.`,
-    es: `Estimado/a {!Contact.FirstName},
-Gracias por ponerse en contacto con el equipo de soporte True Blue de Crestron.
-El caso {!Case.CaseNumber} ha sido creado para este problema.
-
-Tal como se habló por teléfono,
-
-No dude en contactarnos si tiene más preguntas. Muchas gracias.`,
-  },
   'opening.issueSummary': {
     en: `Hi {!Contact.FirstName},
 
@@ -457,13 +432,13 @@ Gracias por contactar con Crestron True Blue Support.`,
   'followUp.closeUpdate': {
     en: `Hi {!Contact.FirstName},
 
-Thanks for the update. I will go ahead and mark the case as solved. If you require further assistance please do not hesitate to contact us again. Hope you have a great rest of your day!`,
+Thanks for the update. We will go ahead and close the case. If you require further assistance please do not hesitate to contact us again. Hope you have a great rest of your day!`,
     nl: `Beste {!Contact.FirstName},
 
-Bedankt voor de update. Ik zal de case als opgelost markeren. Mocht u verdere hulp nodig hebben, aarzel dan niet om ons opnieuw te contacteren. Ik wens u een fijne rest van de dag!`,
+Bedankt voor de update. We zullen de case sluiten. Mocht u verdere hulp nodig hebben, aarzel dan niet om ons opnieuw te contacteren. Ik wens u een fijne rest van de dag!`,
     es: `Hola {!Contact.FirstName},
 
-Gracias por la actualización. Procederé a marcar el caso como resuelto. Si necesita más asistencia, no dude en contactarnos de nuevo. ¡Que tenga un excelente resto del día!`,
+Gracias por la actualización. Procederemos a cerrar el caso. Si necesita más asistencia, no dude en contactarnos de nuevo. ¡Que tenga un excelente resto del día!`,
   },
   'followUp.closeAnswered': {
     en: `Hi {!Contact.FirstName},
@@ -476,31 +451,76 @@ Aangezien uw vragen beantwoord zijn, zal ik de case sluiten. Mocht u verdere hul
 
 Como sus preguntas han sido respondidas, procederé a cerrar el caso. Si necesita más asistencia, no dude en contactarnos de nuevo. ¡Que tenga un buen día!`,
   },
-  'followUp.closeOoo': {
+  'followUp.closeWaiting': {
     en: `Thank you for the update!
 
-As you are out of office, we will close this case for the time being so that you will not receive any automated follow-up. When you are back in the office, you can reply to this email to have this case reopened.
+As we are waiting for the feedback of the troubleshooting (or until the information can be gathered on site), we will close this case for the time being so that you will not receive any automated follow-up. Once you have the feedback or information available, you can reply to this email to have this case reopened.
 
 Should you have any other query, please do not hesitate to contact us. Thank you.`,
     nl: `Bedankt voor de update!
 
-Aangezien u afwezig bent, sluiten we deze case voorlopig zodat u geen automatische opvolging ontvangt. Wanneer u terug op kantoor bent, kunt u op deze e-mail antwoorden om de case opnieuw te laten openen.
+Aangezien we wachten op de feedback van de troubleshooting (of tot de informatie ter plaatse verzameld kan worden), sluiten we deze case voorlopig zodat u geen automatische opvolging ontvangt. Zodra u de feedback of informatie heeft, kunt u op deze e-mail antwoorden om de case opnieuw te laten openen.
 
 Twijfel zeker niet om ons te contacteren indien u verdere vragen heeft. Alvast bedankt.`,
     es: `¡Gracias por la actualización!
 
-Como está fuera de la oficina, cerraremos este caso por el momento para que no reciba ningún seguimiento automático. Cuando vuelva a la oficina, puede responder a este correo electrónico para que el caso se reabra.
+Como estamos a la espera de los resultados del diagnóstico (o hasta que se pueda recopilar la información in situ), cerraremos este caso por el momento para que no reciba ningún seguimiento automático. Cuando disponga de los resultados o de la información, puede responder a este correo electrónico para que el caso se reabra.
 
 No dude en contactarnos si tiene alguna otra consulta. Muchas gracias.`,
+  },
+  'followUp.closeDuplicate': {
+    en: `Thank you for reaching out to Crestron True Blue Support.
+Please note that case [duplicate case number] is a duplicate of case [primary case number]. To avoid duplicate troubleshooting efforts and ensure all information is tracked in a single location, we will proceed with closing case [duplicate case number] and continue our investigation under case [primary case number].
+Should you have any further questions, please do not hesitate to contact us.`,
+    nl: `Bedankt voor uw bericht aan Crestron True Blue Support.
+Gelieve er rekening mee te houden dat case [duplicate case number] een duplicaat is van case [primary case number]. Om dubbele troubleshooting te vermijden en ervoor te zorgen dat alle informatie op één plaats wordt bijgehouden, sluiten we case [duplicate case number] en zetten we ons onderzoek voort onder case [primary case number].
+Twijfel zeker niet om ons te contacteren indien u verdere vragen heeft.`,
+    es: `Gracias por ponerse en contacto con Crestron True Blue Support.
+Tenga en cuenta que el caso [duplicate case number] es un duplicado del caso [primary case number]. Para evitar duplicar esfuerzos de diagnóstico y garantizar que toda la información se registre en un único lugar, procederemos a cerrar el caso [duplicate case number] y continuaremos nuestra investigación bajo el caso [primary case number].
+Si tiene alguna otra pregunta, no dude en contactarnos.`,
   },
   'followUp.clientWorking': {
     en: `Hi {!Contact.FirstName},
 
 Understood. We will wait for your responses. Thank you for keeping us informed.
 If you have any further questions, please do not hesitate to contact us.`,
+    nl: `Beste {!Contact.FirstName},
+
+Begrepen. We wachten op uw antwoorden. Bedankt om ons op de hoogte te houden.
+Twijfel zeker niet om ons te contacteren indien u verdere vragen heeft.`,
     es: `Buenas,
 Entendido. Quedamos atentos a sus respuestas. Gracias por informarnos.
 Si tiene alguna otra pregunta, no dude en contactarnos.`,
+  },
+  'followUp.clientWorkingPolite': {
+    en: `Hi {!Contact.FirstName},
+
+Thank you for keeping us informed. We understand that you are going through the advised troubleshooting with your client, and we will gladly wait for the feedback.
+
+Whenever you have more information, please reply to this email and we will be happy to continue supporting you. Should you have any other query, please do not hesitate to contact us.`,
+    nl: `Beste {!Contact.FirstName},
+
+Bedankt om ons op de hoogte te houden. We begrijpen dat u de voorgestelde troubleshooting met uw klant overloopt, en we wachten graag op de feedback.
+
+Zodra u meer informatie heeft, kunt u op deze e-mail antwoorden en helpen we u graag verder. Twijfel zeker niet om ons te contacteren indien u verdere vragen heeft.`,
+    es: `Hola {!Contact.FirstName},
+
+Gracias por mantenernos informados. Entendemos que está realizando las pruebas de diagnóstico recomendadas con su cliente, y esperaremos con gusto sus comentarios.
+
+En cuanto tenga más información, responda a este correo electrónico y con gusto seguiremos ayudándole. Si tiene alguna otra consulta, no dude en contactarnos.`,
+  },
+  'followUp.monitorPositive': {
+    en: `We will continue to monitor this support incident for future updates. Based on your feedback with the advised troubleshooting having a positive impact with no further assistance required at this point, we will not actively follow up with you on this incident.`,
+    nl: `We blijven deze supportcase opvolgen voor toekomstige updates. Op basis van uw feedback dat de voorgestelde troubleshooting een positieve impact heeft en dat er op dit moment geen verdere hulp nodig is, zullen we niet actief bij u opvolgen voor deze case.`,
+    es: `Seguiremos monitorizando esta incidencia de soporte por si hubiera novedades. Según sus comentarios, el diagnóstico recomendado ha tenido un impacto positivo y no necesita más asistencia por el momento, por lo que no realizaremos un seguimiento activo de esta incidencia.`,
+  },
+  'followUp.monitorNoFollowUp': {
+    en: `In this case we will continue to monitor this support incident for future updates, however we will not actively follow up with you on this incident every 2 business days, as per our policy.
+Once you reply to this email, we will take up further correspondence with you continuing supporting you with this incident!`,
+    nl: `In dit geval blijven we deze supportcase opvolgen voor toekomstige updates, maar we zullen conform ons beleid niet om de 2 werkdagen actief bij u opvolgen voor deze case.
+Zodra u op deze e-mail antwoordt, nemen we de verdere correspondentie met u weer op en blijven we u ondersteunen met deze case!`,
+    es: `En este caso seguiremos monitorizando esta incidencia de soporte por si hubiera novedades; sin embargo, de acuerdo con nuestra política, no realizaremos un seguimiento activo con usted cada 2 días hábiles.
+Una vez que responda a este correo electrónico, retomaremos la correspondencia y seguiremos ayudándole con esta incidencia.`,
   },
   'followUp.escalationUpdate': {
     en: `I wanted to let you know that we are still working on this case and that it has been forwarded further internally for review. We will get back to you with feedback as soon as we can.`,

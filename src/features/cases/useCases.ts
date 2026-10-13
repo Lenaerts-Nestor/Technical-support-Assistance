@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { ClipboardEvent, KeyboardEvent } from 'react'
-import { FLAGGED_PHRASES, LANGUAGES, TEMPLATE_BODIES, TEMPLATE_GROUPS } from './casesData'
+import { ALL_TEMPLATE_BUTTONS, FLAGGED_PHRASES, LANGUAGES, TEMPLATE_BODIES } from './casesData'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { useCopyToClipboard } from '../../shared/hooks/useCopyToClipboard'
 import {
@@ -13,9 +13,7 @@ import {
   textToHtml,
   toggleBulletLines,
 } from './bullets'
-import type { CaseLanguage, FlaggedMatch, TemplateButton } from './types'
-
-const ALL_BUTTONS: TemplateButton[] = TEMPLATE_GROUPS.flatMap((g) => g.buttons)
+import type { CaseLanguage, FlaggedMatch } from './types'
 
 const DRAFT_KEY = storageKey('cases', 'draft')
 const LANGUAGE_KEY = storageKey('cases', 'language')
@@ -30,7 +28,7 @@ const reviveLanguage = (raw: unknown): CaseLanguage | null =>
 function templateText(id: string, language: CaseLanguage): string {
   const body = TEMPLATE_BODIES[id]?.[language]
   if (body) return body
-  const label = ALL_BUTTONS.find((b) => b.id === id)?.label ?? id
+  const label = ALL_TEMPLATE_BUTTONS.find((b) => b.id === id)?.label ?? id
   return `[${label}]`
 }
 
