@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from './ErrorBoundary'
 import { AppDataProvider } from './AppDataProvider'
 import { FocusModeContext } from './focusMode'
 import { NAV_ITEMS, NavigationContext } from './navigation'
+import { storageKey, usePersistentState } from '../shared/storage/usePersistentState'
 import type { PageId } from './navigation'
 import { VoiceCallPage } from '../features/voiceCall/VoiceCallPage'
 import { RmaPage } from '../features/rma/RmaPage'
@@ -25,8 +26,24 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
 
 export default function App() {
   const [page, setPage] = useState<PageId>('voiceCall')
+  // The user's own choice: shrink the sidebar to icons. Remembered across reloads.
+  const [collapsed, setCollapsed] = usePersistentState<boolean>(
+    storageKey('app', 'sidebarCollapsed'),
+    () => false,
+    (raw) => (typeof raw === 'boolean' ? raw : null),
+  )
   // A page can ask for room (see focusMode.ts); only the visible page gets it.
-  const [focus, setFocus] = useState(false)
+  const [focused, setFocused] = useState<ReadonlySet<PageId>>(() => new Set())
+  const setFocus = useCallback((id: PageId, on: boolean) => {
+    setFocused((prev) => {
+      if (prev.has(id) === on) return prev
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+  const forced = focused.has(page)
 
   return (
     <ErrorBoundary>
@@ -34,7 +51,13 @@ export default function App() {
       <AppDataProvider>
         <NavigationContext.Provider value={setPage}>
           <div className="bg-canvas text-ink flex h-full">
-            <Sidebar current={page} onNavigate={setPage} compact={focus && page === 'guides'} />
+            <Sidebar
+              current={page}
+              onNavigate={setPage}
+              compact={collapsed || forced}
+              lockedCompact={forced}
+              onToggle={() => setCollapsed((c) => !c)}
+            />
             {/*
               Every page stays mounted and the inactive ones are hidden, so stepping
               away from a half-filled form mid-call and coming back keeps it. Each

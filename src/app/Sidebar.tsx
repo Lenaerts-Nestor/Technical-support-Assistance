@@ -3,6 +3,8 @@ import { NAV_ITEMS } from './navigation'
 import { useFolder } from './appDataContext'
 import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
 import type { FolderStatus } from '../features/sync/useFolderLifecycle'
+import { ICON_BTN } from '../shared/ui/styles'
+import { ICON_BASE } from '../shared/ui/iconBase'
 
 const ICONS: Record<PageId, React.ReactElement> = {
   voiceCall: (
@@ -45,6 +47,9 @@ type SidebarProps = {
   onNavigate: (page: PageId) => void
   /** Icons only, to give the page beside it more room. */
   compact?: boolean
+  /** The page needs the room, so the user's toggle is off until it lets go. */
+  lockedCompact?: boolean
+  onToggle: () => void
 }
 
 type NavButtonProps = {
@@ -99,7 +104,13 @@ function NavButton({ id, label, active, compact, onNavigate, status }: NavButton
   )
 }
 
-export function Sidebar({ current, onNavigate, compact = false }: SidebarProps) {
+export function Sidebar({
+  current,
+  onNavigate,
+  compact = false,
+  lockedCompact = false,
+  onToggle,
+}: SidebarProps) {
   const folder = useFolder()
   const toOrganize = useGuidesToOrganize()
   const syncStatus =
@@ -116,21 +127,41 @@ export function Sidebar({ current, onNavigate, compact = false }: SidebarProps) 
         compact ? 'w-16 px-2' : 'w-60 px-3'
       }`}
     >
-      {compact ? (
-        <div
-          className="text-brand-strong mx-auto pb-5 text-sm font-bold tracking-tight"
-          title="Support Hub"
+      <div className={compact ? 'flex flex-col items-center gap-3 pb-5' : 'flex items-start justify-between gap-2 pb-5 pl-3'}>
+        {compact ? (
+          <div className="text-brand-strong text-sm font-bold tracking-tight" title="Support Hub">
+            SH
+          </div>
+        ) : (
+          <div>
+            <h1 className="text-ink text-base font-semibold tracking-tight">Support Hub</h1>
+            <p className="text-ink-faint mt-0.5 text-xs">Case Dashboard</p>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={lockedCompact}
+          aria-expanded={!compact}
+          aria-label={compact ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={
+            lockedCompact
+              ? 'This page is using the space'
+              : compact
+                ? 'Expand sidebar'
+                : 'Collapse sidebar'
+          }
+          className={`${ICON_BTN} shrink-0 ${compact ? 'order-first' : ''}`}
         >
-          SH
-        </div>
-      ) : (
-        <div className="px-3 pb-5">
-          <h1 className="text-ink text-base font-semibold tracking-tight">
-            Support Hub
-          </h1>
-          <p className="text-ink-faint mt-0.5 text-xs">Case Dashboard</p>
-        </div>
-      )}
+          <svg
+            {...ICON_BASE}
+            className={`h-4 w-4 transition-transform ${compact ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          >
+            <path d="m15 6-6 6 6 6" />
+          </svg>
+        </button>
+      </div>
 
       <nav className="border-line-soft flex flex-col gap-0.5 border-t pt-4">
         {main.map((item) => (
