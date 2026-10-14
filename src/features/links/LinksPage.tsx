@@ -78,6 +78,7 @@ export function LinksPage() {
               section={section}
               // Colours follow the full list so a search doesn't recolour the cards.
               index={links.sections.findIndex((s) => s.id === section.id)}
+              count={links.sections.length}
               links={links}
               editing={editing}
               searching={searching}

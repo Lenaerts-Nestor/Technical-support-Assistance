@@ -1,8 +1,9 @@
 import { useState } from 'react'
+import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
 import { DELETE_BTN } from '../../../shared/ui/styles'
-import { TrashIcon } from '../../../shared/ui/icons'
+import { CopyIcon, TrashIcon } from '../../../shared/ui/icons'
 import { LinkForm } from './LinkForm'
-import { LinkIcon, PencilIcon } from './icons'
+import { CheckIcon, LinkIcon, PencilIcon } from './icons'
 import type { LinksController } from '../useLinks'
 import type { LinkEntry } from '../types'
 
@@ -50,9 +51,10 @@ type LinkRowProps = {
   editing: boolean
 }
 
-/** One link: opens in a new tab, or edits in place while the page is in edit mode. */
+/** One link: opens in a new tab, copies its URL, or edits in place while the page is in edit mode. */
 export function LinkRow({ link, links, editing }: LinkRowProps) {
   const [renaming, setRenaming] = useState(false)
+  const { copied, copy } = useCopyToClipboard()
 
   if (renaming) {
     return (
@@ -71,11 +73,22 @@ export function LinkRow({ link, links, editing }: LinkRowProps) {
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="group flex items-center gap-1">
       <a href={link.url} target="_blank" rel="noreferrer" title={link.url} className={ROW}>
         <LinkIcon className="text-ink-faint h-4 w-4 shrink-0" />
         <span className="truncate">{link.label}</span>
       </a>
+      <button
+        type="button"
+        onClick={() => void copy(link.url)}
+        aria-label={copied ? `Copied ${link.label} URL` : `Copy ${link.label} URL`}
+        title={copied ? 'Copied!' : 'Copy URL'}
+        className={`shrink-0 rounded-md p-1.5 transition-[opacity,colors] hover:bg-subtle focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 ${
+          copied ? 'text-emerald-300 opacity-100' : 'text-ink-faint hover:text-ink opacity-0'
+        }`}
+      >
+        {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
+      </button>
       {editing && (
         <RowTools
           label={link.label}
