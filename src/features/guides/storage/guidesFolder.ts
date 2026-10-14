@@ -5,6 +5,9 @@
  * than throwing.
  */
 
+import { isIgnoredName } from './fsNames'
+import { readTextFile, writeFileExact } from './fsOps'
+
 export const GUIDES_FILENAME = 'guides.json'
 
 /** Chrome / Edge / other Chromium desktop browsers only. */
@@ -33,36 +36,26 @@ export async function verifyPermission(
   return false
 }
 
-/** `guides.json` text, or `null` if the file does not exist yet. */
-export async function readGuidesJson(
-  dir: FileSystemDirectoryHandle,
-): Promise<string | null> {
-  try {
-    const fileHandle = await dir.getFileHandle(GUIDES_FILENAME)
-    const file = await fileHandle.getFile()
-    return await file.text()
-  } catch {
-    return null
-  }
+/**
+ * `guides.json` text, or `null` if the file does not exist yet. Any other
+ * failure (a locked file, `guides.json` being a folder) is thrown, so a read that
+ * merely failed is never mistaken for "no file yet" and seeded over.
+ */
+export function readGuidesJson(dir: FileSystemDirectoryHandle): Promise<string | null> {
+  return readTextFile(dir, GUIDES_FILENAME)
 }
 
 /** Create or overwrite `guides.json` with `text`. */
-export async function writeGuidesJson(
-  dir: FileSystemDirectoryHandle,
-  text: string,
-): Promise<void> {
-  const fileHandle = await dir.getFileHandle(GUIDES_FILENAME, { create: true })
-  const writable = await fileHandle.createWritable()
-  await writable.write(text)
-  await writable.close()
+export function writeGuidesJson(dir: FileSystemDirectoryHandle, text: string): Promise<void> {
+  return writeFileExact(dir, GUIDES_FILENAME, text)
 }
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif']
 
-const isImageName = (name: string) =>
+export const isImageName = (name: string) =>
   IMAGE_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext))
 
-const isZipName = (name: string) => name.toLowerCase().endsWith('.zip')
+export const isZipName = (name: string) => name.toLowerCase().endsWith('.zip')
 
 /** Folder that picked project zips are copied into. */
 export const PROJECTS_DIR = 'projects'
@@ -97,6 +90,7 @@ async function listFiles(
   try {
     for await (const [name, handle] of dir.entries()) {
       if (found.length >= max) break
+      if (isIgnoredName(name)) continue
       if (handle.kind === 'file') {
         if (match(name)) found.push(name)
         continue
@@ -104,7 +98,7 @@ async function listFiles(
       try {
         for await (const [childName, child] of handle.entries()) {
           if (found.length >= max) break
-          if (child.kind === 'file' && match(childName)) {
+          if (child.kind === 'file' && !isIgnoredName(childName) && match(childName)) {
             found.push(`${name}/${childName}`)
           }
         }

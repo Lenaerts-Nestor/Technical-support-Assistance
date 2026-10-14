@@ -1,5 +1,8 @@
 import type { PageId } from './navigation'
 import { NAV_ITEMS } from './navigation'
+import { useFolder } from './appDataContext'
+import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
+import type { FolderStatus } from '../features/sync/useFolderLifecycle'
 
 const ICONS: Record<PageId, React.ReactElement> = {
   voiceCall: (
@@ -17,9 +20,24 @@ const ICONS: Record<PageId, React.ReactElement> = {
   links: (
     <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1ZM8 13h8v-2H8v2Zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10Z" />
   ),
+  sync: (
+    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8Zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3Z" />
+  ),
   kevinGuide: (
     <path d="M12 2 4 6v5c0 4.7 3.2 8.9 8 10 4.8-1.1 8-5.3 8-10V6l-8-4Zm-1.2 13.4L7.4 12l1.4-1.4 2 2 4.4-4.4 1.4 1.4-5.8 5.8Z" />
   ),
+}
+
+/** Colour + wording of the folder-status dot on the Sync entry. */
+const FOLDER_DOT: Record<FolderStatus, { tone: string; label: string; pulse?: boolean }> = {
+  unsupported: { tone: 'bg-ink-faint', label: 'Folder sync is not available in this browser' },
+  idle: { tone: 'bg-ink-faint', label: 'No folder linked' },
+  checking: { tone: 'bg-sky-400', label: 'Checking the linked folder', pulse: true },
+  reconnect: { tone: 'bg-amber-400', label: 'The linked folder needs permission' },
+  ready: { tone: 'bg-emerald-400', label: 'Folder linked' },
+  saving: { tone: 'bg-sky-400', label: 'Saving to the linked folder', pulse: true },
+  saved: { tone: 'bg-emerald-400', label: 'Folder in sync' },
+  error: { tone: 'bg-rose-400', label: 'Sync error' },
 }
 
 type SidebarProps = {
@@ -29,7 +47,69 @@ type SidebarProps = {
   compact?: boolean
 }
 
+type NavButtonProps = {
+  id: PageId
+  label: string
+  active: boolean
+  compact: boolean
+  onNavigate: (page: PageId) => void
+  /** Status text for the Sync entry, shown as a dot and read out by screen readers. */
+  status?: { tone: string; label: string; pulse?: boolean }
+}
+
+function NavButton({ id, label, active, compact, onNavigate, status }: NavButtonProps) {
+  const title = compact ? (status ? `${label} — ${status.label}` : label) : status?.label
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(id)}
+      title={title}
+      aria-label={compact ? title : undefined}
+      aria-current={active ? 'page' : undefined}
+      className={`relative flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+        compact ? 'justify-center px-0' : 'gap-3 pr-3 pl-4'
+      } ${
+        active
+          ? `bg-brand-soft text-brand-strong before:bg-brand before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-[""] ${
+              compact ? 'ring-brand-line ring-1' : ''
+            }`
+          : 'text-ink-muted hover:bg-subtle hover:text-ink'
+      }`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className={`fill-current ${compact ? 'h-5 w-5' : 'h-4 w-4'} ${active ? '' : 'text-ink-faint'}`}
+        aria-hidden="true"
+      >
+        {ICONS[id]}
+      </svg>
+      {!compact && label}
+      {status && (
+        <>
+          <span
+            aria-hidden="true"
+            className={`${status.tone} ${status.pulse ? 'animate-pulse' : ''} h-2 w-2 rounded-full ${
+              compact ? 'absolute top-1.5 right-3' : 'ml-auto'
+            }`}
+          />
+          {!compact && <span className="sr-only">{`: ${status.label}`}</span>}
+        </>
+      )}
+    </button>
+  )
+}
+
 export function Sidebar({ current, onNavigate, compact = false }: SidebarProps) {
+  const folder = useFolder()
+  const toOrganize = useGuidesToOrganize()
+  const syncStatus =
+    toOrganize > 0 && ['ready', 'saving', 'saved'].includes(folder.status)
+      ? { tone: 'bg-amber-400', label: 'Folder linked — guides can be organized into their own folders' }
+      : FOLDER_DOT[folder.status]
+  const visible = NAV_ITEMS.filter((item) => !item.hidden)
+  const main = visible.filter((item) => item.placement !== 'bottom')
+  const bottom = visible.filter((item) => item.placement === 'bottom')
+
   return (
     <aside
       className={`border-line-strong bg-surface flex shrink-0 flex-col border-r py-5 transition-[width] duration-200 ${
@@ -53,38 +133,36 @@ export function Sidebar({ current, onNavigate, compact = false }: SidebarProps) 
       )}
 
       <nav className="border-line-soft flex flex-col gap-0.5 border-t pt-4">
-        {NAV_ITEMS.filter((item) => !item.hidden).map((item) => {
-          const active = item.id === current
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onNavigate(item.id)}
-              title={compact ? item.label : undefined}
-              aria-label={compact ? item.label : undefined}
-              aria-current={active ? 'page' : undefined}
-              className={`relative flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
-                compact ? 'justify-center px-0' : 'gap-3 pr-3 pl-4'
-              } ${
-                active
-                  ? `bg-brand-soft text-brand-strong before:bg-brand before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-[""] ${
-                      compact ? 'ring-brand-line ring-1' : ''
-                    }`
-                  : 'text-ink-muted hover:bg-subtle hover:text-ink'
-              }`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className={`fill-current ${compact ? 'h-5 w-5' : 'h-4 w-4'} ${active ? '' : 'text-ink-faint'}`}
-                aria-hidden="true"
-              >
-                {ICONS[item.id]}
-              </svg>
-              {!compact && item.label}
-            </button>
-          )
-        })}
+        {main.map((item) => (
+          <NavButton
+            key={item.id}
+            id={item.id}
+            label={item.label}
+            active={item.id === current}
+            compact={compact}
+            onNavigate={onNavigate}
+          />
+        ))}
       </nav>
+
+      {bottom.length > 0 && (
+        <nav
+          aria-label="Sync"
+          className="border-line-soft mt-auto flex flex-col gap-0.5 border-t pt-4"
+        >
+          {bottom.map((item) => (
+            <NavButton
+              key={item.id}
+              id={item.id}
+              label={item.label}
+              active={item.id === current}
+              compact={compact}
+              onNavigate={onNavigate}
+              status={item.id === 'sync' ? syncStatus : undefined}
+            />
+          ))}
+        </nav>
+      )}
     </aside>
   )
 }

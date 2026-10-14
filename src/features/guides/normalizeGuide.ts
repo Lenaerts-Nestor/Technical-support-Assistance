@@ -1,4 +1,5 @@
 import { DEFAULT_DEVICE_ID } from './panel/devices'
+import { isSafeSegment } from './storage/fsNames'
 import type {
   Guide,
   GuideLink,
@@ -272,6 +273,8 @@ export function normalizeGuide(raw: unknown): Guide | null {
     ...(asStr(o.author) ? { author: asStr(o.author) } : {}),
     pinned: o.pinned === true,
     ...(typeof o.order === 'number' ? { order: o.order } : {}),
+    // A folder name is a single safe path segment — anything else is dropped.
+    ...(isSafeSegment(asStr(o.folder).trim()) ? { folder: asStr(o.folder).trim() } : {}),
     parts: asArr(o.parts)
       .map(normalizePart)
       .filter((p): p is GuidePart => p !== null),
@@ -298,6 +301,18 @@ export function parseGuidesFile(text: string): Guide[] {
       ? Object.values(container as Record<string, unknown>)
       : []
   return list.map(normalizeGuide).filter((g): g is Guide => g !== null)
+}
+
+/**
+ * A guide as it travels: without the library-local bits (pin, position, which
+ * folder it lives in here), so it drops into another library cleanly.
+ */
+export function toPortableGuide(guide: Guide): Guide {
+  const portable: Guide = { ...guide }
+  delete portable.folder
+  delete portable.pinned
+  delete portable.order
+  return portable
 }
 
 /** Canonical on-disk / export shape: a `{ [id]: Guide }` map plus a timestamp. */

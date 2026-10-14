@@ -205,6 +205,13 @@ export type Guide = {
   pinned?: boolean
   /** Manual sort position within its group (pinned vs. all). Lower = higher up. */
   order?: number
+  /**
+   * Name of the guide's own folder (`guides/<folder>/`) holding its images and
+   * project zips. Its `image` / `projectZip` references are relative to that
+   * folder. Without it the guide is a "shared pool" guide: references are
+   * relative to the linked folder's root, as in the original layout.
+   */
+  folder?: string
   parts: GuidePart[]
   links: GuideLink[]
   tags?: string[]

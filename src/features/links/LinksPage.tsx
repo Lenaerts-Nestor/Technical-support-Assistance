@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLinks } from './useLinks'
+import { useLinksData } from '../../app/appDataContext'
 import { filterSections } from './linksData'
 import { FolderModal } from './components/FolderModal'
 import { LinkForm } from './components/LinkForm'
@@ -10,7 +10,7 @@ import { EMPTY, GHOST_BTN_MD, INPUT, PAGE_SUBTITLE, PAGE_TITLE, PRIMARY_BTN } fr
 
 /** Quick-launch board: sections of links, with folders that open in a dialog. */
 export function LinksPage() {
-  const links = useLinks()
+  const links = useLinksData()
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState(false)
   const [addingSection, setAddingSection] = useState(false)
