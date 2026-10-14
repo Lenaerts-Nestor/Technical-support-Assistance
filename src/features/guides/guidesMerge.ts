@@ -16,7 +16,7 @@ export type GuidesMergeResult = {
  * New guides arrive unpinned and unordered (those are library-local). On an id
  * clash: `replace` takes the incoming content but keeps the local pin / order,
  * `keep-both` adds a copy under a new id titled "… (imported)", `skip` leaves
- * the local guide alone.
+ * the local guide alone. A replaced guide keeps its local folder.
  */
 export function mergeGuides(
   current: Guide[],
@@ -34,13 +34,14 @@ export function mergeGuides(
     const content: Guide = { ...item }
     delete content.order
     delete content.pinned
+    delete content.folder // a folder name means nothing in another library
 
     if (index < 0) {
       guides.push({ ...content, pinned: false })
       added++
     } else if (mode === 'replace') {
       const local = guides[index]
-      guides[index] = { ...content, pinned: local.pinned, order: local.order }
+      guides[index] = { ...content, pinned: local.pinned, order: local.order, folder: local.folder }
       replaced++
     } else if (mode === 'keep-both') {
       guides.push({

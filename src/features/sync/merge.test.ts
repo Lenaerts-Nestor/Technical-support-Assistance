@@ -87,6 +87,16 @@ describe('mergeGuides', () => {
     expect(r.guides.find((g) => g.id === 'g3')!.order).toBeUndefined()
   })
 
+  it('never carries a folder name in from another library, but keeps the local one on replace', () => {
+    const withFolders = [guide('g1', 'Local', [], { folder: 'local-folder' }), guide('g2', 'Second', [])]
+    const remote = [guide('g1', 'Remote', [], { folder: 'their-folder' }), guide('g3', 'Third', [], { folder: 'x' })]
+    const r = mergeGuides(withFolders, remote, 'replace')
+    expect(r.guides.find((g) => g.id === 'g1')!.folder).toBe('local-folder')
+    expect(r.guides.find((g) => g.id === 'g3')!.folder).toBeUndefined()
+    const copy = mergeGuides(withFolders, remote, 'keep-both').guides.find((g) => g.title === 'Remote (imported)')!
+    expect(copy.folder).toBeUndefined()
+  })
+
   it('keep-both: adds a copy under a new id', () => {
     const r = mergeGuides(local, incoming, 'keep-both')
     expect(r).toMatchObject({ added: 1, replaced: 0, copied: 1 })

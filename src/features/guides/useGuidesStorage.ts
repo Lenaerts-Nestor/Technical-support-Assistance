@@ -1,18 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { parseGuidesFile, toGuidesFile } from './normalizeGuide'
-import { collectGuideAssets } from './storage/assets'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { parseGuidesFile, toGuidesFile, toPortableGuide } from './normalizeGuide'
 import {
-  importIntoFolder,
-  listImageFiles,
-  listZipFiles,
-  readFileFromFolder,
-  readGuidesJson,
-  readImageFile,
-  writeGuidesJson,
-} from './storage/guidesFolder'
-import { downloadBlob } from './storage/folderZip'
+  allocateGuideFolder,
+  deleteGuideFolder,
+  writeGuideMirror,
+} from './storage/guideFolders'
+import { readGuidesJson, writeGuidesJson } from './storage/guidesFolder'
 import type { FolderController } from '../sync/useFolderLifecycle'
-import type { GuideAssets } from './view/GuideAssetsContext'
+import type { GuideAssetIo } from './useGuideAssets'
 import type { Guide } from './types'
 
 /** How long edits settle before the debounced write to `guides.json`. */
@@ -22,52 +17,53 @@ type UseGuidesStorageArgs = {
   folder: FolderController
   /** Current in-memory guides — watched for autosave, seeded into a fresh file. */
   guides: Guide[]
+  /** A just-created guide that has never been saved: written to `guides.json` but not mirrored yet. */
+  pendingNewId: string | null
   /** Called with the folder's guides when the folder is linked, reconnected or rescanned. */
   onAdopt: (guides: Guide[]) => void
+  /** Called when a guide has been given its own folder. */
+  onFolderAssigned: (guideId: string, folderName: string) => void
 }
 
 export type GuidesStorage = {
-  assets: GuideAssets
-  /** Write `guides.json` now, skipping the debounce. */
+  /** Write `guides.json` (and changed guide folders) now, skipping the debounce. */
   saveNow: () => Promise<void>
-}
-
-/** Every image filename referenced by a step, across all guides. */
-function collectImageNames(guides: Guide[]): Set<string> {
-  const names = new Set<string>()
-  for (const guide of guides) {
-    for (const asset of collectGuideAssets(guide)) if (asset.kind === 'image') names.add(asset.ref)
-  }
-  return names
+  /** Give a guide that has none a folder named after its title; resolves to the folder, or null when no folder is linked. */
+  ensureFolder: GuideAssetIo['ensureFolder']
+  /** Delete a guide's folder and everything in it. Throws when it cannot be removed. */
+  deleteFolder: (folderName: string) => Promise<void>
+  /** What `useGuideAssets` needs to resolve and add files for the open guide. */
+  assetIo: GuideAssetIo
 }
 
 /**
- * Keeps the guides list and the linked folder in step: hydrates from its
- * `guides.json` whenever the folder is linked, reconnected or rescanned,
- * debounce-writes it back on every edit, and resolves step images out of the same
- * folder. With no folder linked it is inert — the guides stay an in-memory
- * scratchpad. The folder itself (link / permission / epoch) is owned by
- * `useFolderLifecycle`.
+ * Keeps the guides list and the linked folder in step: hydrates from `guides.json`
+ * whenever the folder is linked, reconnected or rescanned, debounce-writes it back
+ * on every edit, and mirrors each guide that has its own folder to
+ * `guides/<folder>/guide.json`. `guides.json` stays the single source of truth —
+ * the mirrors are derived copies so a guide folder is self-contained. With no
+ * folder linked it is inert and the guides stay an in-memory scratchpad. The
+ * folder itself (link / permission / epoch) is owned by `useFolderLifecycle`.
  */
-export function useGuidesStorage({ folder, guides, onAdopt }: UseGuidesStorageArgs): GuidesStorage {
+export function useGuidesStorage({
+  folder,
+  guides,
+  pendingNewId,
+  onAdopt,
+  onFolderAssigned,
+}: UseGuidesStorageArgs): GuidesStorage {
   const { dir, epoch, report, runExclusive } = folder
-
-  /** Set once the folder's guides have been adopted for the current `[dir, epoch]`. */
-  const [adoptedEpoch, setAdoptedEpoch] = useState(0)
-  const [imageUrls, setImageUrls] = useState<ReadonlyMap<string, string>>(() => new Map())
-  /** Image filenames present in the linked folder, for the step image picker. */
-  const [imageNames, setImageNames] = useState<readonly string[]>([])
-  /** Project zips present in the linked folder, for the zip picker and download buttons. */
-  const [zipNames, setZipNames] = useState<readonly string[]>([])
 
   const dirRef = useRef<FileSystemDirectoryHandle | null>(dir)
   const linkedRef = useRef(false)
-  /** `JSON.stringify` of the guides last known to be on disk — guards redundant writes. */
+  /** `JSON.stringify` of the guides last known to be in `guides.json` — guards redundant writes. */
   const syncedSnapshotRef = useRef('')
+  /** Portable JSON of each guide as last written to (or found in) its folder mirror. */
+  const mirrorsRef = useRef<Map<string, string>>(new Map())
   const guidesRef = useRef(guides)
+  const pendingRef = useRef(pendingNewId)
   const onAdoptRef = useRef(onAdopt)
-  const requestedImagesRef = useRef<Set<string>>(new Set())
-  const objectUrlsRef = useRef<Set<string>>(new Set())
+  const onFolderAssignedRef = useRef(onFolderAssigned)
 
   useEffect(() => {
     dirRef.current = dir
@@ -76,16 +72,18 @@ export function useGuidesStorage({ folder, guides, onAdopt }: UseGuidesStorageAr
     guidesRef.current = guides
   }, [guides])
   useEffect(() => {
+    pendingRef.current = pendingNewId
+  }, [pendingNewId])
+  useEffect(() => {
     onAdoptRef.current = onAdopt
-  }, [onAdopt])
+    onFolderAssignedRef.current = onFolderAssigned
+  }, [onAdopt, onFolderAssigned])
 
-  const releaseImages = useCallback(() => {
-    for (const url of objectUrlsRef.current) URL.revokeObjectURL(url)
-    objectUrlsRef.current.clear()
-    requestedImagesRef.current.clear()
-    setImageUrls(new Map())
-    setImageNames([])
-    setZipNames([])
+  /** Trust the mirrors that are on disk: only guides that change from here on are rewritten. */
+  const trustMirrors = useCallback((list: Guide[]) => {
+    mirrorsRef.current = new Map(
+      list.filter((g) => g.folder).map((g) => [g.id, JSON.stringify(toPortableGuide(g))]),
+    )
   }, [])
 
   /* ---- adopt the folder's guides whenever the folder (re)appears ----------- */
@@ -107,20 +105,17 @@ export function useGuidesStorage({ folder, guides, onAdopt }: UseGuidesStorageAr
             return
           }
           syncedSnapshotRef.current = JSON.stringify(parsed)
+          trustMirrors(parsed)
           onAdoptRef.current(parsed)
         } else {
           const seed = guidesRef.current
           await writeGuidesJson(dir, JSON.stringify(toGuidesFile(seed), null, 2))
           syncedSnapshotRef.current = JSON.stringify(seed)
+          trustMirrors(seed)
         }
         linkedRef.current = true
         report.synced()
         report.clearError()
-        setAdoptedEpoch(epoch)
-        const [images, zips] = [await listImageFiles(dir), await listZipFiles(dir)]
-        if (cancelled) return
-        setImageNames(images)
-        setZipNames(zips)
       } catch {
         if (!cancelled) report.failed('Could not read that folder — link it again.')
       }
@@ -128,9 +123,8 @@ export function useGuidesStorage({ folder, guides, onAdopt }: UseGuidesStorageAr
     return () => {
       cancelled = true
       linkedRef.current = false
-      releaseImages()
     }
-  }, [dir, epoch, report, runExclusive, releaseImages])
+  }, [dir, epoch, report, runExclusive, trustMirrors])
 
   /* ---- debounced autosave -------------------------------------------- */
 
@@ -139,15 +133,36 @@ export function useGuidesStorage({ folder, guides, onAdopt }: UseGuidesStorageAr
       runExclusive(async () => {
         const handle = dirRef.current
         if (!handle || !linkedRef.current) return
-        const current = JSON.stringify(guidesRef.current)
+        const list = guidesRef.current
+        const current = JSON.stringify(list)
         if (current === syncedSnapshotRef.current) return
         report.saving()
         try {
-          await writeGuidesJson(handle, JSON.stringify(toGuidesFile(guidesRef.current), null, 2))
+          await writeGuidesJson(handle, JSON.stringify(toGuidesFile(list), null, 2))
           syncedSnapshotRef.current = current
-          report.saved()
         } catch {
           report.failed('Could not write to the folder — check it still exists.')
+          return
+        }
+
+        // Mirrors come second and only for guides that changed; a never-saved guide waits for its Save.
+        let mirrorFailed = false
+        for (const guide of list) {
+          if (!guide.folder || guide.id === pendingRef.current) continue
+          const json = JSON.stringify(toPortableGuide(guide))
+          if (mirrorsRef.current.get(guide.id) === json) continue
+          try {
+            await writeGuideMirror(handle, guide.folder, guide)
+            mirrorsRef.current.set(guide.id, json)
+          } catch {
+            mirrorFailed = true
+          }
+        }
+        if (mirrorFailed) {
+          syncedSnapshotRef.current = '' // so the next save retries the mirrors
+          report.failed('Could not update a guide’s own folder — check the folder is still there.')
+        } else {
+          report.saved()
         }
       }, true),
     [report, runExclusive],
@@ -160,133 +175,45 @@ export function useGuidesStorage({ folder, guides, onAdopt }: UseGuidesStorageAr
     return () => window.clearTimeout(timer)
   }, [guides, flush])
 
-  /* ---- pull step images out of the folder -------------------------- */
+  /* ---- guide folders -------------------------------------------------- */
 
-  useEffect(() => {
-    const handle = dirRef.current
-    if (!handle || !linkedRef.current) return
-    const pending = [...collectImageNames(guides)].filter(
-      (name) => !requestedImagesRef.current.has(name),
-    )
-    if (pending.length === 0) return
-    pending.forEach((name) => requestedImagesRef.current.add(name))
-
-    let cancelled = false
-    void (async () => {
-      for (const name of pending) {
-        const blob = await readImageFile(handle, name)
-        if (cancelled || !blob) continue
-        const url = URL.createObjectURL(blob)
-        objectUrlsRef.current.add(url)
-        setImageUrls((prev) => new Map(prev).set(name, url))
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [guides, adoptedEpoch])
-
-  /* ---- assets ------------------------------------------------------- */
-
-  const resolveImage = useCallback((name: string) => imageUrls.get(name), [imageUrls])
-
-  /**
-   * Open the OS file picker inside the linked folder and hand back the chosen
-   * file's name, relative to that folder where we can work it out. Resolves to
-   * `null` if the user cancels or no folder is linked.
-   */
-  const pickImage = useCallback(async (): Promise<string | null> => {
-    const root = dirRef.current
-    if (!root || typeof window.showOpenFilePicker !== 'function') return null
-    let file: FileSystemFileHandle
-    try {
-      ;[file] = await window.showOpenFilePicker({
-        id: 'support-hub-guide-image',
-        startIn: root,
-        multiple: false,
-        types: [
-          {
-            description: 'Images',
-            accept: {
-              'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif'],
-            },
-          },
-        ],
-      })
-    } catch {
-      return null // cancelled
-    }
-    // `resolve` gives the path segments from the folder to the file, so a file
-    // in a sub-folder comes back as "screens/step-1.png" rather than a bare name.
-    const segments = await root.resolve(file).catch(() => null)
-    const name = segments && segments.length > 0 ? segments.join('/') : file.name
-    setImageNames((prev) => (prev.includes(name) ? prev : [...prev, name].sort()))
-    return name
-  }, [])
-
-  const hasZip = useCallback((path: string) => zipNames.includes(path), [zipNames])
-
-  const addZipName = useCallback(
-    (name: string) =>
-      setZipNames((prev) => (prev.includes(name) ? prev : [...prev, name].sort())),
-    [],
+  const ensureFolder = useCallback<GuidesStorage['ensureFolder']>(
+    (guide) =>
+      runExclusive(async () => {
+        if (guide.folder) return guide.folder
+        const handle = dirRef.current
+        if (!handle || !linkedRef.current) return null
+        const known = guidesRef.current.find((g) => g.id === guide.id)
+        if (known?.folder) return known.folder
+        try {
+          const taken = new Set(guidesRef.current.flatMap((g) => (g.folder ? [g.folder.toLowerCase()] : [])))
+          const title = guide.title.trim() || `new-guide-${guide.id.slice(0, 8)}`
+          const name = await allocateGuideFolder(handle, title, taken)
+          // Visible straight away to a second call, before React has re-rendered.
+          guidesRef.current = guidesRef.current.map((g) => (g.id === guide.id ? { ...g, folder: name } : g))
+          onFolderAssignedRef.current(guide.id, name)
+          return name
+        } catch {
+          report.warn('Could not create a folder for this guide.')
+          return null
+        }
+      }),
+    [report, runExclusive],
   )
 
-  /**
-   * Open the OS file picker for a project zip. A file already inside the linked
-   * folder is referenced where it is; anything else is copied into `projects/`
-   * so the folder stays self-contained when it is handed to someone else.
-   */
-  const pickZip = useCallback(async (): Promise<string | null> => {
-    const root = dirRef.current
-    if (!root || typeof window.showOpenFilePicker !== 'function') return null
-    let handle: FileSystemFileHandle
-    try {
-      ;[handle] = await window.showOpenFilePicker({
-        id: 'support-hub-guide-zip',
-        startIn: root,
-        multiple: false,
-        types: [{ description: 'Zip archives', accept: { 'application/zip': ['.zip'] } }],
-      })
-    } catch {
-      return null // cancelled
-    }
-    const segments = await root.resolve(handle).catch(() => null)
-    if (segments && segments.length > 0) {
-      const inside = segments.join('/')
-      addZipName(inside)
-      return inside
-    }
-    try {
-      const path = await importIntoFolder(root, await handle.getFile())
-      addZipName(path)
-      report.clearError()
-      return path
-    } catch {
-      report.warn('Could not copy that zip into the linked folder.')
-      return null
-    }
-  }, [addZipName, report])
-
-  const downloadZip = useCallback(
-    async (path: string): Promise<boolean> => {
-      const root = dirRef.current
-      const file = root ? await readFileFromFolder(root, path) : null
-      if (!file) {
-        report.warn(`"${path}" is not in the linked folder.`)
-        return false
-      }
-      downloadBlob(file, path.split('/').pop() || path)
-      report.clearError()
-      return true
-    },
-    [report],
+  const deleteFolder = useCallback(
+    (folderName: string) =>
+      runExclusive(async () => {
+        const handle = dirRef.current
+        if (handle) await deleteGuideFolder(handle, folderName)
+      }),
+    [runExclusive],
   )
 
-  const assets = useMemo<GuideAssets>(
-    () => ({ resolveImage, imageNames, pickImage, zipNames, hasZip, pickZip, downloadZip }),
-    [imageNames, pickImage, resolveImage, zipNames, hasZip, pickZip, downloadZip],
+  const assetIo = useMemo<GuideAssetIo>(
+    () => ({ dir, epoch, pendingNewId, ensureFolder, runExclusive, report }),
+    [dir, epoch, pendingNewId, ensureFolder, runExclusive, report],
   )
 
-  return { assets, saveNow: flush }
+  return { saveNow: flush, ensureFolder, deleteFolder, assetIo }
 }

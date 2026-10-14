@@ -142,7 +142,11 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
         <button
           type="button"
           onClick={() => {
-            if (window.confirm(`Delete "${guide.title || 'this guide'}"?`)) onDelete()
+            const name = `"${guide.title || 'this guide'}"`
+            const message = guide.folder
+              ? `Permanently delete ${name} and its folder (its images and project files)? Use Export first if you want to keep a copy.`
+              : `Delete ${name}?`
+            if (window.confirm(message)) onDelete()
           }}
           className={DANGER_BTN}
         >

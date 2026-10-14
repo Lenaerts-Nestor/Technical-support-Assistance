@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useFolder, useGuidesData, useReportEditingGuide } from '../../app/appDataContext'
 import { NavigationContext } from '../../app/navigation'
 import { EMPTY } from '../../shared/ui/styles'
+import { useGuideAssets } from './useGuideAssets'
 import { useGuidesScreen } from './useGuidesScreen'
 import { GuidesHeader } from './components/GuidesHeader'
 import { GuideGroup } from './components/GuideGroup'
@@ -18,6 +19,7 @@ export function GuidesPage() {
   const page = useGuidesScreen(library)
   const isEmpty = library.guides.length === 0
   const active = page.activeGuide
+  const assets = useGuideAssets(active, library.assetIo)
 
   useReportEditingGuide(page.screen.name === 'edit' && !!active)
 
@@ -89,7 +91,7 @@ export function GuidesPage() {
   }
 
   return (
-    <GuideAssetsProvider value={library.assets}>
+    <GuideAssetsProvider value={assets}>
       {page.screen.name !== 'edit' && <FolderStatusStrip />}
       {screen}
     </GuideAssetsProvider>

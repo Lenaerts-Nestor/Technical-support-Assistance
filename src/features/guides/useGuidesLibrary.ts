@@ -63,7 +63,18 @@ export function useGuidesLibrary(folder: FolderController) {
     setPendingNewId(null)
   }, [])
 
-  const storage = useGuidesStorage({ folder, guides, onAdopt: adopt })
+  /** A guide has been given its own folder (new guide saved, or a file added before its first save). */
+  const assignFolder = useCallback((id: string, folderName: string) => {
+    setGuides((list) => list.map((g) => (g.id === id && !g.folder ? { ...g, folder: folderName } : g)))
+  }, [])
+
+  const storage = useGuidesStorage({
+    folder,
+    guides,
+    pendingNewId,
+    onAdopt: adopt,
+    onFolderAssigned: assignFolder,
+  })
 
   const pinnedGuides = useMemo(() => guides.filter((g) => g.pinned).sort(compareGuides), [guides])
   const unpinnedGuides = useMemo(() => guides.filter((g) => !g.pinned).sort(compareGuides), [guides])
@@ -90,24 +101,58 @@ export function useGuidesLibrary(folder: FolderController) {
     setPendingNewId(draft.id)
   }, [])
 
-  /** Commit an edited guide (and mark a new one as saved). */
-  const saveGuide = useCallback((saved: Guide) => {
-    setGuides((list) => list.map((g) => (g.id === saved.id ? saved : g)))
-    setPendingNewId((pending) => (pending === saved.id ? null : pending))
-  }, [])
+  /**
+   * Commit an edited guide. The editor works on a copy made when it opened, so a
+   * folder given to the guide meanwhile is kept from the stored one. A brand-new
+   * guide gets its own folder now that it has a title.
+   */
+  const { ensureFolder, deleteFolder } = storage
+  const saveGuide = useCallback(
+    (saved: Guide) => {
+      const isNew = pendingNewId === saved.id
+      setGuides((list) =>
+        list.map((g) => (g.id === saved.id ? { ...saved, folder: g.folder ?? saved.folder } : g)),
+      )
+      setPendingNewId((pending) => (pending === saved.id ? null : pending))
+      if (isNew) void ensureFolder(saved)
+    },
+    [ensureFolder, pendingNewId],
+  )
 
-  /** Drop a never-saved guide from memory (Cancel on a new guide). */
-  const discardDraftGuide = useCallback((id: string) => {
-    setGuides((list) => list.filter((g) => g.id !== id))
-    setPendingNewId((pending) => (pending === id ? null : pending))
-  }, [])
+  /** Drop a never-saved guide (Cancel on a new guide), and the folder made for it if a file was added first. */
+  const discardDraftGuide = useCallback(
+    (id: string) => {
+      const draft = guides.find((g) => g.id === id)
+      if (draft?.folder) void deleteFolder(draft.folder).catch(() => {})
+      setGuides((list) => list.filter((g) => g.id !== id))
+      setPendingNewId((pending) => (pending === id ? null : pending))
+    },
+    [deleteFolder, guides],
+  )
 
-  /** Delete a guide. Resolves to false when it could not be removed. */
-  const removeGuide = useCallback(async (id: string): Promise<boolean> => {
-    setGuides((list) => list.filter((g) => g.id !== id))
-    setPendingNewId((pending) => (pending === id ? null : pending))
-    return true
-  }, [])
+  /**
+   * Delete a guide — and its folder with the images and project zips in it.
+   * Resolves to false (and keeps the guide) when the folder could not be removed.
+   */
+  const removeGuide = useCallback(
+    async (id: string): Promise<boolean> => {
+      const guide = guides.find((g) => g.id === id)
+      if (guide?.folder) {
+        try {
+          await deleteFolder(guide.folder)
+        } catch {
+          folder.report.warn(
+            'Could not delete the guide’s folder, so nothing was removed. Close anything using its files and try again.',
+          )
+          return false
+        }
+      }
+      setGuides((list) => list.filter((g) => g.id !== id))
+      setPendingNewId((pending) => (pending === id ? null : pending))
+      return true
+    },
+    [deleteFolder, folder.report, guides],
+  )
 
   /** Upsert guides from a guides JSON by id — never a list replacement. */
   const importGuides = useCallback(
@@ -119,8 +164,19 @@ export function useGuidesLibrary(folder: FolderController) {
     [guides],
   )
 
+  /** The guides as text — without each guide's folder name, which means nothing elsewhere. */
   const exportGuidesJson = useCallback(
-    () => downloadJson('guides-backup.json', toGuidesFile(guides)),
+    () =>
+      downloadJson(
+        'guides-backup.json',
+        toGuidesFile(
+          guides.map((g) => {
+            const copy: Guide = { ...g }
+            delete copy.folder
+            return copy
+          }),
+        ),
+      ),
     [guides],
   )
 
@@ -134,7 +190,7 @@ export function useGuidesLibrary(folder: FolderController) {
     pinnedGuides,
     unpinnedGuides,
     pendingNewId,
-    assets: storage.assets,
+    assetIo: storage.assetIo,
     saveNow: storage.saveNow,
     togglePin,
     moveGuide,

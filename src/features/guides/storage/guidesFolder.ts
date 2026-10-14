@@ -52,10 +52,10 @@ export function writeGuidesJson(dir: FileSystemDirectoryHandle, text: string): P
 
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif']
 
-const isImageName = (name: string) =>
+export const isImageName = (name: string) =>
   IMAGE_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext))
 
-const isZipName = (name: string) => name.toLowerCase().endsWith('.zip')
+export const isZipName = (name: string) => name.toLowerCase().endsWith('.zip')
 
 /** Folder that picked project zips are copied into. */
 export const PROJECTS_DIR = 'projects'
