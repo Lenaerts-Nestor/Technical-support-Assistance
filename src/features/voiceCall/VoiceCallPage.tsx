@@ -1,17 +1,26 @@
+import { useState } from 'react'
+import { useFocusMode } from '../../app/focusMode'
 import { useVoiceCall } from './useVoiceCall'
 import { NOTE_SECTIONS } from './voiceCallData'
 import { CallHeader } from './components/CallHeader'
 import { ProductsCard } from './components/ProductsCard'
 import { NoteCard } from './components/NoteCard'
+import { QuestionsCard } from './components/QuestionsCard'
 
 export function VoiceCallPage() {
   const vc = useVoiceCall()
+  const [questionsOpen, setQuestionsOpen] = useState(false)
+  // The card takes the right-hand side, so the sidebar shrinks to icons meanwhile.
+  useFocusMode('voiceCall', questionsOpen)
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
+    <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-8 py-7">
+      <div className="min-w-0 flex-1 space-y-6">
       <CallHeader
         justCopied={vc.justCopied}
         hasContent={vc.hasContent}
+        questionsOpen={questionsOpen}
+        onToggleQuestions={() => setQuestionsOpen((o) => !o)}
         onCopy={vc.copyNotes}
         onClear={vc.clearCall}
       />
@@ -38,6 +47,8 @@ export function VoiceCallPage() {
           />
         ))}
       </div>
+      </div>
+      {questionsOpen && <QuestionsCard onClose={() => setQuestionsOpen(false)} />}
     </div>
   )
 }

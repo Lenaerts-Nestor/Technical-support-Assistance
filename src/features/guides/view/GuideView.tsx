@@ -55,7 +55,7 @@ export function GuideView({ guide, onBack, onEdit, onExport, onDelete }: GuideVi
   const panels = useMemo(() => collectPanels(guide.parts), [guide.parts])
   const [tab, setTab] = useState<'guide' | string>('guide')
   const activePanel = panels.find((p) => p.id === tab)
-  useFocusMode(!!activePanel)
+  useFocusMode('guides', !!activePanel)
 
   const [layout, setLayout] = usePersistentState<GuideLayout>(
     LAYOUT_KEY,
