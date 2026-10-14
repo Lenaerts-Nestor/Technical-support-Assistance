@@ -8,6 +8,7 @@ import {
   SECTION_LABEL,
 } from '../../../shared/ui/styles'
 import { useSaveAll } from '../useSaveAll'
+import { FolderStructure } from './FolderStructure'
 import { FolderIcon, SyncIcon } from './icons'
 
 const clockTime = (iso: string) =>
@@ -74,6 +75,7 @@ export function FolderCard() {
           )}
         </div>
       </div>
+      <FolderStructure />
     </section>
   )
 }

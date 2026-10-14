@@ -2,9 +2,11 @@ import { useContext } from 'react'
 import { useFolder } from '../../../app/appDataContext'
 import { NavigationContext } from '../../../app/navigation'
 import { GHOST_BTN } from '../../../shared/ui/styles'
+import { useGuidesToOrganize } from '../../sync/useGuidesToOrganize'
 
 const AMBER = 'border-amber-400/40 bg-amber-400/10 text-amber-100'
 const ROSE = 'border-rose-400/40 bg-rose-400/10 text-rose-100'
+const SKY = 'border-sky-400/40 bg-sky-400/10 text-sky-100'
 
 /**
  * One line above the Guides list / a guide when the linked folder needs
@@ -14,6 +16,7 @@ const ROSE = 'border-rose-400/40 bg-rose-400/10 text-rose-100'
 export function FolderStatusStrip() {
   const folder = useFolder()
   const goTo = useContext(NavigationContext)
+  const toOrganize = useGuidesToOrganize()
 
   let tone: string
   let text: string
@@ -35,6 +38,14 @@ export function FolderStatusStrip() {
     action = (
       <button type="button" onClick={() => goTo('sync')} className={GHOST_BTN}>
         Open Sync
+      </button>
+    )
+  } else if (toOrganize > 0) {
+    tone = SKY
+    text = `${toOrganize} ${toOrganize === 1 ? 'guide still uses' : 'guides still use'} the shared pool of images. Organize gives each guide a folder of its own, so it can be shared on its own.`
+    action = (
+      <button type="button" onClick={() => goTo('sync')} className={GHOST_BTN}>
+        Organize folders…
       </button>
     )
   } else {

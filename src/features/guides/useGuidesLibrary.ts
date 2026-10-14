@@ -154,6 +154,25 @@ export function useGuidesLibrary(folder: FolderController) {
     [deleteFolder, folder.report, guides],
   )
 
+  /**
+   * Take the guides Organize has just given a folder (and rewritten references)
+   * into the list by id. The local pin and position are kept.
+   */
+  const applyOrganized = useCallback((organized: Guide[]) => {
+    const byId = new Map(organized.map((g) => [g.id, g]))
+    setGuides((list) =>
+      list.map((g) => {
+        const done = byId.get(g.id)
+        return done ? { ...done, pinned: g.pinned, order: g.order } : g
+      }),
+    )
+  }, [])
+
+  /** Add guides found in folders on disk. Anything already in the library is left as it is. */
+  const adoptFolderGuides = useCallback((found: Guide[]) => {
+    setGuides((list) => [...list, ...found.filter((f) => !list.some((g) => g.id === f.id))])
+  }, [])
+
   /** Upsert guides from a guides JSON by id — never a list replacement. */
   const importGuides = useCallback(
     (incoming: Guide[], mode: ConflictMode): GuidesMergeResult => {
@@ -198,6 +217,8 @@ export function useGuidesLibrary(folder: FolderController) {
     saveGuide,
     discardDraftGuide,
     removeGuide,
+    applyOrganized,
+    adoptFolderGuides,
     importGuides,
     exportGuidesJson,
     downloadTemplate,

@@ -1,6 +1,7 @@
 import type { PageId } from './navigation'
 import { NAV_ITEMS } from './navigation'
 import { useFolder } from './appDataContext'
+import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
 import type { FolderStatus } from '../features/sync/useFolderLifecycle'
 
 const ICONS: Record<PageId, React.ReactElement> = {
@@ -100,6 +101,11 @@ function NavButton({ id, label, active, compact, onNavigate, status }: NavButton
 
 export function Sidebar({ current, onNavigate, compact = false }: SidebarProps) {
   const folder = useFolder()
+  const toOrganize = useGuidesToOrganize()
+  const syncStatus =
+    toOrganize > 0 && ['ready', 'saving', 'saved'].includes(folder.status)
+      ? { tone: 'bg-amber-400', label: 'Folder linked — guides can be organized into their own folders' }
+      : FOLDER_DOT[folder.status]
   const visible = NAV_ITEMS.filter((item) => !item.hidden)
   const main = visible.filter((item) => item.placement !== 'bottom')
   const bottom = visible.filter((item) => item.placement === 'bottom')
@@ -152,7 +158,7 @@ export function Sidebar({ current, onNavigate, compact = false }: SidebarProps) 
               active={item.id === current}
               compact={compact}
               onNavigate={onNavigate}
-              status={item.id === 'sync' ? FOLDER_DOT[folder.status] : undefined}
+              status={item.id === 'sync' ? syncStatus : undefined}
             />
           ))}
         </nav>

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useFolder, useIsEditingGuide } from '../../../app/appDataContext'
-import { downloadBlob, zipFolder } from '../../guides/storage/folderZip'
 import { ZipArchive, ZipError } from '../../guides/storage/zipReader'
 import { ZipLimitError } from '../../guides/storage/zipWriter'
 import { GHOST_BTN_MD } from '../../../shared/ui/styles'
-import { classifyArchive, datestamp, manifestSource, MANIFEST_NAME, wrongCardMessage } from '../packages'
+import { exportFullBackup } from '../backupExport'
+import { classifyArchive, MANIFEST_NAME, wrongCardMessage } from '../packages'
 import { describeFolderContent, restoreBackup } from '../restoreBackup'
 import type { FolderContent } from '../restoreBackup'
 import { useSaveAll } from '../useSaveAll'
@@ -52,14 +52,12 @@ export function BackupCard() {
   const exportBackup = async () => {
     if (!dir) return
     try {
-      await saveAll()
-      const { blob, count } = await folder.runExclusive(() => zipFolder(dir, [manifestSource('backup')]))
-      if (count <= 1) {
-        setNotice({ tone: 'error', text: 'The linked folder is empty — nothing to back up.' })
-        return
-      }
-      downloadBlob(blob, `${folder.folderName || 'support-hub'}-backup-${datestamp()}.zip`)
-      setNotice({ tone: 'ok', text: `Backup downloaded — ${plural(count - 1, 'file')}.` })
+      const files = await exportFullBackup(folder, saveAll)
+      setNotice(
+        files === 0
+          ? { tone: 'error', text: 'The linked folder is empty — nothing to back up.' }
+          : { tone: 'ok', text: `Backup downloaded — ${plural(files, 'file')}.` },
+      )
     } catch (e) {
       setNotice({
         tone: 'error',

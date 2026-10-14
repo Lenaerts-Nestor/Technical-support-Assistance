@@ -171,11 +171,14 @@ export type MemoryFs = {
   root: MemDir
   /** The root typed as the real handle, to pass to the code under test. */
   handle: FileSystemDirectoryHandle
+  /** Shared by every node, so `options.hooks` can be set after the fixture has been seeded. */
+  options: FsOptions
 }
 
 export function createMemoryFs(options: FsOptions = {}): MemoryFs {
-  const root = new MemDir('library', '', options)
-  return { root, handle: root as unknown as FileSystemDirectoryHandle }
+  const shared: FsOptions = { ...options }
+  const root = new MemDir('library', '', shared)
+  return { root, handle: root as unknown as FileSystemDirectoryHandle, options: shared }
 }
 
 /** Create (or overwrite) `path` with `content`, making folders as needed. */
