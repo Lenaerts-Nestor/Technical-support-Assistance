@@ -111,3 +111,18 @@ export function filterSections(sections: LinkSection[], query: string): LinkSect
     return items.length > 0 ? [{ ...section, items }] : []
   })
 }
+
+/**
+ * Move the section with `id` so it ends up at index `toIndex` of the new list.
+ * Out-of-range targets are clamped; an unknown id returns the list unchanged.
+ */
+export function moveSection(sections: LinkSection[], id: string, toIndex: number): LinkSection[] {
+  const from = sections.findIndex((s) => s.id === id)
+  if (from === -1) return sections
+  const to = Math.max(0, Math.min(sections.length - 1, toIndex))
+  if (to === from) return sections
+  const next = [...sections]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
+}

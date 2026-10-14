@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
-import { DEFAULT_SECTIONS, normalizeUrl, reviveSections } from './linksData'
+import { DEFAULT_SECTIONS, moveSection as moveSectionTo, normalizeUrl, reviveSections } from './linksData'
 import { readLinksFile, writeLinksFile } from './linksFile'
 import { countLinks, mergeLinkSections } from './linksMerge'
 import type { FolderLink } from '../sync/useFolderLifecycle'
@@ -26,6 +26,8 @@ export type LinksController = {
   addSection: (title: string) => void
   renameSection: (id: string, title: string) => void
   removeSection: (id: string) => void
+  /** Move a section so it lands at `toIndex` in the full list (clamped). */
+  moveSection: (id: string, toIndex: number) => void
   /** Add a link to a section, or into one of its folders. `false` when the URL is unusable. */
   addLink: (sectionId: string, folderId: string | null, label: string, url: string) => boolean
   addFolder: (sectionId: string, label: string) => void
@@ -131,6 +133,11 @@ export function useLinks(folder: FolderLink): LinksController {
     [setSections],
   )
 
+  const moveSection = useCallback(
+    (id: string, toIndex: number) => setSections((prev) => moveSectionTo(prev, id, toIndex)),
+    [setSections],
+  )
+
   const addLink = useCallback(
     (sectionId: string, folderId: string | null, label: string, url: string) => {
       const href = normalizeUrl(url)
@@ -196,6 +203,7 @@ export function useLinks(folder: FolderLink): LinksController {
     addSection,
     renameSection,
     removeSection,
+    moveSection,
     addLink,
     addFolder,
     updateItem,
