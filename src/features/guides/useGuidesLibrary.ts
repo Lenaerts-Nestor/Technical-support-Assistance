@@ -168,6 +168,15 @@ export function useGuidesLibrary(folder: FolderController) {
     )
   }, [])
 
+  /** Put imported guides into the list by id: an id already there is replaced, anything else is added. */
+  const upsertGuides = useCallback((incoming: Guide[]) => {
+    setGuides((list) => {
+      const byId = new Map(incoming.map((g) => [g.id, g]))
+      const merged = list.map((g) => byId.get(g.id) ?? g)
+      return [...merged, ...incoming.filter((g) => !list.some((l) => l.id === g.id))]
+    })
+  }, [])
+
   /** Add guides found in folders on disk. Anything already in the library is left as it is. */
   const adoptFolderGuides = useCallback((found: Guide[]) => {
     setGuides((list) => [...list, ...found.filter((f) => !list.some((g) => g.id === f.id))])
@@ -218,6 +227,7 @@ export function useGuidesLibrary(folder: FolderController) {
     discardDraftGuide,
     removeGuide,
     applyOrganized,
+    upsertGuides,
     adoptFolderGuides,
     importGuides,
     exportGuidesJson,

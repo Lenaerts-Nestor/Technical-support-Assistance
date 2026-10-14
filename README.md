@@ -1,3 +1,60 @@
+# Support Hub
+
+A dashboard for support work: voice-call notes, RMA, cases, step-by-step guides and
+quick links. Guides, links and case snippets are saved into one folder on your
+computer that you pick once on the **Sync** page (Chrome or Edge on desktop).
+
+## The linked folder
+
+```
+<your folder>/
+  guides.json                 the list of guides (the source of truth)
+  guides/<name>/              one folder per guide — everything it needs
+    guide.json                a copy of the guide, so the folder is self-contained
+    images/…                  its screenshots
+    projects/…                its project zips
+  links.json                  the Links page
+  cases-snippets.json         "My texts" on the Cases page
+  legacy-backup/              guides.json as it was before Organize
+```
+
+A guide's images and project zips are referenced *relative to its own folder*
+(`images/step-1.png`), so a guide can be moved on its own. New guides get their
+folder automatically; picking an image or zip from somewhere else copies it into
+the guide's folder.
+
+### Guides from before (one shared pool of images)
+
+Guides saved in the old layout keep working untouched: their images are looked up at
+the top of the linked folder. **Sync → Folder structure → Organize folders** gives
+each of them a folder of its own. It only copies — originals are never moved or
+deleted — and shows a preview first. A guide whose files cannot all be copied is left
+exactly as it was and can be retried. **Find guide folders** adds guide folders you
+dropped into `guides/` by hand.
+
+## Sharing
+
+The **Sync** page (bottom of the sidebar) moves one part at a time:
+
+| Card | File | Notes |
+|---|---|---|
+| Links | `.zip` with `links.json` (a bare `links.json` also works) | merge or replace |
+| Case snippets | `.zip` with `cases-snippets.json` | merge or replace |
+| Guides | `.zip` with the guide's folder | **Export guide** here or in the guide view; **Import guide package** merges by guide id (replace / keep both / skip). A guide folder zipped by hand works too. |
+| Full backup | `.zip` of the whole folder | restores into a folder that holds no other files yet |
+
+## Development
+
+```
+npm install
+npm run dev       # http://localhost:5173
+npm run lint
+npm test          # unit tests for the zip, folder and merge logic
+npm run build     # type-checks, then builds
+```
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

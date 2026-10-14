@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useFolder, useGuidesData, useReportEditingGuide } from '../../app/appDataContext'
 import { NavigationContext } from '../../app/navigation'
 import { EMPTY } from '../../shared/ui/styles'
+import { useGuideExport } from '../sync/useGuideExport'
 import { useGuideAssets } from './useGuideAssets'
 import { useGuidesScreen } from './useGuidesScreen'
 import { GuidesHeader } from './components/GuidesHeader'
@@ -17,6 +18,7 @@ export function GuidesPage() {
   const folder = useFolder()
   const goTo = useContext(NavigationContext)
   const page = useGuidesScreen(library)
+  const exportGuide = useGuideExport()
   const isEmpty = library.guides.length === 0
   const active = page.activeGuide
   const assets = useGuideAssets(active, library.assetIo)
@@ -30,6 +32,22 @@ export function GuidesPage() {
         guide={active}
         onBack={page.closeGuide}
         onEdit={() => page.editGuide(active.id)}
+        onExport={() =>
+          void exportGuide(active).then(
+            (result) => {
+              if (result.missing.length > 0) {
+                folder.report.warn(
+                  `Exported “${active.title || 'guide'}”, but ${result.missing.length} file${
+                    result.missing.length === 1 ? ' it refers' : 's it refers'
+                  } to could not be found and ${result.missing.length === 1 ? 'is' : 'are'} not in the package (${result.missing
+                    .slice(0, 3)
+                    .join(', ')}${result.missing.length > 3 ? ', …' : ''}).`,
+                )
+              }
+            },
+            () => folder.report.warn('Could not build the export.'),
+          )
+        }
         onDelete={() => void page.deleteGuide(active.id)}
       />
     )

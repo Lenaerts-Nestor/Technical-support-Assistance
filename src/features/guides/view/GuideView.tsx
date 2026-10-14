@@ -18,6 +18,7 @@ type GuideViewProps = {
   guide: Guide
   onBack: () => void
   onEdit: () => void
+  onExport: () => void
   onDelete: () => void
 }
 
@@ -39,7 +40,7 @@ function collectPanels(parts: GuidePart[]): PanelPart[] {
   return out
 }
 
-export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
+export function GuideView({ guide, onBack, onEdit, onExport, onDelete }: GuideViewProps) {
   const { lead, body } = useMemo(() => {
     const first = guide.parts.findIndex(isStructural)
     const splitAt = first === -1 ? guide.parts.length : first
@@ -138,6 +139,14 @@ export function GuideView({ guide, onBack, onEdit, onDelete }: GuideViewProps) {
         )}
         <button type="button" onClick={onEdit} className={GHOST_BTN_MD}>
           Edit
+        </button>
+        <button
+          type="button"
+          onClick={onExport}
+          title="Download this guide with its images and project files as a .zip you can import into another library"
+          className={GHOST_BTN_MD}
+        >
+          Export
         </button>
         <button
           type="button"

@@ -76,7 +76,7 @@ export function manifestSource(type: Exclude<PackageKind, 'unknown' | 'legacy-ba
 /* -- Classification ------------------------------------------------------ */
 
 /** Depth ≤ 3: `guide.json`, `<slug>/guide.json`, `guides/<slug>/guide.json`. */
-const isGuideEntry = (path: string) => {
+export const isGuideEntry = (path: string) => {
   const parts = path.toLowerCase().split('/')
   return parts[parts.length - 1] === 'guide.json' && parts.length <= 3
 }
