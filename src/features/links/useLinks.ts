@@ -2,15 +2,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { DEFAULT_SECTIONS, normalizeUrl, reviveSections } from './linksData'
 import { readLinksFile, writeLinksFile } from './linksFile'
+import { countLinks, mergeLinkSections } from './linksMerge'
+import type { FolderLink } from '../sync/useFolderLifecycle'
 import type { LinkEntry, LinkFolder, LinkSection, SectionItem } from './types'
 
 const LINKS_KEY = storageKey('links', 'sections')
 const FILE_DEBOUNCE_MS = 600
 
+export type LinksImportResult = {
+  added: { sections: number; folders: number; links: number }
+  /** Links left out because the same URL was already there. */
+  skipped: number
+}
+
 export type LinksController = {
   sections: LinkSection[]
   /** True once the list is mirrored to `links.json` in the linked folder. */
   savedToFile: boolean
+  /** Write `links.json` now (when a folder is linked and was read). */
+  saveNow: () => Promise<void>
+  /** Bring in sections from an export: `merge` adds what is missing, `replace` swaps the lot. */
+  importSections: (incoming: LinkSection[], mode: 'merge' | 'replace') => LinksImportResult
   addSection: (title: string) => void
   renameSection: (id: string, title: string) => void
   removeSection: (id: string) => void
@@ -38,39 +50,69 @@ function mapItems(
 
 /**
  * The Links page's data. Kept in localStorage like the other pages, and
- * mirrored to `links.json` in the folder linked on the Guides page (when one is
- * linked and writable). A file already in that folder wins on load.
+ * mirrored to `links.json` in the linked folder (when one is linked and
+ * writable). A file already in that folder wins whenever the folder is linked,
+ * reconnected or rescanned; a folder without one gets it created from what is
+ * on screen.
  */
-export function useLinks(): LinksController {
+export function useLinks(folder: FolderLink): LinksController {
+  const { dir, epoch } = folder
   const [sections, setSections] = usePersistentState<LinkSection[]>(
     LINKS_KEY,
     () => DEFAULT_SECTIONS,
     reviveSections,
   )
   const [savedToFile, setSavedToFile] = useState(false)
-  /** Don't write until the folder's file has had its chance to be adopted. */
-  const loaded = useRef(false)
+  /** The folder whose file has been read — writes wait for it, so a failed read can't overwrite the file. */
+  const loadedFor = useRef<FileSystemDirectoryHandle | null>(null)
+  const sectionsRef = useRef(sections)
 
   useEffect(() => {
+    sectionsRef.current = sections
+  }, [sections])
+
+  useEffect(() => {
+    loadedFor.current = null
+    if (!dir) return
     let cancelled = false
-    void readLinksFile().then((fromFile) => {
-      if (cancelled) return
+    void readLinksFile(dir).then(async (fromFile) => {
+      if (cancelled || fromFile === null) return
       if (fromFile) setSections(fromFile)
-      loaded.current = true
-      if (fromFile !== null) setSavedToFile(true)
+      else await writeLinksFile(dir, sectionsRef.current)
+      if (cancelled) return
+      loadedFor.current = dir
+      setSavedToFile(true)
     })
     return () => {
       cancelled = true
     }
-  }, [setSections])
+  }, [dir, epoch, setSections])
 
   useEffect(() => {
-    if (!loaded.current) return
+    if (!dir || loadedFor.current !== dir) return
     const timer = window.setTimeout(() => {
-      void writeLinksFile(sections).then(setSavedToFile)
+      void writeLinksFile(dir, sections).then(setSavedToFile)
     }, FILE_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [sections])
+  }, [dir, sections])
+
+  const saveNow = useCallback(async () => {
+    if (dir && loadedFor.current === dir) await writeLinksFile(dir, sectionsRef.current)
+  }, [dir])
+
+  const importSections = useCallback(
+    (incoming: LinkSection[], mode: 'merge' | 'replace'): LinksImportResult => {
+      if (mode === 'replace') {
+        setSections(incoming)
+        const folders = incoming.reduce((n, s) => n + s.items.filter((i) => i.kind === 'folder').length, 0)
+        return { added: { sections: incoming.length, folders, links: countLinks(incoming) }, skipped: 0 }
+      }
+      const result = mergeLinkSections(sectionsRef.current, incoming)
+      setSections(result.sections)
+      return { added: result.added, skipped: result.skipped }
+    },
+    [setSections],
+  )
 
   const addSection = useCallback(
     (title: string) =>
@@ -148,7 +190,9 @@ export function useLinks(): LinksController {
 
   return {
     sections,
-    savedToFile,
+    savedToFile: savedToFile && dir !== null,
+    saveNow,
+    importSections,
     addSection,
     renameSection,
     removeSection,

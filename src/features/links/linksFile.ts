@@ -1,29 +1,17 @@
-import { loadFolderHandle } from '../guides/storage/handleStore'
-import { isFolderSyncSupported, verifyPermission } from '../guides/storage/guidesFolder'
+import { readTextFile, writeFileExact } from '../guides/storage/fsOps'
 import { reviveSections } from './linksData'
 import type { LinkSection } from './types'
 
-/** Lives next to `guides.json` in the folder linked from the Guides page. */
+/** Lives next to `guides.json` in the linked folder. */
 export const LINKS_FILENAME = 'links.json'
 
-/** The linked folder, only if we already hold read-write access (no prompt). */
-async function linkedFolder(): Promise<FileSystemDirectoryHandle | null> {
-  if (!isFolderSyncSupported()) return null
-  const handle = await loadFolderHandle()
-  return handle && (await verifyPermission(handle, false)) ? handle : null
-}
-
-/** Sections on disk: `null` when no folder is usable, `undefined` when no file yet. */
-export async function readLinksFile(): Promise<LinkSection[] | null | undefined> {
+/** Sections on disk: `null` when the read failed, `undefined` when there is no file yet. */
+export async function readLinksFile(
+  dir: FileSystemDirectoryHandle,
+): Promise<LinkSection[] | null | undefined> {
   try {
-    const dir = await linkedFolder()
-    if (!dir) return null
-    let text: string
-    try {
-      text = await (await (await dir.getFileHandle(LINKS_FILENAME)).getFile()).text()
-    } catch {
-      return undefined
-    }
+    const text = await readTextFile(dir, LINKS_FILENAME)
+    if (text === null) return undefined
     return reviveSections(JSON.parse(text)) ?? undefined
   } catch {
     return null
@@ -31,14 +19,12 @@ export async function readLinksFile(): Promise<LinkSection[] | null | undefined>
 }
 
 /** Returns whether the file was written. */
-export async function writeLinksFile(sections: LinkSection[]): Promise<boolean> {
+export async function writeLinksFile(
+  dir: FileSystemDirectoryHandle,
+  sections: LinkSection[],
+): Promise<boolean> {
   try {
-    const dir = await linkedFolder()
-    if (!dir) return false
-    const fileHandle = await dir.getFileHandle(LINKS_FILENAME, { create: true })
-    const writable = await fileHandle.createWritable()
-    await writable.write(JSON.stringify({ sections }, null, 2))
-    await writable.close()
+    await writeFileExact(dir, LINKS_FILENAME, JSON.stringify({ sections }, null, 2))
     return true
   } catch {
     return false
