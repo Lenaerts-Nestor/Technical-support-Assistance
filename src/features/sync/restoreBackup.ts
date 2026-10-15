@@ -7,20 +7,22 @@ import { countLinks } from '../links/linksMerge'
 import { LINKS_FILENAME } from '../links/linksFile'
 import { reviveSections } from '../links/linksData'
 import { SNIPPETS_FILENAME, reviveSnippets } from '../cases/snippetsFile'
+import { CALENDAR_FILENAME } from '../calendar/calendarFile'
+import { reviveEntries } from '../calendar/calendarData'
 import { MANIFEST_NAME } from './packages'
 
 /** What is in the linked folder, counted the way the app reads it. */
-export type FolderContent = { guides: number; links: number; snippets: number; other: number }
+export type FolderContent = { guides: number; links: number; snippets: number; calendar: number; other: number }
 
-export const folderIsEmpty = (c: FolderContent) => c.guides + c.links + c.snippets + c.other === 0
+export const folderIsEmpty = (c: FolderContent) => c.guides + c.links + c.snippets + c.calendar + c.other === 0
 
 /**
- * The folder's content at its top level. The three data files count by what they
+ * The folder's content at its top level. The data files count by what they
  * hold — an empty `guides.json` / `links.json` that the app wrote itself on first
  * link is not content — and anything else (images, other folders) counts as other.
  */
 export async function describeFolderContent(dir: FileSystemDirectoryHandle): Promise<FolderContent> {
-  const content: FolderContent = { guides: 0, links: 0, snippets: 0, other: 0 }
+  const content: FolderContent = { guides: 0, links: 0, snippets: 0, calendar: 0, other: 0 }
   for await (const [name, handle] of dir.entries()) {
     if (isIgnoredName(name)) continue
     if (handle.kind !== 'file') {
@@ -32,6 +34,7 @@ export async function describeFolderContent(dir: FileSystemDirectoryHandle): Pro
       if (name === GUIDES_FILENAME) content.guides += parseGuidesFile(text).length
       else if (name === LINKS_FILENAME) content.links += countLinks(reviveSections(JSON.parse(text)) ?? [])
       else if (name === SNIPPETS_FILENAME) content.snippets += reviveSnippets(JSON.parse(text))?.length ?? 0
+      else if (name === CALENDAR_FILENAME) content.calendar += reviveEntries(JSON.parse(text))?.length ?? 0
       else content.other++
     } catch {
       content.other++ // unreadable: treat as content rather than risk overwriting it
@@ -45,7 +48,7 @@ export type RestoreResult = { written: number; failed: { path: string; message: 
 /** Data documents go last, so an interrupted restore never leaves a guide pointing at files that are not there yet. */
 function rank(path: string): number {
   const name = path.toLowerCase().split('/').pop() ?? ''
-  if ([GUIDES_FILENAME, LINKS_FILENAME, SNIPPETS_FILENAME].includes(name) && !path.includes('/')) return 2
+  if ([GUIDES_FILENAME, LINKS_FILENAME, SNIPPETS_FILENAME, CALENDAR_FILENAME].includes(name) && !path.includes('/')) return 2
   return name === 'guide.json' ? 1 : 0
 }
 

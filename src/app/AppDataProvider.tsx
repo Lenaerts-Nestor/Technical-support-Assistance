@@ -4,7 +4,9 @@ import { useFolderLifecycle } from '../features/sync/useFolderLifecycle'
 import { useGuidesLibrary } from '../features/guides/useGuidesLibrary'
 import { useLinks } from '../features/links/useLinks'
 import { useSnippets } from '../features/cases/useSnippets'
+import { useCalendar } from '../features/calendar/useCalendar'
 import {
+  CalendarContext,
   EditingContext,
   FolderContext,
   GuidesContext,
@@ -18,6 +20,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const guides = useGuidesLibrary(folder)
   const links = useLinks(folder)
   const snippets = useSnippets(folder)
+  const calendar = useCalendar(folder)
   const [editing, setEditing] = useState(false)
   const editingValue = useMemo(() => ({ editing, setEditing }), [editing])
 
@@ -26,7 +29,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       <GuidesContext value={guides}>
         <LinksContext value={links}>
           <SnippetsContext value={snippets}>
-            <EditingContext value={editingValue}>{children}</EditingContext>
+            <CalendarContext value={calendar}>
+              <EditingContext value={editingValue}>{children}</EditingContext>
+            </CalendarContext>
           </SnippetsContext>
         </LinksContext>
       </GuidesContext>

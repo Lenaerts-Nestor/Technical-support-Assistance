@@ -14,6 +14,7 @@ describe('describeFolderContent', () => {
     await put(fs, 'guides.json', guidesJson(0))
     await put(fs, 'links.json', JSON.stringify({ sections: [{ id: 'a', title: 'A', items: [] }] }))
     await put(fs, 'cases-snippets.json', JSON.stringify({ snippets: [] }))
+    await put(fs, 'calendar.json', JSON.stringify({ entries: [] }))
     expect(folderIsEmpty(await describeFolderContent(fs.handle))).toBe(true)
   })
 
@@ -22,9 +23,10 @@ describe('describeFolderContent', () => {
     await put(fs, 'guides.json', guidesJson(2))
     await put(fs, 'links.json', JSON.stringify({ sections: [{ id: 'a', title: 'A', items: [{ id: 'l', kind: 'link', label: 'x', url: 'https://x.com' }] }] }))
     await put(fs, 'cases-snippets.json', JSON.stringify({ snippets: [{ id: 's', label: 'a', text: 'b', language: 'en' }] }))
+    await put(fs, 'calendar.json', JSON.stringify({ entries: [{ date: '2026-10-15', kind: 'pto' }] }))
     await put(fs, 'a.png', 'png')
     await put(fs, 'a.png.crswap', 'ignored')
-    expect(await describeFolderContent(fs.handle)).toEqual({ guides: 2, links: 1, snippets: 1, other: 1 })
+    expect(await describeFolderContent(fs.handle)).toEqual({ guides: 2, links: 1, snippets: 1, calendar: 1, other: 1 })
   })
 
   it('counts an unreadable data file as content rather than risk overwriting it', async () => {

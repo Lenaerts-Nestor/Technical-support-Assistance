@@ -32,6 +32,13 @@
   /* Text that sits on a filled brand background — amber needs dark, not white. */
   --color-on-brand: #1a1a1c;
 
+  /* Calendar days away. PTO is a deliberately loud light green so a day off
+     is the first thing the eye lands on; "other" is a violet that stays apart from it. */
+  --color-pto: #3df58a;
+  --color-pto-ink: #04230f;
+  --color-leave-other: #c58bff;
+  --color-leave-other-ink: #1f0a38;
+
   /* Just enough lift to separate a card from the canvas — borders do the work. */
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.35);
 }
