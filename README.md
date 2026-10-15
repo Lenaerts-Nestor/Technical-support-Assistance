@@ -1,7 +1,7 @@
 # Support Hub
 
 A dashboard for support work: voice-call notes, RMA, cases, step-by-step guides and
-quick links. Guides, links and case snippets are saved into one folder on your
+quick links, and a personal calendar of days off. Guides, links, case snippets and the calendar are saved into one folder on your
 computer that you pick once on the **Sync** page (Chrome or Edge on desktop).
 
 ## The linked folder
@@ -15,6 +15,7 @@ computer that you pick once on the **Sync** page (Chrome or Edge on desktop).
     projects/…                its project zips
   links.json                  the Links page
   cases-snippets.json         "My texts" on the Cases page
+  calendar.json               the Calendar page — personal, stays in your own folder
   legacy-backup/              guides.json as it was before Organize
 ```
 
@@ -31,6 +32,16 @@ each of them a folder of its own. It only copies — originals are never moved o
 deleted — and shows a preview first. A guide whose files cannot all be copied is left
 exactly as it was and can be retried. **Find guide folders** adds guide folders you
 dropped into `guides/` by hand.
+
+## Calendar
+
+Mark days as **PTO** (bright green) or **Other** (with a short note). Click a day, or use
+**Mark days** for a span (optionally skipping weekends) — any month, past or future. The
+card on the right lists the next five events, and **All** shrinks the view to a whole-year
+grid. The calendar follows today's date by itself. Entries are plain JSON
+(`{ "entries": [{ "date": "2026-10-15", "kind": "pto" | "other", "note": "" }] }`), kept
+in `calendar.json` in your own linked folder. It has no Sync card of its own, so it is never
+part of a Links or Snippets export — only your full backup carries it.
 
 ## Sharing
 

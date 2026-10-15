@@ -11,6 +11,7 @@ import { RmaPage } from '../features/rma/RmaPage'
 import { CasesPage } from '../features/cases/CasesPage'
 import { GuidesPage } from '../features/guides/GuidesPage'
 import { LinksPage } from '../features/links/LinksPage'
+import { CalendarPage } from '../features/calendar/CalendarPage'
 import { SyncPage } from '../features/sync/SyncPage'
 import { KevinGuidePage } from '../features/kevinGuide/KevinGuidePage'
 
@@ -20,6 +21,7 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
   cases: CasesPage,
   guides: GuidesPage,
   links: LinksPage,
+  calendar: CalendarPage,
   sync: SyncPage,
   kevinGuide: KevinGuidePage,
 }
