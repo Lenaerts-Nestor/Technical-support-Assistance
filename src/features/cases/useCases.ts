@@ -13,6 +13,7 @@ import {
   textToHtml,
   toggleBulletLines,
 } from './bullets'
+import { findPlaceholders } from './placeholders'
 import type { CaseLanguage, FlaggedMatch } from './types'
 
 const DRAFT_KEY = storageKey('cases', 'draft')
@@ -329,6 +330,18 @@ export function useCases() {
     editorRef.current?.focus()
   }, [withCheckpoint, setDraft])
 
+  const placeholders = useMemo(() => findPlaceholders(draft), [draft])
+  const nextPlaceholder = useRef(0)
+
+  const jumpToPlaceholder = useCallback(() => {
+    const el = editorRef.current
+    if (!el || !placeholders.length) return
+    const index = nextPlaceholder.current % placeholders.length
+    nextPlaceholder.current = index + 1
+    el.focus()
+    el.setSelectionRange(placeholders[index].start, placeholders[index].end)
+  }, [placeholders])
+
   const applyBold = useCallback(() => {
     const el = editorRef.current
     const start = el?.selectionStart ?? 0
@@ -525,14 +538,15 @@ export function useCases() {
    * (Salesforce, Notes, Outlook), the plain one tidy "• " lines for everything else.
    */
   const copy = useCallback(() => {
+    if (placeholders.length) return
     const plain = normalizeBullets(draft)
     return copyToClipboard(plain, 'rich', textToHtml(plain))
-  }, [copyToClipboard, draft])
+  }, [copyToClipboard, draft, placeholders])
 
   /** Plain text only, for a destination that misbehaves with the rich flavour. */
   const copyPlain = useCallback(
-    () => copyToClipboard(normalizeBullets(draft), 'plain'),
-    [copyToClipboard, draft],
+    () => (placeholders.length ? undefined : copyToClipboard(normalizeBullets(draft), 'plain')),
+    [copyToClipboard, draft, placeholders],
   )
 
   return {
@@ -551,6 +565,8 @@ export function useCases() {
     flagged,
     jumpToFlagged,
     removeFlagged,
+    placeholders,
+    jumpToPlaceholder,
     applyBold,
     applyBullets,
     indentBullets: shiftBullets,
