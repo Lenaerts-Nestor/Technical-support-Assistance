@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLinksData } from '../../app/appDataContext'
-import { filterSections, packSections } from './linksData'
+import { filterSections } from './linksData'
 import { FolderModal } from './components/FolderModal'
 import { LinkForm } from './components/LinkForm'
 import { SectionCard } from './components/SectionCard'
@@ -18,9 +18,6 @@ export function LinksPage() {
 
   const searching = query.trim() !== ''
   const shown = filterSections(links.sections, query)
-  // Editing keeps the saved order so the move arrows and drag handles mean what they say;
-  // otherwise small sections are stacked and the cards sorted by size.
-  const cells = editing ? shown.map((section) => [section]) : packSections(shown)
 
   // The open folder is looked up live, so edits made inside the dialog show at once.
   const open = openFolderId
@@ -42,6 +39,17 @@ export function LinksPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {editing && (
+            <button
+              type="button"
+              className={GHOST_BTN_MD}
+              aria-pressed={addingSection}
+              onClick={() => setAddingSection((v) => !v)}
+            >
+              <PlusIcon className="h-4 w-4" />
+              Add section
+            </button>
+          )}
           <div className="relative">
             <SearchIcon className="text-ink-faint pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
             <input
@@ -75,45 +83,34 @@ export function LinksPage() {
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-4">
-          {cells.map((cell) => (
-            <div key={cell[0].id} className="space-y-4">
-              {cell.map((section) => (
-                <SectionCard
-                  key={section.id}
-                  section={section}
-                  // Colours follow the full list so a search doesn't recolour the cards.
-                  index={links.sections.findIndex((s) => s.id === section.id)}
-                  count={links.sections.length}
-                  links={links}
-                  editing={editing}
-                  searching={searching}
-                  onOpenFolder={setOpenFolderId}
-                />
-              ))}
-            </div>
+          {shown.map((section) => (
+            <SectionCard
+              key={section.id}
+              section={section}
+              // Colours follow the full list so a search doesn't recolour the cards.
+              index={links.sections.findIndex((s) => s.id === section.id)}
+              count={links.sections.length}
+              links={links}
+              editing={editing}
+              searching={searching}
+              onOpenFolder={setOpenFolderId}
+            />
           ))}
         </div>
       )}
 
-      {editing && !searching && (
+      {editing && addingSection && (
         <div className="max-w-sm">
-          {addingSection ? (
-            <LinkForm
-              withUrl={false}
-              labelPlaceholder="Section name"
-              submitLabel="Add section"
-              onSubmit={(title) => {
-                links.addSection(title)
-                setAddingSection(false)
-              }}
-              onCancel={() => setAddingSection(false)}
-            />
-          ) : (
-            <button type="button" className={GHOST_BTN_MD} onClick={() => setAddingSection(true)}>
-              <PlusIcon className="h-4 w-4" />
-              Add section
-            </button>
-          )}
+          <LinkForm
+            withUrl={false}
+            labelPlaceholder="Section name"
+            submitLabel="Add section"
+            onSubmit={(title) => {
+              links.addSection(title)
+              setAddingSection(false)
+            }}
+            onCancel={() => setAddingSection(false)}
+          />
         </div>
       )}
 
