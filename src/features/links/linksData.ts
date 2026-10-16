@@ -126,3 +126,41 @@ export function moveSection(sections: LinkSection[], id: string, toIndex: number
   next.splice(to, 0, moved)
   return next
 }
+
+/** A section with this many items or fewer is "small" and may share a column cell with others. */
+export const SMALL_SECTION_MAX = 3
+
+/** Rough height budget of one stacked cell, in items (each stacked section also costs a header). */
+const STACK_BUDGET = 12
+
+/** One cell of the Links grid: a single large section, or several small ones stacked. */
+export type SectionCell = LinkSection[]
+
+/**
+ * Lay sections out as grid cells. Large sections get a cell each, biggest first;
+ * small ones (<= SMALL_SECTION_MAX items) are stacked together, biggest first,
+ * so the short cards don't each waste a whole column. The sort is stable, so
+ * equal-sized sections keep the order the user gave them.
+ */
+export function packSections(sections: LinkSection[]): SectionCell[] {
+  const bySize = [...sections].sort((a, b) => b.items.length - a.items.length)
+  const cells: SectionCell[] = []
+  let stack: LinkSection[] = []
+  let used = 0
+  for (const section of bySize) {
+    if (section.items.length > SMALL_SECTION_MAX) {
+      cells.push([section])
+      continue
+    }
+    const cost = section.items.length + 2
+    if (stack.length > 0 && used + cost > STACK_BUDGET) {
+      cells.push(stack)
+      stack = []
+      used = 0
+    }
+    stack.push(section)
+    used += cost
+  }
+  if (stack.length > 0) cells.push(stack)
+  return cells
+}
