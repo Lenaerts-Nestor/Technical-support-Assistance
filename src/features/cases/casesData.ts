@@ -90,6 +90,14 @@ export const FLAGGED_PHRASES: string[] = [
   "i'm unable to browse the internet",
 ]
 
+/**
+ * Fill-in-the-blank phrases the templates leave in the draft. While one remains
+ * (or a run of "#####", see placeholders.ts) the editor highlights it and keeps
+ * Copy disabled. Add a phrase here when a new template uses one; other
+ * bracketed text and {!merge fields} are left alone.
+ */
+export const TEMPLATE_PLACEHOLDERS: string[] = ['[duplicate case number]', '[primary case number]']
+
 /** True for an item that opens a menu rather than inserting text itself. */
 export const isTemplateMenu = (item: TemplateItem): item is TemplateMenu => 'options' in item
 
