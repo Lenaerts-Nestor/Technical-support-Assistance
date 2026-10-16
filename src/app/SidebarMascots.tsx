@@ -17,6 +17,10 @@ const MASCOTS: { src: string; title: string }[] = [
   { src: giphy('ssZGnMX7oD6lkn4hIN'), title: 'Pepe the frog throwing it back' },
   { src: giphy('oxepJEnraGSaRinMUW'), title: 'Frogs in the rain' },
   { src: tenor('15495250134764203639'), title: "I'm sorry frog" },
+  { src: tenor('27279924'), title: 'Worry him frog' },
+  { src: tenor('2619942249443391928'), title: 'Worried froge' },
+  { src: tenor('15424500876455105492'), title: 'Concerned froge' },
+  { src: tenor('8435336107615142483'), title: 'Worried froge in a hoodie' },
 ]
 
 export function SidebarMascots() {
