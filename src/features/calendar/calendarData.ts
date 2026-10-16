@@ -138,22 +138,18 @@ export const sortEntries = (entries: CalendarEntry[]) =>
 /* -- Reading the entries ------------------------------------------------- */
 
 /**
- * Join consecutive marked days into events: same kind, same note, and nothing
- * but a weekend between them — so a Monday-to-Friday week off is one run, and
- * Friday plus the next Monday joins up too.
+ * Join back-to-back marked days into events: same kind, same note, and on
+ * consecutive calendar days — so a Monday-to-Friday week off is one run, but a
+ * Friday and the next Monday stay apart so each stretch is clearly shown.
  */
 export function groupRuns(entries: CalendarEntry[]): LeaveRun[] {
   const runs: LeaveRun[] = []
   for (const entry of sortEntries(entries)) {
     const last = runs[runs.length - 1]
-    if (last && last.kind === entry.kind && last.note === entry.note) {
-      let next = addDays(last.end, 1)
-      while (next < entry.date && isWeekend(next)) next = addDays(next, 1)
-      if (next === entry.date) {
-        last.end = entry.date
-        last.days++
-        continue
-      }
+    if (last && last.kind === entry.kind && last.note === entry.note && addDays(last.end, 1) === entry.date) {
+      last.end = entry.date
+      last.days++
+      continue
     }
     runs.push({ start: entry.date, end: entry.date, kind: entry.kind, note: entry.note, days: 1 })
   }

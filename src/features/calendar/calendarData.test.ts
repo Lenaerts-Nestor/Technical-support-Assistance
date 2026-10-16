@@ -103,9 +103,17 @@ describe('reviveEntries', () => {
 })
 
 describe('groupRuns / upcomingRuns', () => {
-  it('joins a working week, including across the weekend', () => {
-    const runs = groupRuns([pto('2026-10-15'), pto('2026-10-16'), pto('2026-10-19'), pto('2026-10-20')])
-    expect(runs).toEqual([{ start: '2026-10-15', end: '2026-10-20', kind: 'pto', note: '', days: 4 }])
+  it('joins consecutive days into one run', () => {
+    const runs = groupRuns([pto('2026-10-14'), pto('2026-10-15'), pto('2026-10-16')])
+    expect(runs).toEqual([{ start: '2026-10-14', end: '2026-10-16', kind: 'pto', note: '', days: 3 }])
+  })
+
+  it('splits a run at the weekend so Friday and Monday are separate', () => {
+    const runs = groupRuns([pto('2026-10-23'), pto('2026-10-26')])
+    expect(runs.map((r) => [r.start, r.end])).toEqual([
+      ['2026-10-23', '2026-10-23'],
+      ['2026-10-26', '2026-10-26'],
+    ])
   })
 
   it('keeps a gap, a different kind or a different note apart', () => {
