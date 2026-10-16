@@ -5,6 +5,7 @@ import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
 import type { FolderStatus } from '../features/sync/useFolderLifecycle'
 import { ICON_BTN } from '../shared/ui/styles'
 import { ICON_BASE } from '../shared/ui/iconBase'
+import { SidebarMascots } from './SidebarMascots'
 
 const ICONS: Record<PageId, React.ReactElement> = {
   voiceCall: (
@@ -178,6 +179,9 @@ export function Sidebar({
           />
         ))}
       </nav>
+
+      {/* Too narrow for pictures once the sidebar is icons-only. */}
+      {!compact && <SidebarMascots />}
 
       {bottom.length > 0 && (
         <nav
