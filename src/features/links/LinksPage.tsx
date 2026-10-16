@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLinksData } from '../../app/appDataContext'
-import { filterSections } from './linksData'
+import { filterSections, packSections } from './linksData'
 import { FolderModal } from './components/FolderModal'
 import { LinkForm } from './components/LinkForm'
 import { SectionCard } from './components/SectionCard'
@@ -18,6 +18,9 @@ export function LinksPage() {
 
   const searching = query.trim() !== ''
   const shown = filterSections(links.sections, query)
+  // Editing keeps the saved order so the move arrows and drag handles mean what they say;
+  // otherwise small sections are stacked and the cards sorted by size.
+  const cells = editing ? shown.map((section) => [section]) : packSections(shown)
 
   // The open folder is looked up live, so edits made inside the dialog show at once.
   const open = openFolderId
@@ -71,19 +74,23 @@ export function LinksPage() {
             : 'No sections yet. Use Edit, then Add section to create one.'}
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] items-start gap-4">
-          {shown.map((section) => (
-            <SectionCard
-              key={section.id}
-              section={section}
-              // Colours follow the full list so a search doesn't recolour the cards.
-              index={links.sections.findIndex((s) => s.id === section.id)}
-              count={links.sections.length}
-              links={links}
-              editing={editing}
-              searching={searching}
-              onOpenFolder={setOpenFolderId}
-            />
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-4">
+          {cells.map((cell) => (
+            <div key={cell[0].id} className="space-y-4">
+              {cell.map((section) => (
+                <SectionCard
+                  key={section.id}
+                  section={section}
+                  // Colours follow the full list so a search doesn't recolour the cards.
+                  index={links.sections.findIndex((s) => s.id === section.id)}
+                  count={links.sections.length}
+                  links={links}
+                  editing={editing}
+                  searching={searching}
+                  onOpenFolder={setOpenFolderId}
+                />
+              ))}
+            </div>
           ))}
         </div>
       )}

@@ -33,6 +33,7 @@ export function SectionCard({ section, index, count, links, editing, searching, 
   const [adding, setAdding] = useState<Adding>(null)
   const [renaming, setRenaming] = useState(false)
   const [dropTarget, setDropTarget] = useState(false)
+  const folders = section.items.filter((item) => item.kind === 'folder')
   const canReorder = editing && !searching && count > 1
 
   const removeSection = () => {
@@ -76,7 +77,7 @@ export function SectionCard({ section, index, count, links, editing, searching, 
         />
       ) : (
         <header className="mb-2.5 flex items-center justify-between gap-2 px-1">
-          <h3 className="text-ink flex min-w-0 items-center gap-2 text-sm font-semibold">
+          <h3 className="text-ink flex min-w-0 items-center gap-2 text-base font-bold tracking-tight">
             {canReorder && (
               <span
                 draggable
@@ -94,7 +95,7 @@ export function SectionCard({ section, index, count, links, editing, searching, 
                 <GripIcon className="h-4 w-4" />
               </span>
             )}
-            <LinkIcon className={`h-4 w-4 shrink-0 ${tone.icon}`} />
+            <LinkIcon className={`h-4.5 w-4.5 shrink-0 ${tone.icon}`} />
             <span className="truncate">{section.title}</span>
           </h3>
           {editing && !searching && (
@@ -112,7 +113,8 @@ export function SectionCard({ section, index, count, links, editing, searching, 
           </p>
         )}
 
-        {section.items.map((item) =>
+        {/* Plain links first, folders pinned to the bottom of the section. */}
+        {[...section.items.filter((item) => item.kind === 'link'), ...folders].map((item) =>
           item.kind === 'folder' ? (
             <FolderRow
               key={item.id}

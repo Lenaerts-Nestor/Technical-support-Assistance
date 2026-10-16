@@ -9,7 +9,7 @@ import type { LinkEntry } from '../types'
 
 /** Shared look of every row: a link, a folder, or a button in the folder modal. */
 export const ROW =
-  'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-line-soft bg-subtle px-2.5 py-2 text-left text-sm text-ink transition-colors hover:border-line-strong hover:bg-line-soft'
+  'flex min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-line-soft bg-subtle px-3 py-2.5 text-left text-[15px] font-semibold text-ink transition-colors hover:border-line-strong hover:bg-line-soft'
 
 /** Pencil + trash shown beside a row while the page is in edit mode. */
 export function RowTools({

@@ -5,6 +5,7 @@ import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
 import type { FolderStatus } from '../features/sync/useFolderLifecycle'
 import { ICON_BTN } from '../shared/ui/styles'
 import { ICON_BASE } from '../shared/ui/iconBase'
+import { SidebarClock } from './SidebarClock'
 import { SidebarMascots } from './SidebarMascots'
 
 const ICONS: Record<PageId, React.ReactElement> = {
@@ -132,16 +133,7 @@ export function Sidebar({
       }`}
     >
       <div className={compact ? 'flex flex-col items-center gap-3 pb-5' : 'flex items-start justify-between gap-2 pb-5 pl-3'}>
-        {compact ? (
-          <div className="text-brand-strong text-sm font-bold tracking-tight" title="Support Hub">
-            SH
-          </div>
-        ) : (
-          <div>
-            <h1 className="text-ink text-base font-semibold tracking-tight">Support Hub</h1>
-            <p className="text-ink-faint mt-0.5 text-xs">Case Dashboard</p>
-          </div>
-        )}
+        <SidebarClock compact={compact} />
         <button
           type="button"
           onClick={onToggle}

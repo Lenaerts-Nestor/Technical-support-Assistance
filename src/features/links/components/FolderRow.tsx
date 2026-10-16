@@ -35,11 +35,16 @@ export function FolderRow({ folder, links, editing, onOpen }: FolderRowProps) {
 
   return (
     <div className="flex items-center gap-1">
-      <button type="button" onClick={onOpen} className={ROW} aria-haspopup="dialog">
-        <FolderIcon className="text-ink-faint h-4 w-4 shrink-0" />
+      <button
+        type="button"
+        onClick={onOpen}
+        className={`${ROW} !border-amber-400/50 !bg-amber-400/10 hover:!border-amber-300 hover:!bg-amber-400/20`}
+        aria-haspopup="dialog"
+      >
+        <FolderIcon className="h-4.5 w-4.5 shrink-0 text-amber-300" />
         <span className="flex-1 truncate">{folder.label}</span>
         <span className={COUNT_BADGE}>{folder.links.length}</span>
-        <ChevronRightIcon className="text-ink-faint h-3.5 w-3.5 shrink-0" />
+        <ChevronRightIcon className="h-3.5 w-3.5 shrink-0 text-amber-300" />
       </button>
       {editing && (
         <RowTools
