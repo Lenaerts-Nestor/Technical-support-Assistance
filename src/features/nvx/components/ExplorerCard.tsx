@@ -26,9 +26,9 @@ export function ExplorerCard({ path, onPath, blockedReason, running, onSend, onS
         }}
       >
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-ink-muted font-mono text-xs font-semibold">GET</span>
+          <span className="text-ink-muted font-mono text-sm font-semibold">GET</span>
           <input
-            className={`${INPUT} min-w-[16rem] flex-1 font-mono`}
+            className={`${INPUT} min-w-[16rem] flex-1 py-2 font-mono text-[15px]`}
             value={path}
             placeholder="/Device/DeviceInfo"
             aria-label="Path on the device"
@@ -43,8 +43,8 @@ export function ExplorerCard({ path, onPath, blockedReason, running, onSend, onS
             Save as call
           </button>
         </div>
-        {path.trim() && !clean && <p className="text-xs text-rose-300">That is not a path the app can send. It must start with / and have no spaces.</p>}
-        {blockedReason && <p className="text-ink-muted text-xs">{blockedReason}</p>}
+        {path.trim() && !clean && <p className="text-sm text-rose-300">That is not a path the app can send. It must start with / and have no spaces.</p>}
+        {blockedReason && <p className="text-ink-muted text-sm">{blockedReason}</p>}
       </form>
     </section>
   )

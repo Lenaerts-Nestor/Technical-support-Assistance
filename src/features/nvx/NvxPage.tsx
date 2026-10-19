@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useNvxData } from '../../app/appDataContext'
+import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { PAGE_SUBTITLE, PAGE_TITLE, PANEL } from '../../shared/ui/styles'
 import { CallsCard } from './components/CallsCard'
+import { ConnectionPanel } from './components/ConnectionPanel'
 import { CallDialog, GroupDialog, UnitDialog } from './components/Dialogs'
 import { ExplorerCard } from './components/ExplorerCard'
 import { GroupBar } from './components/GroupBar'
-import { LoginCard } from './components/LoginCard'
 import { ResultsCard } from './components/ResultsCard'
-import { UnitsCard } from './components/UnitsCard'
 import { useNvxRunner } from './useNvxRunner'
 import type { NvxCall, NvxUnit } from './types'
 
@@ -19,7 +19,7 @@ type Dialog =
 
 /**
  * Reads settings from Crestron devices over their HTTPS REST API: pick a group (NVX, NAX…),
- * pick one of its units, then run a saved call or try any path in the explorer. The login and
+ * tick one or more of its units, then run a saved call or try any path in the explorer. The login and
  * the requests are done by the desktop app, so on the website this page only prepares groups,
  * units and calls.
  */
@@ -27,34 +27,47 @@ export function NvxPage() {
   const nvx = useNvxData()
   const runner = useNvxRunner()
   const [activeId, setActiveId] = useState<string | null>(null)
-  /** Per group: the selected unit and the password (memory only — never saved). */
-  const [unitIds, setUnitIds] = useState<Record<string, string>>({})
+  /** Per group: the ticked units, and the password (memory only — never saved). */
+  const [ticked, setTicked] = useState<Record<string, string[]>>({})
   const [passwords, setPasswords] = useState<Record<string, string>>({})
+  /** A personal preference: the units & login panel folded down to one line. */
+  const [panelOpen, setPanelOpen] = usePersistentState<boolean>(
+    storageKey('nvx', 'panelOpen'),
+    () => true,
+    (raw) => (typeof raw === 'boolean' ? raw : null),
+  )
   const [explorerPath, setExplorerPath] = useState('/Device/DeviceInfo')
   const [dialog, setDialog] = useState<Dialog | null>(null)
 
   const group = nvx.groups.find((g) => g.id === activeId) ?? nvx.groups[0]
-  const unit = group?.units.find((u) => u.id === unitIds[group.id]) ?? group?.units[0]
   const password = group ? (passwords[group.id] ?? '') : ''
+  // Until the user ticks something, the first unit is the one that runs.
+  const selectedIds = new Set(
+    group ? (ticked[group.id] ?? group.units.slice(0, 1).map((u) => u.id)).filter((id) => group.units.some((u) => u.id === id)) : [],
+  )
+  const targets = group ? group.units.filter((u) => selectedIds.has(u.id)) : []
+  const setSelected = (ids: string[]) => group && setTicked((prev) => ({ ...prev, [group.id]: ids }))
 
   const blockedReason = !runner.available
     ? 'Calls run from the Support Hub desktop app. Here you can prepare groups, units and calls.'
-    : !unit
+    : group.units.length === 0
       ? 'Add a unit first.'
-      : !group.username
-        ? 'Enter the username.'
-        : !password
-          ? 'Enter the password.'
-          : null
+      : targets.length === 0
+        ? 'Tick at least one unit.'
+        : !group.username
+          ? 'Enter the username.'
+          : !password
+            ? 'Enter the password.'
+            : null
 
   const runCalls = (calls: Pick<NvxCall, 'title' | 'path'>[]) => {
-    if (group && unit) void runner.run(unit, { username: group.username, password }, calls)
+    if (group && targets.length > 0) void runner.run(targets, { username: group.username, password }, calls)
   }
 
   const closeDialog = () => setDialog(null)
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
+    <div className="mx-auto max-w-[1700px] space-y-6 px-8 py-7">
       <header className="space-y-4">
         <div>
           <h2 className={PAGE_TITLE}>Device API</h2>
@@ -84,42 +97,38 @@ export function NvxPage() {
               your groups, units and calls here.
             </p>
           )}
-          <div className="grid items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-            <div className="space-y-6">
-              <UnitsCard
-                units={group.units}
-                selectedId={unit?.id}
-                onSelect={(unitId) => setUnitIds((prev) => ({ ...prev, [group.id]: unitId }))}
-                onAdd={() => setDialog({ kind: 'unit' })}
-                onEdit={(u) => setDialog({ kind: 'unit', unit: u })}
-              />
-              <LoginCard
-                username={group.username}
-                password={password}
-                onUsername={(name) => nvx.setUsername(group.id, name)}
-                onPassword={(value) => setPasswords((prev) => ({ ...prev, [group.id]: value }))}
-              />
-            </div>
-            <div className="space-y-6">
-              <CallsCard
-                calls={group.calls}
-                blockedReason={blockedReason}
-                running={runner.running}
-                onRun={(call) => runCalls([call])}
-                onRunAll={() => runCalls(group.calls)}
-                onEdit={(call) => setDialog({ kind: 'call', call })}
-              />
-              <ExplorerCard
-                path={explorerPath}
-                onPath={setExplorerPath}
-                blockedReason={blockedReason}
-                running={runner.running}
-                onSend={(path) => runCalls([{ title: 'Explorer', path }])}
-                onSave={(path) => setDialog({ kind: 'call', path })}
-              />
-              <ResultsCard results={runner.results} running={runner.running} onClear={runner.clear} />
-            </div>
-          </div>
+          <ConnectionPanel
+            units={group.units}
+            selectedIds={selectedIds}
+            onToggleUnit={(unitId) => setSelected(selectedIds.has(unitId) ? [...selectedIds].filter((id) => id !== unitId) : [...selectedIds, unitId])}
+            onSelectAll={(on) => setSelected(on ? group.units.map((u) => u.id) : [])}
+            onAddUnit={() => setDialog({ kind: 'unit' })}
+            onEditUnit={(u) => setDialog({ kind: 'unit', unit: u })}
+            username={group.username}
+            password={password}
+            onUsername={(name) => nvx.setUsername(group.id, name)}
+            onPassword={(value) => setPasswords((prev) => ({ ...prev, [group.id]: value }))}
+            open={panelOpen}
+            onToggle={() => setPanelOpen((open) => !open)}
+          />
+          <CallsCard
+            calls={group.calls}
+            blockedReason={blockedReason}
+            running={runner.running}
+            unitCount={targets.length}
+            onRun={(call) => runCalls([call])}
+            onRunAll={() => runCalls(group.calls)}
+            onEdit={(call) => setDialog({ kind: 'call', call })}
+          />
+          <ExplorerCard
+            path={explorerPath}
+            onPath={setExplorerPath}
+            blockedReason={blockedReason}
+            running={runner.running}
+            onSend={(path) => runCalls([{ title: 'Explorer', path }])}
+            onSave={(path) => setDialog({ kind: 'call', path })}
+          />
+          <ResultsCard results={runner.results} units={runner.units} running={runner.running} onClear={runner.clear} />
         </>
       )}
 
@@ -154,7 +163,7 @@ export function NvxPage() {
           onClose={closeDialog}
           onSave={(fields) => {
             const id = nvx.saveUnit(group.id, { ...fields, id: dialog.unit?.id })
-            setUnitIds((prev) => ({ ...prev, [group.id]: id }))
+            if (!selectedIds.has(id)) setSelected([...selectedIds, id])
             closeDialog()
           }}
           onDelete={

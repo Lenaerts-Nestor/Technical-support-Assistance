@@ -1,4 +1,4 @@
-import type { DeviceReply, NvxCall, NvxGroup, NvxUnit, RunResult } from './types'
+import type { CompareRow, DeviceReply, NvxCall, NvxGroup, NvxUnit, RunResult } from './types'
 
 export const NAME_MAX_LENGTH = 40
 const PATH_MAX_LENGTH = 500
@@ -79,6 +79,50 @@ export function flatten(data: unknown, prefix = ''): FlatValue[] {
     return entries.flatMap(([key, value]) => flatten(value, prefix ? `${prefix}.${key}` : key))
   }
   return [{ path: prefix, value: showScalar(data) }]
+}
+
+/**
+ * A path split for reading: the part before the last dot (shown dim, without the `Device.` every
+ * path starts with) and the last part (the property itself, shown bright).
+ */
+export function splitPath(path: string): { prefix: string; leaf: string } {
+  const dot = path.lastIndexOf('.')
+  if (dot < 0) return { prefix: '', leaf: path }
+  return { prefix: path.slice(0, dot + 1).replace(/^Device\./, ''), leaf: path.slice(dot + 1) }
+}
+
+/** The run's answers in reading order: unit by unit (in the order given), each unit's calls in call order. */
+export function sortResults(results: RunResult[], units: NvxUnit[]): RunResult[] {
+  const position = new Map(units.map((u, i) => [u.id, i]))
+  return [...results].sort(
+    (a, b) => (position.get(a.unit.id) ?? 0) - (position.get(b.unit.id) ?? 0) || a.callIndex - b.callIndex,
+  )
+}
+
+/**
+ * Every property any unit answered, with each unit's value side by side, so the odd one out stands
+ * out. A unit with no answer at all shows `null` everywhere and is left out of the comparison, so
+ * an unreachable unit does not make every row look different. Rows keep the order they first appear in.
+ */
+export function compareRows(results: RunResult[], units: NvxUnit[]): CompareRow[] {
+  const rows = new Map<string, (string | null)[]>()
+  const answered = new Set<number>()
+  for (const result of sortResults(results, units)) {
+    if (!result.reply.ok || result.reply.data === undefined) continue
+    const column = units.findIndex((u) => u.id === result.unit.id)
+    if (column < 0) continue
+    answered.add(column)
+    for (const { path, value } of flatten(result.reply.data)) {
+      const values = rows.get(path) ?? units.map(() => null)
+      values[column] ??= value // the same property answered by two calls keeps the first value
+      rows.set(path, values)
+    }
+  }
+  return [...rows].map(([path, values]) => ({
+    path,
+    values,
+    differs: new Set(values.filter((_, column) => answered.has(column))).size > 1,
+  }))
 }
 
 /** The answer as it should be shown or copied as JSON: pretty when it was JSON, the raw text otherwise. */

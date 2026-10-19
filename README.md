@@ -53,18 +53,23 @@ headers and keep HttpOnly cookies — so the desktop app does it (`desktop/nvx.c
 groups, units and calls.
 
 - **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls and username.
-- **Units**: a name and the device's IPv4 address. The selected unit is where calls run.
-- **Saved calls**: a title and a path such as `/Device/DeviceInfo`. One click runs it on the
-  selected unit; **Run all** gathers every call into one report, with **Copy report** for a case note.
+- **Units & login** in a panel at the top that folds down to one line. A unit is a name and the
+  device's IPv4 address; tick one or several, and calls run on every ticked unit.
+- **Saved calls**: a title and a path such as `/Device/DeviceInfo`. One click runs it on the ticked
+  units; **Run all** gathers every call into one report, with **Copy report** for a case note.
 - **Explorer**: try any path (`GET` only for now), then **Save as call**.
+- **Results**: a section per unit with a card per call (as a table or as JSON), or — with several
+  units — **Compare**, one table with the units side by side and the properties that differ
+  highlighted (**Only differences** hides the rest). A unit that could not be reached is left out
+  of the comparison and marked.
 - **Login**: the username is remembered per group; the password is kept in memory only and is
   gone when the app closes. The app logs in by itself, again when a session expires, and logs out
   of every device when it quits.
 
 Safety: only private network addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x) are accepted,
 so the app can never be pointed at the internet; the self-signed certificate is accepted for
-those requests only; and a failed login stops the run instead of retrying, so a wrong password
-cannot lock an account. Units and calls are saved in `nvx.json` in the linked folder (and in
+those requests only; a failed login stops the run for that unit instead of retrying, so a wrong
+password cannot lock an account; and a device that does not answer is given up on after 10 seconds. Units and calls are saved in `nvx.json` in the linked folder (and in
 your full backup); passwords never are.
 
 ## Sharing

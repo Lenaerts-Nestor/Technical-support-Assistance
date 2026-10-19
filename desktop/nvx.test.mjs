@@ -77,6 +77,7 @@ async function startMockDevice({ user = 'admin', password = 'secret' } = {}) {
     if (req.url === '/Device/DeviceInfo') return reply(200, JSON.stringify({ Device: { DeviceInfo: { Model: 'DM-NVX-E30', Name: 'Lab encoder' } } }), headers)
     if (req.url === '/Device/Ethernet/HostName') return reply(200, JSON.stringify({ Device: { Ethernet: { HostName: 'NVX-LAB' } } }), headers)
     if (req.url === '/plain') return reply(200, 'not json', headers)
+    if (req.url === '/hang') return // the device never answers
     return reply(404, 'nope', headers)
   })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -189,6 +190,25 @@ describe('answers', () => {
     const result = await clientFor(device).request({ ip: '127.0.0.1', path: '/Device/Nothing', ...creds })
     expect(result).toMatchObject({ ok: false, status: 404, kind: 'http' })
     expect(result.error).toContain('/Device/Nothing')
+  })
+
+  it('gives up on a device that stops answering', async () => {
+    device = await startMockDevice()
+    const client = createNvxClient({ port: device.port, allowLoopback: true, timeoutMs: 300 })
+    const started = Date.now()
+    const result = await client.request({ ip: '127.0.0.1', path: '/hang', ...creds })
+    expect(result).toMatchObject({ ok: false, kind: 'network' })
+    expect(result.error).toContain('timed out')
+    expect(Date.now() - started).toBeLessThan(3000)
+  })
+
+  it('gives up on an address that silently drops packets instead of waiting for the OS', async () => {
+    // 10.255.255.1 is private and goes nowhere: either nothing answers or the network says "unreachable".
+    const client = createNvxClient({ port: 8443, timeoutMs: 300 })
+    const started = Date.now()
+    const result = await client.request({ ip: '10.255.255.1', path: '/Device/DeviceInfo', ...creds })
+    expect(result).toMatchObject({ ok: false, kind: 'network' })
+    expect(Date.now() - started).toBeLessThan(3000)
   })
 
   it('reports a device that is not there', async () => {

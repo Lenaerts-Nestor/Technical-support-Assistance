@@ -43,6 +43,16 @@ export type RunResult = {
   key: string
   title: string
   path: string
+  /** Where the call sits in the run, so answers that arrive out of order can be put back in order. */
+  callIndex: number
   unit: NvxUnit
   reply: DeviceReply
+}
+
+/** One row of the comparison: a property and its value on each unit (`null` where a unit has none). */
+export type CompareRow = {
+  path: string
+  values: (string | null)[]
+  /** True when the units do not all show the same value. */
+  differs: boolean
 }

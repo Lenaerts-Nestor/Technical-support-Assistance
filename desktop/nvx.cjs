@@ -87,7 +87,7 @@ function describeNetworkError(error, ip, port) {
  * One HTTPS exchange. Resolves with the status, headers and text, whatever the status is;
  * rejects only when nothing came back.
  */
-function send({ ip, port, method, path, headers, body, jar }) {
+function send({ ip, port, method, path, headers, body, jar, timeoutMs }) {
   return new Promise((resolve, reject) => {
     const cookies = cookieHeader(jar)
     const request = https.request(
@@ -122,7 +122,10 @@ function send({ ip, port, method, path, headers, body, jar }) {
         response.on('error', reject)
       },
     )
-    request.setTimeout(REQUEST_TIMEOUT_MS, () => request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })))
+    // One deadline for the whole exchange. `request.setTimeout` only starts once connected, so an
+    // address that silently drops packets (a mistyped IP) would wait for the OS's own, much longer, limit.
+    const deadline = setTimeout(() => request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })), timeoutMs)
+    request.on('close', () => clearTimeout(deadline))
     request.on('error', (error) => reject(error instanceof NvxError ? error : new NvxError('network', describeNetworkError(error, ip, port))))
     if (body !== undefined) request.write(body)
     request.end()
@@ -133,7 +136,7 @@ function send({ ip, port, method, path, headers, body, jar }) {
  * Keeps one logged-in session per device and runs GET requests through it. Requests to the
  * same device go one at a time, because AuthByPasswd rotates on every response.
  */
-function createNvxClient({ port = 443, allowLoopback = false } = {}) {
+function createNvxClient({ port = 443, allowLoopback = false, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   /** ip -> { jar, username, password, queue } */
   const sessions = new Map()
 
@@ -149,7 +152,7 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
   async function login(ip, session, username, password) {
     session.jar.clear()
     const base = `https://${ip}`
-    const first = await send({ ip, port, method: 'GET', path: '/userlogin.html', jar: session.jar })
+    const first = await send({ ip, port, method: 'GET', path: '/userlogin.html', jar: session.jar, timeoutMs })
     if (!session.jar.has('TRACKID')) {
       throw new NvxError('auth', `${ip} did not offer a login (no TRACKID cookie). Is authentication enabled on the device?`, first.status)
     }
@@ -166,6 +169,7 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
       },
       body,
       jar: session.jar,
+      timeoutMs,
     })
     // A good login redirects to "/" (or answers 200 when a client follows it) and sets AuthByPasswd.
     const accepted = (second.status === 302 || second.status === 200) && session.jar.has('AuthByPasswd')
@@ -183,7 +187,7 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
     const run = async () => {
       const sameLogin = session.username === username && session.password === password
       if (!sameLogin || !session.jar.has('AuthByPasswd')) await login(ip, session, username, password)
-      const request = () => send({ ip, port, method: 'GET', path, headers: { Referer: `https://${ip}/` }, jar: session.jar })
+      const request = () => send({ ip, port, method: 'GET', path, headers: { Referer: `https://${ip}/` }, jar: session.jar, timeoutMs })
       let response = await request()
       if (response.status === 403) {
         // Expired session: log in again once and retry.
@@ -204,7 +208,7 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
     sessions.delete(ip)
     if (!session.jar.size) return
     try {
-      await send({ ip, port, method: 'GET', path: '/logout', headers: { Referer: `https://${ip}/` }, jar: session.jar })
+      await send({ ip, port, method: 'GET', path: '/logout', headers: { Referer: `https://${ip}/` }, jar: session.jar, timeoutMs })
     } catch {
       // Best effort: the device drops idle sessions on its own.
     }

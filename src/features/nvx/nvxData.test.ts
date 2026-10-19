@@ -4,6 +4,9 @@ import {
   flatten,
   formatReport,
   formatResult,
+  compareRows,
+  sortResults,
+  splitPath,
   newGroup,
   normalizeIp,
   normalizePath,
@@ -17,6 +20,7 @@ const ok = (data: unknown): RunResult => ({
   key: 'k',
   title: 'Device info',
   path: '/Device/DeviceInfo',
+  callIndex: 0,
   unit,
   reply: { ok: true, status: 200, ms: 20, data, text: JSON.stringify(data) },
 })
@@ -148,5 +152,78 @@ describe('reviveGroups', () => {
     expect(reviveGroups({ groups: [] })).toBeNull()
     expect(reviveGroups('x')).toBeNull()
     expect(reviveGroups([])).toEqual([])
+  })
+})
+
+const unitA = { id: 'a', label: 'A', ip: '10.0.0.1' }
+const unitB = { id: 'b', label: 'B', ip: '10.0.0.2' }
+const answer = (u: typeof unitA, callIndex: number, data: unknown): RunResult => ({
+  key: `${u.id}${callIndex}`,
+  title: `call ${callIndex}`,
+  path: '/x',
+  callIndex,
+  unit: u,
+  reply: { ok: true, status: 200, ms: 1, data },
+})
+const failure = (u: typeof unitA): RunResult => ({
+  key: `${u.id}!`,
+  title: 'call 0',
+  path: '/x',
+  callIndex: 0,
+  unit: u,
+  reply: { ok: false, status: null, ms: 1, kind: 'network', error: 'No answer' },
+})
+
+describe('splitPath', () => {
+  it('dims the object and keeps the property bright, without the leading Device.', () => {
+    expect(splitPath('Device.DeviceInfo.Model')).toEqual({ prefix: 'DeviceInfo.', leaf: 'Model' })
+    expect(splitPath('Device.Ethernet.Adapters[0].Ip')).toEqual({ prefix: 'Ethernet.Adapters[0].', leaf: 'Ip' })
+    expect(splitPath('Device.Name')).toEqual({ prefix: '', leaf: 'Name' })
+    expect(splitPath('Model')).toEqual({ prefix: '', leaf: 'Model' })
+  })
+})
+
+describe('sortResults', () => {
+  it('puts answers that arrived out of order back unit by unit, call by call', () => {
+    const arrived = [answer(unitB, 1, {}), answer(unitA, 1, {}), answer(unitB, 0, {}), answer(unitA, 0, {})]
+    expect(sortResults(arrived, [unitA, unitB]).map((r) => r.key)).toEqual(['a0', 'a1', 'b0', 'b1'])
+  })
+})
+
+describe('compareRows', () => {
+  it('lines the units up and flags the properties that differ', () => {
+    const rows = compareRows(
+      [
+        answer(unitA, 0, { Device: { Info: { Model: 'E30', Version: '7.4' } } }),
+        answer(unitB, 0, { Device: { Info: { Model: 'E30', Version: '7.2' } } }),
+      ],
+      [unitA, unitB],
+    )
+    expect(rows).toEqual([
+      { path: 'Device.Info.Model', values: ['E30', 'E30'], differs: false },
+      { path: 'Device.Info.Version', values: ['7.4', '7.2'], differs: true },
+    ])
+  })
+
+  it('flags a property that only one of the answering units has', () => {
+    const rows = compareRows([answer(unitA, 0, { Device: { Extra: 1, Same: 5 } }), answer(unitB, 0, { Device: { Same: 5 } })], [unitA, unitB])
+    expect(rows).toEqual([
+      { path: 'Device.Extra', values: ['1', null], differs: true },
+      { path: 'Device.Same', values: ['5', '5'], differs: false },
+    ])
+  })
+
+  it('leaves a unit that never answered out of the comparison', () => {
+    const rows = compareRows([answer(unitA, 0, { Device: { Same: 1 } }), failure(unitB)], [unitA, unitB])
+    expect(rows).toEqual([{ path: 'Device.Same', values: ['1', null], differs: false }])
+  })
+
+  it('keeps the first value when two calls answer the same property', () => {
+    const rows = compareRows([answer(unitA, 0, { Device: { H: 'one' } }), answer(unitA, 1, { Device: { H: 'two' } })], [unitA])
+    expect(rows).toEqual([{ path: 'Device.H', values: ['one'], differs: false }])
+  })
+
+  it('is empty when nothing answered', () => {
+    expect(compareRows([failure(unitA)], [unitA])).toEqual([])
   })
 })
