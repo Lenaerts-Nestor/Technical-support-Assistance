@@ -1,5 +1,11 @@
-// Runs before the page. The only thing it exposes is a flag, so later features can
-// tell the desktop app from the website.
-const { contextBridge } = require('electron')
+// Runs before the page. It exposes a flag, so features can tell the desktop app from the
+// website, and the device bridge (the only way the page reaches a device).
+const { contextBridge, ipcRenderer } = require('electron')
 
-contextBridge.exposeInMainWorld('desktop', { isDesktop: true })
+contextBridge.exposeInMainWorld('desktop', {
+  isDesktop: true,
+  nvx: {
+    get: (request) => ipcRenderer.invoke('nvx:get', request),
+    logout: (ip) => ipcRenderer.invoke('nvx:logout', ip),
+  },
+})

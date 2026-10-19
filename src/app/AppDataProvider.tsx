@@ -5,12 +5,14 @@ import { useGuidesLibrary } from '../features/guides/useGuidesLibrary'
 import { useLinks } from '../features/links/useLinks'
 import { useSnippets } from '../features/cases/useSnippets'
 import { useCalendar } from '../features/calendar/useCalendar'
+import { useNvx } from '../features/nvx/useNvx'
 import {
   CalendarContext,
   EditingContext,
   FolderContext,
   GuidesContext,
   LinksContext,
+  NvxContext,
   SnippetsContext,
 } from './appDataContext'
 
@@ -21,6 +23,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const links = useLinks(folder)
   const snippets = useSnippets(folder)
   const calendar = useCalendar(folder)
+  const nvx = useNvx(folder)
   const [editing, setEditing] = useState(false)
   const editingValue = useMemo(() => ({ editing, setEditing }), [editing])
 
@@ -30,7 +33,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         <LinksContext value={links}>
           <SnippetsContext value={snippets}>
             <CalendarContext value={calendar}>
-              <EditingContext value={editingValue}>{children}</EditingContext>
+              <NvxContext value={nvx}>
+                <EditingContext value={editingValue}>{children}</EditingContext>
+              </NvxContext>
             </CalendarContext>
           </SnippetsContext>
         </LinksContext>

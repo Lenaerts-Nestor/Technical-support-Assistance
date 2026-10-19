@@ -1,9 +1,10 @@
 // Electron shell for Support Hub: loads the built web app in a window.
 // Everything the pages store stays on this computer; nothing here talks to the network.
-const { app, BrowserWindow, Menu, net, protocol, session, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, net, protocol, session, shell } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
+const { createNvxClient, registerNvxIpc } = require('./nvx.cjs')
 
 const SCHEME = 'app'
 const HOST = 'support-hub'
@@ -30,6 +31,14 @@ function serveApp(request) {
 
   const isFile = fs.existsSync(requested) && fs.statSync(requested).isFile()
   return net.fetch(pathToFileURL(isFile ? requested : path.join(DIST_DIR, 'index.html')).toString())
+}
+
+const nvx = createNvxClient()
+
+/** Only the app's own page may use the device bridge. */
+const isTrustedSender = (event) => {
+  const url = event.senderFrame?.url ?? ''
+  return url.startsWith(APP_ORIGIN) || Boolean(devUrl() && url.startsWith(devUrl()))
 }
 
 /** What the pages may ask the browser for. Everything else is denied. */
@@ -107,8 +116,18 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(null)
     protocol.handle(SCHEME, serveApp)
     restrictPermissions()
+    registerNvxIpc(ipcMain, nvx, isTrustedSender)
     createWindow()
   })
 
   app.on('window-all-closed', () => app.quit())
+
+  // Leave devices tidily: end every login before quitting (but never wait more than 2 seconds).
+  let closing = false
+  app.on('before-quit', (event) => {
+    if (closing) return
+    closing = true
+    event.preventDefault()
+    void Promise.race([nvx.logoutAll(), new Promise((resolve) => setTimeout(resolve, 2000))]).finally(() => app.quit())
+  })
 }
