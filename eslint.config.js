@@ -20,6 +20,15 @@ export default defineConfig([
     },
   },
   {
+    // The desktop shell's tests run in Node as modules.
+    files: ['desktop/**/*.mjs'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      sourceType: 'module',
+      globals: globals.node,
+    },
+  },
+  {
     // The Electron shell is plain CommonJS running in Node.
     files: ['desktop/**/*.cjs'],
     extends: [js.configs.recommended],

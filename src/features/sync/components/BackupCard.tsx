@@ -25,7 +25,7 @@ type Pending = {
 }
 
 const describeContent = (c: FolderContent) =>
-  [c.guides && plural(c.guides, 'guide'), c.links && plural(c.links, 'link'), c.snippets && plural(c.snippets, 'text'), c.calendar && plural(c.calendar, 'calendar day')]
+  [c.guides && plural(c.guides, 'guide'), c.links && plural(c.links, 'link'), c.snippets && plural(c.snippets, 'text'), c.calendar && plural(c.calendar, 'calendar day'), c.nvx && plural(c.nvx, 'device API entry', 'device API entries')]
     .filter(Boolean)
     .join(', ')
 

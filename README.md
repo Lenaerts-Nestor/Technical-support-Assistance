@@ -16,6 +16,7 @@ computer that you pick once on the **Sync** page (Chrome or Edge on desktop).
   links.json                  the Links page
   cases-snippets.json         "My texts" on the Cases page
   calendar.json               the Calendar page — personal, stays in your own folder
+  nvx.json                    the Device API page: groups, unit addresses, saved calls (no passwords)
   legacy-backup/              guides.json as it was before Organize
 ```
 
@@ -42,6 +43,29 @@ grid. The calendar follows today's date by itself. Entries are plain JSON
 (`{ "entries": [{ "date": "2026-10-15", "kind": "pto" | "other", "note": "" }] }`), kept
 in `calendar.json` in your own linked folder. It has no Sync card of its own, so it is never
 part of a Links or Snippets export — only your full backup carries it.
+
+## Device API (desktop app only)
+
+Reads settings from Crestron devices (DM NVX and others that use the same REST API) over
+HTTPS. A web page cannot do the device login — it has to set `Cookie`, `Origin` and `Referer`
+headers and keep HttpOnly cookies — so the desktop app does it (`desktop/nvx.cjs`), following
+*Authentication* in the DM NVX API manual. On the website the page only lets you prepare
+groups, units and calls.
+
+- **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls and username.
+- **Units**: a name and the device's IPv4 address. The selected unit is where calls run.
+- **Saved calls**: a title and a path such as `/Device/DeviceInfo`. One click runs it on the
+  selected unit; **Run all** gathers every call into one report, with **Copy report** for a case note.
+- **Explorer**: try any path (`GET` only for now), then **Save as call**.
+- **Login**: the username is remembered per group; the password is kept in memory only and is
+  gone when the app closes. The app logs in by itself, again when a session expires, and logs out
+  of every device when it quits.
+
+Safety: only private network addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x) are accepted,
+so the app can never be pointed at the internet; the self-signed certificate is accepted for
+those requests only; and a failed login stops the run instead of retrying, so a wrong password
+cannot lock an account. Units and calls are saved in `nvx.json` in the linked folder (and in
+your full backup); passwords never are.
 
 ## Sharing
 
