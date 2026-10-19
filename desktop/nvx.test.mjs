@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { generate } from 'selfsigned'
 
-const { createNvxClient, isPrivateIPv4, isValidPath, updateJar, validateChangeBody } = createRequire(import.meta.url)('./nvx.cjs')
+const { createNvxClient, isPrivateIPv4, isValidPath, updateJar, checkHeaders } = createRequire(import.meta.url)('./nvx.cjs')
 
 /** A throwaway self-signed certificate, like the one an NVX ships with. Made fresh for each run. */
 let tls
@@ -23,7 +23,7 @@ const token = () => randomBytes(8).toString('hex')
  * every response, 403 when the session is wrong, and GET /logout.
  */
 async function startMockDevice({ user = 'admin', password = 'secret', denyChanges = false, requireXsrf = false } = {}) {
-  const state = { sessions: new Map(), pending: new Set(), loginPosts: [], forbidden: 0, requests: [], logouts: 0, changes: [], hostName: 'NVX-LAB' }
+  const state = { sessions: new Map(), pending: new Set(), loginPosts: [], forbidden: 0, requests: [], logouts: 0, changes: [], echoes: [], hostName: 'NVX-LAB' }
   const server = https.createServer(tls, (req, res) => {
     const cookies = parseCookies(req.headers.cookie)
     const reply = (status, body, headers = {}) => {
@@ -96,9 +96,27 @@ async function startMockDevice({ user = 'admin', password = 'secret', denyChange
       })
       return
     }
+    if (req.url === '/echo') {
+      let raw = ''
+      req.on('data', (c) => (raw += c))
+      req.on('end', () => {
+        session.auth = token()
+        state.echoes.push({ method: req.method, headers: req.headers, body: raw })
+        reply(200, JSON.stringify({ method: req.method, body: raw, contentType: req.headers['content-type'] ?? null }), {
+          'Content-Type': 'application/json',
+          'X-Mock': 'yes',
+          'Set-Cookie': [`AuthByPasswd=${session.auth}; Path=/; Secure; HttpOnly`, 'Other=secret; Path=/'],
+        })
+      })
+      return
+    }
     state.requests.push({ url: req.url, referer: req.headers.referer })
     session.auth = token()
     const headers = { 'Set-Cookie': [`AuthByPasswd=${session.auth}; Path=/; Secure; HttpOnly`] }
+    if (req.url === '/preview/pic.jpeg') {
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', ...headers })
+      return res.end(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x80, 0x81, 0xfe, 0xff]))
+    }
     if (req.url === '/Device/DeviceInfo') return reply(200, JSON.stringify({ Device: { DeviceInfo: { Model: 'DM-NVX-E30', Name: 'Lab encoder' } } }), headers)
     if (req.url === '/Device/Ethernet/HostName') return reply(200, JSON.stringify({ Device: { Ethernet: { HostName: state.hostName } } }), headers)
     if (req.url === '/plain') return reply(200, 'not json', headers)
@@ -203,13 +221,14 @@ describe('device login', () => {
 })
 
 describe('changing settings', () => {
-  const change = (client, body, extra = {}) => client.change({ ip: '127.0.0.1', body, ...creds, ...extra })
+  const post = (client, body, extra = {}) =>
+    client.request({ ip: '127.0.0.1', method: 'POST', path: '/Device', body: typeof body === 'string' ? body : JSON.stringify(body), ...creds, ...extra })
   const hostName = { Device: { Ethernet: { HostName: 'NVX-NEW' } } }
 
   it('posts a partial object to /Device and returns what the device answered', async () => {
     device = await startMockDevice()
     const client = clientFor(device)
-    const result = await change(client, hostName)
+    const result = await post(client, hostName)
     expect(result.ok).toBe(true)
     expect(result.data.Actions[0].Results[0]).toMatchObject({ Property: 'HostName', StatusId: 1, StatusInfo: 'Reboot needed' })
     expect(device.state.changes).toHaveLength(1)
@@ -220,7 +239,7 @@ describe('changing settings', () => {
 
   it('reports a status the device gives for one property', async () => {
     device = await startMockDevice()
-    const result = await change(clientFor(device), { Device: { Ethernet: { MacAddress: '00.00.00.00.00.00' } } })
+    const result = await post(clientFor(device), { Device: { Ethernet: { MacAddress: '00.00.00.00.00.00' } } })
     expect(result.data.Actions[0].Results[0]).toMatchObject({ Property: 'MacAddress', StatusId: -2 })
   })
 
@@ -229,73 +248,114 @@ describe('changing settings', () => {
     const client = clientFor(device)
     await client.request({ ip: '127.0.0.1', path: '/Device/DeviceInfo', ...creds })
     device.state.sessions.clear()
-    expect((await change(client, hostName)).ok).toBe(true)
+    expect((await post(client, hostName)).ok).toBe(true)
     expect(device.state.loginPosts).toHaveLength(2)
     expect(device.state.changes).toHaveLength(1)
   })
 
   it('says so when the device keeps refusing the change after a fresh login', async () => {
     device = await startMockDevice({ denyChanges: true })
-    const result = await change(clientFor(device), hostName)
+    const result = await post(clientFor(device), hostName)
     expect(result).toMatchObject({ ok: false, status: 403, kind: 'http' })
-    expect(result.error).toContain('refused the change')
+    expect(result.error).toContain('refused the request')
     expect(device.state.changes).toHaveLength(0)
   })
 
   it('sends the security token back as a header when the device hands it out as a cookie', async () => {
     device = await startMockDevice({ requireXsrf: true })
-    const result = await change(clientFor(device), hostName)
-    expect(result.ok).toBe(true)
+    expect((await post(clientFor(device), hostName)).ok).toBe(true)
     expect(device.state.changes).toHaveLength(1)
   })
 
-  it('never contacts the device with a change it will not send', async () => {
+  it('sends the body exactly as written, empty objects included: the person has control', async () => {
     device = await startMockDevice()
-    const client = clientFor(device)
-    for (const body of [{ Device: { Ethernet: {} } }, { Device: {} }, { Nope: { A: 1 } }, 'text', null, { Device: { A: [1] } }]) {
-      expect(await change(client, body)).toMatchObject({ ok: false, kind: 'invalid' })
-    }
-    expect(device.state.loginPosts).toHaveLength(0)
-    expect(device.state.changes).toHaveLength(0)
+    const result = await post(clientFor(device), '{"Device":{"DeviceSpecific":{}}}')
+    expect(result.ok).toBe(true)
+    expect(device.state.changes[0].body).toEqual({ Device: { DeviceSpecific: {} } })
   })
 
   it('needs a private address and a login like a read does', async () => {
     const client = createNvxClient()
-    expect(await change(client, hostName, { ip: '8.8.8.8' })).toMatchObject({ kind: 'invalid' })
-    expect(await change(client, hostName, { ip: '10.0.0.5', username: '' })).toMatchObject({ kind: 'invalid' })
+    expect(await post(client, hostName, { ip: '8.8.8.8' })).toMatchObject({ kind: 'invalid' })
+    expect(await post(client, hostName, { ip: '10.0.0.5', username: '' })).toMatchObject({ kind: 'invalid' })
   })
 })
 
-describe('validateChangeBody', () => {
-  it('accepts nested objects that end in text, numbers and true/false', () => {
-    expect(validateChangeBody({ Device: { Ethernet: { HostName: 'x', Vlan: 20, Dhcp: false } } })).toBeNull()
+describe('requests like Postman', () => {
+  const send = (client, fields) => client.request({ ip: '127.0.0.1', path: '/echo', ...creds, ...fields })
+
+  it('sends PUT, PATCH, DELETE and POST with a body, and takes the method in any case', async () => {
+    device = await startMockDevice()
+    const client = clientFor(device)
+    for (const method of ['PUT', 'patch', 'DELETE', 'POST']) {
+      const result = await send(client, { method, body: '{"a":1}' })
+      expect(result.ok).toBe(true)
+      expect(result.data).toMatchObject({ method: method.toUpperCase(), body: '{"a":1}', contentType: 'application/json' })
+    }
+    expect(device.state.loginPosts).toHaveLength(1)
   })
 
-  it('refuses an empty object anywhere, because the device would delete it', () => {
-    expect(validateChangeBody({ Device: { DeviceSpecific: {} } })).toBe(
-      'Device.DeviceSpecific is an empty object. The device deletes an object it is sent empty, so this is blocked.',
-    )
-    expect(validateChangeBody({ Device: {} })).toContain('delete')
+  it('lets your own headers win over the defaults and adds them to the request', async () => {
+    device = await startMockDevice()
+    const result = await send(clientFor(device), {
+      method: 'POST',
+      body: 'a=1',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Custom': 'hello', referer: 'https://elsewhere/' },
+    })
+    expect(result.data.contentType).toBe('application/x-www-form-urlencoded')
+    const sent = device.state.echoes[0].headers
+    expect(sent['x-custom']).toBe('hello')
+    expect(sent.referer).toBe('https://elsewhere/')
+    expect(sent.origin).toBe('https://127.0.0.1')
   })
 
-  it('refuses what is not understood: lists, null, other roots, odd names', () => {
-    expect(validateChangeBody({ Device: { A: [1] } })).toContain('list')
-    expect(validateChangeBody({ Device: { A: null } })).toContain('null')
-    expect(validateChangeBody({ Other: { A: 1 } })).toContain('Device')
-    expect(validateChangeBody({ Device: { A: 1 }, Extra: 1 })).toContain('Device')
-    expect(validateChangeBody({ Device: { 'A B': 1 } })).toContain('property name')
-    expect(validateChangeBody({ Device: { A: Infinity } })).toContain('number')
-    expect(validateChangeBody({ Device: { A: undefined } })).toContain('unsupported')
-    expect(validateChangeBody([])).not.toBeNull()
+  it('refuses headers the app manages, odd names and values, and too many', () => {
+    expect(checkHeaders({ Cookie: 'a=b' })).toContain('set by the app')
+    expect(checkHeaders({ 'content-length': '5' })).toContain('set by the app')
+    expect(checkHeaders({ Host: 'x' })).toContain('set by the app')
+    expect(checkHeaders({ 'Proxy-Authorization': 'x' })).toContain('set by the app')
+    expect(checkHeaders({ 'Bad Name': 'x' })).toContain('not a valid header name')
+    expect(checkHeaders({ A: 'line\r\nInjected: yes' })).toContain('one line')
+    expect(checkHeaders({ A: 5 })).toContain('plain text')
+    expect(checkHeaders(Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`H${i}`, 'x'])))).toContain('At most')
+    expect(checkHeaders({ Accept: 'text/plain', 'X-Anything': 'ok' })).toBeNull()
+    expect(checkHeaders(undefined)).toBeNull()
+    expect(checkHeaders([])).toContain('name and value')
   })
 
-  it('limits how much one change can do', () => {
-    const many = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`P${i}`, i]))
-    expect(validateChangeBody({ Device: many })).toContain('at most')
-    expect(validateChangeBody({ Device: { Text: 'x'.repeat(11_000) } })).toContain('too large')
-    let deep = { Leaf: 1 }
-    for (let i = 0; i < 12; i++) deep = { [`L${i}`]: deep }
-    expect(validateChangeBody({ Device: deep })).toContain('deeply')
+  it('does not contact the device for a request it will not send', async () => {
+    device = await startMockDevice()
+    const client = clientFor(device)
+    for (const fields of [
+      { method: 'TRACE' },
+      { method: 'GET', body: '{"a":1}' },
+      { method: 'POST', body: 'x'.repeat(101 * 1024) },
+      { method: 'POST', body: 5 },
+      { headers: { Cookie: 'x=y' } },
+      { path: 'echo' },
+    ]) {
+      expect(await send(client, fields)).toMatchObject({ ok: false, kind: 'invalid' })
+    }
+    expect(device.state.loginPosts).toHaveLength(0)
+  })
+
+  it('returns the answer’s headers and size but never the session cookies', async () => {
+    device = await startMockDevice()
+    const result = await send(clientFor(device), { method: 'POST', body: '{}' })
+    expect(result.headers['x-mock']).toBe('yes')
+    expect(result.headers['content-type']).toBe('application/json')
+    expect(result.headers['set-cookie']).toBeUndefined()
+    expect(result.bytes).toBeGreaterThan(10)
+  })
+
+  it('hands back a picture as an image, bytes intact', async () => {
+    device = await startMockDevice()
+    const result = await send(clientFor(device), { path: '/preview/pic.jpeg' })
+    expect(result).toMatchObject({ ok: true, status: 200, bytes: 15 })
+    expect(result.image.type).toBe('image/jpeg')
+    expect([...Buffer.from(result.image.base64, 'base64')]).toEqual([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x80, 0x81, 0xfe, 0xff])
+    expect(result.text).toBeUndefined()
+    expect(result.data).toBeUndefined()
   })
 })
 

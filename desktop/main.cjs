@@ -5,7 +5,6 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { createNvxClient, registerNvxIpc } = require('./nvx.cjs')
-const { registerStreamIpc } = require('./stream.cjs')
 
 const SCHEME = 'app'
 const HOST = 'support-hub'
@@ -118,7 +117,6 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle(SCHEME, serveApp)
     restrictPermissions()
     registerNvxIpc(ipcMain, nvx, isTrustedSender)
-    registerStreamIpc(ipcMain, isTrustedSender)
     createWindow()
   })
 

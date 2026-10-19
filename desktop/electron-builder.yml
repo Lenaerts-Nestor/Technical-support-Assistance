@@ -7,7 +7,6 @@ files:
   - desktop/main.cjs
   - desktop/preload.cjs
   - desktop/nvx.cjs
-  - desktop/stream.cjs
   - package.json
   # The web app is already bundled into dist/, so no node_modules are needed at runtime.
   - '!node_modules'

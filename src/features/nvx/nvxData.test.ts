@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bodyWarnings,
   buildChangeBody,
+  cleanRequest,
+  formatHeaderLines,
+  parseDeviceBody,
+  parseHeaderLines,
   defaultGroups,
   describeStatus,
   getAtPath,
   isEditable,
-  normalizeStreamUrl,
   parseChangeStatuses,
   propertyUrl,
   setAtPath,
@@ -31,6 +35,7 @@ const unit = { id: 'u', label: 'Lab encoder', ip: '10.0.0.5' }
 const ok = (data: unknown): RunResult => ({
   key: 'k',
   title: 'Device info',
+  method: 'GET',
   path: '/Device/DeviceInfo',
   callIndex: 0,
   unit,
@@ -124,7 +129,8 @@ describe('reviveGroups', () => {
     const [group] = defaultGroups()
     expect(group.name).toBe('NVX API')
     expect(group.username).toBe('admin')
-    expect(group.calls.map((c) => c.path)).toEqual(['/Device/DeviceInfo', '/Device/Ethernet/HostName'])
+    expect(group.calls.map((c) => `${c.method} ${c.path}`)).toEqual(['GET /Device/DeviceInfo', 'GET /Device/Ethernet/HostName'])
+    expect(group.folders).toEqual([])
     expect(newGroup('   ').name).toBe('New group')
   })
 
@@ -146,7 +152,7 @@ describe('reviveGroups', () => {
     ])!
     expect(group.username).toBe('admin')
     expect(group.units).toEqual([{ id: 'a', label: 'ok', ip: '10.0.0.9' }])
-    expect(group.calls).toEqual([{ id: 'c', title: 'Info', path: '/Device/DeviceInfo' }])
+    expect(group.calls).toEqual([{ id: 'c', title: 'Info', method: 'GET', path: '/Device/DeviceInfo' }])
   })
 
   it('gives a call without a title its path, and fills in missing ids', () => {
@@ -172,6 +178,7 @@ const unitB = { id: 'b', label: 'B', ip: '10.0.0.2' }
 const answer = (u: typeof unitA, callIndex: number, data: unknown): RunResult => ({
   key: `${u.id}${callIndex}`,
   title: `call ${callIndex}`,
+  method: 'GET',
   path: '/x',
   callIndex,
   unit: u,
@@ -180,6 +187,7 @@ const answer = (u: typeof unitA, callIndex: number, data: unknown): RunResult =>
 const failure = (u: typeof unitA): RunResult => ({
   key: `${u.id}!`,
   title: 'call 0',
+  method: 'GET',
   path: '/x',
   callIndex: 0,
   unit: u,
@@ -237,28 +245,6 @@ describe('compareRows', () => {
 
   it('is empty when nothing answered', () => {
     expect(compareRows([failure(unitA)], [unitA])).toEqual([])
-  })
-})
-
-describe('normalizeStreamUrl', () => {
-  it('keeps an rtsp address on an IPv4 host, and treats nothing as none', () => {
-    expect(normalizeStreamUrl(' rtsp://172.16.4.224/live/main ')).toBe('rtsp://172.16.4.224/live/main')
-    expect(normalizeStreamUrl('rtsps://10.0.0.5:8554')).toBe('rtsps://10.0.0.5:8554')
-    expect(normalizeStreamUrl('   ')).toBe('')
-  })
-
-  it('refuses a password in the address, a name instead of an address, and other kinds of URL', () => {
-    for (const text of ['rtsp://admin:pw@10.0.0.5/x', 'rtsp://camera.local/x', 'http://10.0.0.5/x', 'rtsp://10.0.0.5/a b', '10.0.0.5']) {
-      expect(normalizeStreamUrl(text)).toBeNull()
-    }
-  })
-
-  it('is kept on a unit when the file is read, and dropped when it is not usable', () => {
-    const [group] = reviveGroups([
-      { id: 'g', name: 'X', units: [{ id: 'a', ip: '10.0.0.1', streamUrl: 'rtsp://10.0.0.1/live' }, { id: 'b', ip: '10.0.0.2', streamUrl: 'rtsp://u:p@10.0.0.2/x' }] },
-    ])!
-    expect(group.units[0].streamUrl).toBe('rtsp://10.0.0.1/live')
-    expect(group.units[1].streamUrl).toBeUndefined()
   })
 })
 
@@ -354,5 +340,89 @@ describe('the device’s answer to a change', () => {
     expect(changeLine('Device.A.B', 'new', 'old')).toBe('Device.A.B: "old" → "new"')
     expect(changeLine('Device.A.B', 5)).toBe('Device.A.B: 5')
     expect(changeLine('Device.A.B', 'new', 'old', 'new')).toBe('Device.A.B: "old" → "new" · the device now reports "new"')
+  })
+})
+
+describe('saved requests and folders', () => {
+  it('keeps method, headers, body and folder, and reads an old call as a GET', () => {
+    const [group] = reviveGroups([
+      {
+        id: 'g',
+        name: 'NVX',
+        folders: [{ id: 'f1', name: 'Network' }, null],
+        calls: [
+          { id: 'a', title: 'Set host', method: 'post', path: '/Device', headers: { 'X-One': '1', 'Bad Name': 'x', Num: 5 }, body: '{"Device":{}}', folderId: 'f1' },
+          { id: 'b', title: 'Old', path: '/Device/DeviceInfo' },
+          { id: 'c', title: 'Lost', method: 'GET', path: '/x', folderId: 'gone', body: 'ignored for GET' },
+          { id: 'd', title: 'Odd method', method: 'TRACE', path: '/y' },
+        ],
+      },
+    ])!
+    expect(group.folders).toEqual([{ id: 'f1', name: 'Network' }])
+    expect(group.calls[0]).toEqual({ id: 'a', title: 'Set host', method: 'POST', path: '/Device', headers: { 'X-One': '1' }, body: '{"Device":{}}', folderId: 'f1' })
+    expect(group.calls[1]).toEqual({ id: 'b', title: 'Old', method: 'GET', path: '/Device/DeviceInfo' })
+    expect(group.calls[2]).toEqual({ id: 'c', title: 'Lost', method: 'GET', path: '/x' })
+    expect(group.calls[3].method).toBe('GET')
+  })
+
+  it('round-trips folders and requests', () => {
+    const groups = defaultGroups()
+    groups[0].folders.push({ id: 'f', name: 'Setup' })
+    groups[0].calls.push({ id: 'p', title: 'Post', method: 'POST', path: '/Device', body: '{"Device":{"A":1}}', headers: { A: 'b' }, folderId: 'f' })
+    expect(reviveGroups(JSON.parse(JSON.stringify(groups)))).toEqual(groups)
+  })
+})
+
+describe('headers and bodies', () => {
+  it('reads headers typed one per line', () => {
+    expect(parseHeaderLines('Accept: text/plain\n\n  X-Token :  a:b  \n')).toEqual({ headers: { Accept: 'text/plain', 'X-Token': 'a:b' }, error: null })
+    expect(parseHeaderLines('')).toEqual({ headers: {}, error: null })
+  })
+
+  it('reports a line that is not a header and keeps the good ones', () => {
+    expect(parseHeaderLines('Good: 1\nnonsense\nBad Name: x')).toEqual({ headers: { Good: '1' }, error: 'Line 2: write a header as Name: value.' })
+  })
+
+  it('writes headers back as lines', () => {
+    expect(formatHeaderLines({ A: '1', B: '2' })).toBe('A: 1\nB: 2')
+    expect(formatHeaderLines(undefined)).toBe('')
+  })
+
+  it('names every empty object in a body, because the device deletes those', () => {
+    expect(bodyWarnings('{"Device":{"DeviceSpecific":{}}}')).toEqual(['Device.DeviceSpecific is an empty object. The device deletes an object it is sent empty.'])
+    expect(bodyWarnings('{"Device":{"A":{},"B":{"C":{}}}}')).toHaveLength(2)
+    expect(bodyWarnings('{"Device":{"List":[{}]}}')).toEqual(['Device.List[0] is an empty object. The device deletes an object it is sent empty.'])
+  })
+
+  it('has no warning for a normal body, text that is not JSON, or nothing', () => {
+    expect(bodyWarnings('{"Device":{"Ethernet":{"HostName":"x"}}}')).toEqual([])
+    expect(bodyWarnings('a=1&b=2')).toEqual([])
+    expect(bodyWarnings('{oops')).toEqual([])
+    expect(bodyWarnings(undefined)).toEqual([])
+    expect(bodyWarnings('{}')).toEqual([]) // the whole body being empty is not an object being deleted
+  })
+
+  it('drops empty headers, and the body of a GET', () => {
+    expect(cleanRequest({ method: 'GET', path: '/x', headers: {}, body: '{"a":1}' })).toEqual({ method: 'GET', path: '/x' })
+    expect(cleanRequest({ method: 'POST', path: '/Device', headers: { A: 'b' }, body: '  ' })).toEqual({ method: 'POST', path: '/Device', headers: { A: 'b' } })
+    expect(cleanRequest({ method: 'POST', path: '/Device', body: '{"a":1}' })).toEqual({ method: 'POST', path: '/Device', body: '{"a":1}' })
+  })
+
+  it('recognises the manual’s way of changing a setting, and nothing else', () => {
+    const post = { method: 'POST' as const, path: '/Device', body: '{"Device":{"A":1}}' }
+    expect(parseDeviceBody(post)).toEqual({ Device: { A: 1 } })
+    expect(parseDeviceBody({ ...post, method: 'PUT' })).toBeNull()
+    expect(parseDeviceBody({ ...post, path: '/Device/A' })).toBeNull()
+    expect(parseDeviceBody({ ...post, body: 'x=1' })).toBeNull()
+    expect(parseDeviceBody({ ...post, body: '[1]' })).toBeNull()
+    expect(parseDeviceBody({ ...post, body: '{"Other":1}' })).toBeNull()
+    expect(parseDeviceBody({ method: 'POST', path: '/Device' })).toBeNull()
+  })
+
+  it('mentions the method in a report only when it is not a GET, and a picture by its type and size', () => {
+    const posted: RunResult = { ...ok({ Actions: [] }), method: 'POST', path: '/Device' }
+    expect(formatResult(posted).startsWith('== Device info · Lab encoder (10.0.0.5) · POST /Device ==')).toBe(true)
+    const picture: RunResult = { ...ok({}), reply: { ok: true, status: 200, ms: 5, bytes: 1234, image: { type: 'image/jpeg', base64: 'AAAA' } } }
+    expect(formatResult(picture).endsWith('(image/jpeg, 1234 bytes)')).toBe(true)
   })
 })

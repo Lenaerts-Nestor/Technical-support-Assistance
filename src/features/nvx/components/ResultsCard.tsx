@@ -39,11 +39,10 @@ type ResultsCardProps = {
   onClear: () => void
   canChange: boolean
   onChange: (unit: NvxUnit, path: string, value: SettingValue) => void
-  onOpenStream: (unit: NvxUnit) => void
 }
 
 /** The answers of the last run: a section per unit, or — with several units — one table comparing them. */
-export function ResultsCard({ results, units, running, onClear, canChange, onChange, onOpenStream }: ResultsCardProps) {
+export function ResultsCard({ results, units, running, onClear, canChange, onChange }: ResultsCardProps) {
   const [view, setView] = useState<View>('units')
   const [format, setFormat] = useState<AnswerFormat>('table')
   const [onlyDifferences, setOnlyDifferences] = useState(false)
@@ -107,7 +106,6 @@ export function ResultsCard({ results, units, running, onClear, canChange, onCha
               format={format}
               canChange={canChange}
               onChange={onChange}
-              onOpenStream={onOpenStream}
             />
           ))}
       </div>

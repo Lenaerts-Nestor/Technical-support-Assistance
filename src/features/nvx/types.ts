@@ -1,19 +1,36 @@
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+export type HttpMethod = (typeof HTTP_METHODS)[number]
+
 /** One device the calls are run on. */
 export type NvxUnit = {
   id: string
   label: string
   /** The device's IPv4 address on the local network. */
   ip: string
-  /** Where its video stream can be opened (`rtsp://…`, no password in it). Optional. */
-  streamUrl?: string
 }
 
-/** A saved request: one click runs `GET path` and shows the answer under `title`. */
-export type NvxCall = {
+/** What is sent to a device: a method and path, with optional headers and a raw body. */
+export type DeviceRequest = {
+  method: HttpMethod
+  /** A path on the device, such as `/Device/DeviceInfo`. It may carry a query string. */
+  path: string
+  headers?: Record<string, string>
+  /** The body exactly as typed (usually JSON). Not for GET. */
+  body?: string
+}
+
+/** A saved request: one click runs a GET on the ticked units; anything else is reviewed first. */
+export type NvxCall = DeviceRequest & {
   id: string
   title: string
-  /** A path on the device, such as `/Device/DeviceInfo`. */
-  path: string
+  /** The folder it is kept in; none means it sits at the top. */
+  folderId?: string
+}
+
+/** A named place to keep saved calls together. */
+export type NvxFolder = {
+  id: string
+  name: string
 }
 
 /** A family of devices that share a login and a set of calls (NVX, NAX, …). */
@@ -23,6 +40,7 @@ export type NvxGroup = {
   /** Remembered for the group. The password is never saved. */
   username: string
   units: NvxUnit[]
+  folders: NvxFolder[]
   calls: NvxCall[]
 }
 
@@ -32,10 +50,16 @@ export type DeviceReply = {
   /** HTTP status, or `null` when nothing came back. */
   status: number | null
   ms: number
+  /** Size of the answer in bytes. */
+  bytes?: number
+  /** The answer's headers (never the session cookies). */
+  headers?: Record<string, string>
   /** The answer, when it was JSON. */
   data?: unknown
-  /** The answer as text, whatever it was. */
+  /** The answer as text, unless it was a picture. */
   text?: string
+  /** The answer, when it was a picture the page can show. */
+  image?: { type: string; base64: string }
   kind?: 'invalid' | 'auth' | 'network' | 'http'
   error?: string
 }
@@ -44,6 +68,7 @@ export type DeviceReply = {
 export type RunResult = {
   key: string
   title: string
+  method: HttpMethod
   path: string
   /** Where the call sits in the run, so answers that arrive out of order can be put back in order. */
   callIndex: number
@@ -71,7 +96,7 @@ export type ChangeLogEntry = {
   id: string
   at: number
   unit: NvxUnit
-  /** One line per property: `Device.Ethernet.HostName: "old" → "new"`, plus what the device reported afterwards. */
+  /** What was sent, one line per property or one line for the request. */
   lines: string[]
   outcome: ChangeOutcome
   /** The device's own words, or why it did not happen. */

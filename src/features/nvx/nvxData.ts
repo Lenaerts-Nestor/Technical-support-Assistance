@@ -1,4 +1,5 @@
-import type { ChangeLogEntry, ChangeOutcome, ChangeStatus, CompareRow, DeviceReply, NvxCall, NvxGroup, NvxUnit, RunResult, SettingValue } from './types'
+import { HTTP_METHODS } from './types'
+import type { ChangeLogEntry, ChangeOutcome, ChangeStatus, CompareRow, DeviceReply, DeviceRequest, HttpMethod, NvxCall, NvxFolder, NvxGroup, NvxUnit, RunResult, SettingValue } from './types'
 
 export const NAME_MAX_LENGTH = 40
 const PATH_MAX_LENGTH = 500
@@ -8,15 +9,15 @@ const PATH_MAX_LENGTH = 500
  * Edit or delete them, and add your own from the explorer.
  */
 export const STARTER_CALLS: Omit<NvxCall, 'id'>[] = [
-  { title: 'Device info', path: '/Device/DeviceInfo' },
-  { title: 'Hostname', path: '/Device/Ethernet/HostName' },
+  { title: 'Device info', method: 'GET', path: '/Device/DeviceInfo' },
+  { title: 'Hostname', method: 'GET', path: '/Device/Ethernet/HostName' },
 ]
 
 export const newId = () => crypto.randomUUID()
 
 /** Whether a call is one of the starters that every new group begins with. */
 export const isStarterCall = (call: NvxCall) =>
-  STARTER_CALLS.some((starter) => starter.title === call.title && starter.path === call.path)
+  STARTER_CALLS.some((starter) => starter.title === call.title && starter.method === call.method && starter.path === call.path && !call.body)
 
 export function newGroup(name: string): NvxGroup {
   return {
@@ -24,6 +25,7 @@ export function newGroup(name: string): NvxGroup {
     name: name.trim().slice(0, NAME_MAX_LENGTH) || 'New group',
     username: 'admin',
     units: [],
+    folders: [],
     calls: STARTER_CALLS.map((call) => ({ id: newId(), ...call })),
   }
 }
@@ -61,15 +63,82 @@ export function normalizePath(input: string): string | null {
   return text
 }
 
+/* -- Headers and bodies --------------------------------------------------- */
+
+const HEADER_NAME = /^[A-Za-z0-9-]+$/
+
 /**
- * A stream address as it will be stored: `rtsp://` or `rtsps://` and an IPv4 address, with no user
- * name or password (the player asks for those, so they never end up in `nvx.json`). `''` means none;
- * `null` means what was typed cannot be used.
+ * Headers typed one per line as `Name: value` (blank lines are ignored). The first problem comes back
+ * as a message; the rest of the lines are still read, so the list can be shown while it is being fixed.
  */
-export function normalizeStreamUrl(input: string): string | null {
-  const text = input.trim()
-  if (!text) return ''
-  return /^rtsps?:\/\/(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?(\/[\x21-\x7e]*)?$/i.test(text) ? text : null
+export function parseHeaderLines(text: string): { headers: Record<string, string>; error: string | null } {
+  const headers: Record<string, string> = {}
+  let error: string | null = null
+  for (const [i, raw] of text.split('\n').entries()) {
+    const line = raw.trim()
+    if (!line) continue
+    const colon = line.indexOf(':')
+    const name = colon < 0 ? '' : line.slice(0, colon).trim()
+    if (!HEADER_NAME.test(name)) {
+      error ??= `Line ${i + 1}: write a header as Name: value.`
+      continue
+    }
+    headers[name] = line.slice(colon + 1).trim()
+  }
+  return { headers, error }
+}
+
+/** Headers as lines of `Name: value`, for the editor. */
+export const formatHeaderLines = (headers: Record<string, string> | undefined) =>
+  Object.entries(headers ?? {}).map(([name, value]) => `${name}: ${value}`).join('\n')
+
+/**
+ * Things in a JSON body worth stopping to read before sending. The manual says the device DELETES an
+ * object it is sent empty (`{"Device":{"DeviceSpecific":{}}}`), so every empty object is named.
+ * Nothing is blocked: it is the person's call.
+ */
+export function bodyWarnings(body: string | undefined): string[] {
+  if (!body?.trim()) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return []
+  }
+  const warnings: string[] = []
+  const walk = (node: unknown, path: string) => {
+    if (node === null || typeof node !== 'object') return
+    const entries = Array.isArray(node) ? node.map((v, i) => [`[${i}]`, v] as const) : Object.entries(node)
+    if (entries.length === 0 && path) warnings.push(`${path} is an empty object. The device deletes an object it is sent empty.`)
+    for (const [key, child] of entries) walk(child, path ? (key.startsWith('[') ? `${path}${key}` : `${path}.${key}`) : key)
+  }
+  walk(parsed, '')
+  return warnings
+}
+
+/**
+ * The properties a request sets, when it is the manual's way of changing a setting: a POST of a JSON
+ * object under "Device" to /Device. `null` for any other request.
+ */
+export function parseDeviceBody(request: DeviceRequest): Record<string, unknown> | null {
+  if (request.method !== 'POST' || request.path !== '/Device' || !request.body) return null
+  try {
+    const parsed: unknown = JSON.parse(request.body)
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) && 'Device' in parsed ? (parsed as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+/** A saved or typed request, as the app sends it, with no empty headers or body. */
+export function cleanRequest(input: { method: HttpMethod; path: string; headers?: Record<string, string>; body?: string }): DeviceRequest {
+  const hasHeaders = input.headers && Object.keys(input.headers).length > 0
+  return {
+    method: input.method,
+    path: input.path,
+    ...(hasHeaders ? { headers: input.headers } : {}),
+    ...(input.body?.trim() && input.method !== 'GET' ? { body: input.body } : {}),
+  }
 }
 
 /* -- Showing an answer --------------------------------------------------- */
@@ -147,8 +216,10 @@ const RAW_TEXT_LIMIT = 2000
 /** One result as plain text for a case note. */
 export function formatResult(result: RunResult): string {
   const { reply } = result
-  const heading = `== ${result.title} · ${result.unit.label || result.unit.ip} (${result.unit.ip}) · ${result.path} ==`
+  const where = result.method === 'GET' ? result.path : `${result.method} ${result.path}`
+  const heading = `== ${result.title} · ${result.unit.label || result.unit.ip} (${result.unit.ip}) · ${where} ==`
   if (!reply.ok) return `${heading}\nERROR: ${reply.error ?? 'No answer.'}`
+  if (reply.image) return `${heading}\n(${reply.image.type}, ${reply.bytes ?? 0} bytes)`
   const lines =
     reply.data !== undefined
       ? flatten(reply.data).map(({ path, value }) => `${path}: ${value}`)
@@ -167,14 +238,39 @@ function reviveUnit(raw: unknown): NvxUnit | null {
   const r = raw as Partial<NvxUnit> | null
   const ip = normalizeIp(asText(r?.ip, 20))
   if (!r || !ip) return null
-  const streamUrl = normalizeStreamUrl(asText(r.streamUrl, 300))
-  return { id: asId(r.id), label: asText(r.label, NAME_MAX_LENGTH), ip, ...(streamUrl ? { streamUrl } : {}) }
+  return { id: asId(r.id), label: asText(r.label, NAME_MAX_LENGTH), ip }
 }
 
-function reviveCall(raw: unknown): NvxCall | null {
-  const r = raw as Partial<NvxCall> | null
+function reviveHeaders(raw: unknown): Record<string, string> | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const entries = Object.entries(raw).filter((entry): entry is [string, string] => HEADER_NAME.test(entry[0]) && typeof entry[1] === 'string')
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+const BODY_MAX_LENGTH = 100_000
+
+function reviveCall(raw: unknown, folderIds: ReadonlySet<string>): NvxCall | null {
+  const r = raw as Partial<Record<keyof NvxCall, unknown>> | null
   const path = normalizePath(asText(r?.path, PATH_MAX_LENGTH))
-  return r && path ? { id: asId(r.id), title: asText(r.title, NAME_MAX_LENGTH) || path, path } : null
+  if (!r || !path) return null
+  const method = typeof r.method === 'string' && (HTTP_METHODS as readonly string[]).includes(r.method.toUpperCase()) ? (r.method.toUpperCase() as HttpMethod) : 'GET'
+  const headers = reviveHeaders(r.headers)
+  const body = typeof r.body === 'string' && r.body.trim() && method !== 'GET' ? r.body.slice(0, BODY_MAX_LENGTH) : undefined
+  const folderId = typeof r.folderId === 'string' && folderIds.has(r.folderId) ? r.folderId : undefined
+  return {
+    id: asId(r.id),
+    title: asText(r.title, NAME_MAX_LENGTH) || path,
+    method,
+    path,
+    ...(headers ? { headers } : {}),
+    ...(body ? { body } : {}),
+    ...(folderId ? { folderId } : {}),
+  }
+}
+
+function reviveFolder(raw: unknown): NvxFolder | null {
+  const r = raw as Partial<NvxFolder> | null
+  return r && typeof r === 'object' ? { id: asId(r.id), name: asText(r.name, NAME_MAX_LENGTH) || 'Folder' } : null
 }
 
 const reviveList = <T,>(raw: unknown, one: (item: unknown) => T | null): T[] =>
@@ -194,12 +290,15 @@ export function reviveGroups(raw: unknown): NvxGroup[] | null {
     const id = asId(r.id)
     if (seen.has(id)) continue
     seen.add(id)
+    const folders = reviveList(r.folders, reviveFolder)
+    const folderIds = new Set(folders.map((f) => f.id))
     groups.push({
       id,
       name: asText(r.name, NAME_MAX_LENGTH) || 'Group',
       username: asText(r.username, 64),
       units: reviveList(r.units, reviveUnit),
-      calls: reviveList(r.calls, reviveCall),
+      folders,
+      calls: reviveList(r.calls, (call) => reviveCall(call, folderIds)),
     })
   }
   return groups

@@ -5,11 +5,12 @@ import {
   getAtPath,
   newId,
   parseChangeStatuses,
+  parseDeviceBody,
   propertyUrl,
   setAtPath,
   summarizeStatuses,
 } from './nvxData'
-import type { ChangeLogEntry, NvxCall, NvxUnit, RunResult, SettingValue } from './types'
+import type { ChangeLogEntry, DeviceRequest, NvxCall, NvxUnit, RunResult, SettingValue } from './types'
 
 /** How many of a change's properties are read back from the device to confirm them. */
 const READ_BACK_LIMIT = 5
@@ -42,7 +43,7 @@ export function useNvxRunner() {
     async (
       targets: NvxUnit[],
       login: { username: string; password: string },
-      calls: Pick<NvxCall, 'title' | 'path'>[],
+      calls: (Pick<NvxCall, 'title'> & DeviceRequest)[],
     ) => {
       if (!bridge || targets.length === 0) return
       const id = ++latest.current
@@ -51,9 +52,10 @@ export function useNvxRunner() {
       setRunning(true)
       const runOn = async (unit: NvxUnit) => {
         for (const [callIndex, call] of calls.entries()) {
-          const reply = await bridge.get({ ip: unit.ip, ...login, path: call.path })
+          const { title, ...request } = call
+          const reply = await bridge.request({ ip: unit.ip, ...login, ...request })
           if (id !== latest.current) return
-          setResults((prev) => [...prev, { key: newId(), title: call.title, path: call.path, callIndex, unit, reply }])
+          setResults((prev) => [...prev, { key: newId(), title, method: call.method, path: call.path, callIndex, unit, reply }])
           if (reply.kind && STOPS_THE_RUN.has(reply.kind)) return
         }
       }
@@ -67,12 +69,15 @@ export function useNvxRunner() {
   )
 
   /**
-   * Send a change to one unit, read each property back to confirm it, show the value the device now
-   * reports, and log it. Never throws: a failure comes back as a log entry saying so.
+   * Send a request that changes something (anything but a GET) to one unit and log it. When it is a
+   * POST of properties to /Device, each property is read back to confirm it and the value the device
+   * now reports is shown wherever that property is on screen. Never throws: a failure comes back as
+   * a log entry saying so.
    */
   const apply = useCallback(
-    async (unit: NvxUnit, login: { username: string; password: string }, body: Record<string, unknown>): Promise<ChangeLogEntry> => {
-      const paths = flatten(body).map((f) => f.path)
+    async (unit: NvxUnit, login: { username: string; password: string }, request: DeviceRequest): Promise<ChangeLogEntry> => {
+      const sent = parseDeviceBody(request)
+      const paths = sent ? flatten(sent).map((f) => f.path).filter((p) => propertyUrl(p) !== null) : []
       const shownBefore = (path: string) =>
         resultsRef.current
           .filter((r) => r.unit.id === unit.id)
@@ -83,18 +88,25 @@ export function useNvxRunner() {
         setChanges((prev) => [...prev, logged])
         return logged
       }
-      const lineFor = (path: string, now?: unknown) => changeLine(path, getAtPath(body, path), shownBefore(path), now)
-      if (!bridge) return finish({ lines: paths.map((p) => lineFor(p)), outcome: 'failed', detail: 'Changes are sent from the Support Hub desktop app.' })
+      const describeSent = (now: (path: string) => unknown = () => undefined) =>
+        paths.length > 0
+          ? paths.map((path) => changeLine(path, getAtPath(sent, path), shownBefore(path), now(path)))
+          : [`${request.method} ${request.path}${request.body ? ` · ${request.body.trim().replace(/\s+/g, ' ').slice(0, 200)}` : ''}`]
+      if (!bridge) return finish({ lines: describeSent(), outcome: 'failed', detail: 'Changes are sent from the Support Hub desktop app.' })
 
-      const reply = await bridge.change({ ip: unit.ip, ...login, body })
-      if (!reply.ok) return finish({ lines: paths.map((p) => lineFor(p)), outcome: 'failed', detail: reply.error ?? 'The device did not accept the change.' })
+      const reply = await bridge.request({ ip: unit.ip, ...login, ...request })
+      const answer = reply.text?.trim().replace(/\s+/g, ' ').slice(0, 200)
+      if (!reply.ok) return finish({ lines: describeSent(), outcome: 'failed', detail: `${reply.error ?? 'The device did not accept the request.'}${answer ? ` ${answer}` : ''}` })
 
-      const { outcome, detail } = summarizeStatuses(parseChangeStatuses(reply.data))
-      const lines: string[] = []
+      const statuses = parseChangeStatuses(reply.data)
+      const { outcome, detail } =
+        statuses.length > 0 ? summarizeStatuses(statuses) : { outcome: 'applied' as const, detail: `The device answered HTTP ${reply.status}${answer ? `: ${answer}` : '.'}` }
+      const reported = new Map<string, unknown>()
       for (const path of paths.slice(0, READ_BACK_LIMIT)) {
         const url = propertyUrl(path)
-        const back = url ? await bridge.get({ ip: unit.ip, ...login, path: url }) : undefined
+        const back = url ? await bridge.request({ ip: unit.ip, ...login, method: 'GET', path: url }) : undefined
         const now = back?.ok ? getAtPath(back.data, path) : undefined
+        reported.set(path, now)
         if (typeof now === 'string' || typeof now === 'number' || typeof now === 'boolean') {
           const value: SettingValue = now
           // Show what the device reports now wherever that property is on screen.
@@ -102,10 +114,8 @@ export function useNvxRunner() {
             prev.map((r) => (r.unit.id === unit.id && r.reply.data !== undefined ? { ...r, reply: { ...r.reply, data: setAtPath(r.reply.data, path, value) } } : r)),
           )
         }
-        lines.push(lineFor(path, now))
       }
-      lines.push(...paths.slice(READ_BACK_LIMIT).map((p) => lineFor(p)))
-      return finish({ lines, outcome, detail })
+      return finish({ lines: describeSent((path) => reported.get(path)), outcome, detail })
     },
     [bridge],
   )

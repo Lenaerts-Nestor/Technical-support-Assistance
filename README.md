@@ -46,45 +46,47 @@ part of a Links or Snippets export — only your full backup carries it.
 
 ## Device API (desktop app only)
 
-Reads settings from Crestron devices (DM NVX and others that use the same REST API) over
-HTTPS. A web page cannot do the device login — it has to set `Cookie`, `Origin` and `Referer`
-headers and keep HttpOnly cookies — so the desktop app does it (`desktop/nvx.cjs`), following
-*Authentication* in the DM NVX API manual. On the website the page only lets you prepare
-groups, units and calls.
+A small Postman for Crestron devices (DM NVX and others that use the same REST API). A web page
+cannot do the device login — it has to set `Cookie`, `Origin` and `Referer` headers and keep
+HttpOnly cookies — so the desktop app does it (`desktop/nvx.cjs`), following *Authentication* in the
+DM NVX API manual. On the website the page only lets you prepare groups, units and calls.
 
-- **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls and username.
-- **Units & login** in a panel at the top that folds down to one line. A unit is a name and the
-  device's IPv4 address; tick one or several, and calls run on every ticked unit.
-- **Saved calls**: a title and a path such as `/Device/DeviceInfo`. One click runs it on the ticked
-  units; **Run all** gathers every call into one report, with **Copy report** for a case note.
-- **Explorer**: try any path with `GET`, then **Save as call**. `POST` sends a change (see below).
-- **Results**: a section per unit with a card per call (as a table or as JSON), or — with several
-  units — **Compare**, one table with the units side by side and the properties that differ
-  highlighted (**Only differences** hides the rest). A unit that could not be reached is left out
-  of the comparison and marked.
-- **Changing settings**: switched off at every start (**Read only** ⇄ **Changes allowed**, top right).
-  With it on, a value in the results gets a pencil: edit it, press **Change…**, and the app shows
-  exactly what it will send (`POST /Device` with a partial object, as in *Make API Calls*). Nothing
-  is sent until you press **Apply change**. Afterwards it shows the device's own answer
-  (applied / restart needed / the reason it was refused), reads the property back and shows what
-  the device now reports. The explorer's **POST** mode sends any partial object the same way. Every
-  change of the session is listed under **Changes this session**, with **Copy log** for a case note
-  (not saved). Changes go to one unit at a time. The app cannot tell which properties are writable;
-  a read-only one is refused by the device and says so. Only plain values (text, numbers, true/false)
-  are sent: an empty object is blocked because the device **deletes** an object it is sent empty, and
-  lists and `null` are blocked because their meaning on the device is not known.
-- **Stream**: give a unit a stream address (`rtsp://<its IP>/…`, no password in it) and a play button
-  opens it in **VLC** (it must be installed). VLC asks for the password itself, so it is never saved.
-  Playing video inside the app is not built; it needs a bundled converter and a known-good address first.
-- **Login**: the username is remembered per group; the password is kept in memory only and is
-  gone when the app closes. The app logs in by itself, again when a session expires, and logs out
-  of every device when it quits.
+- **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls, folders and username.
+- **Units**: a name and the device's IPv4 address, in a panel that folds down to one line. Tick one
+  or several; requests run on every ticked unit.
+- **Login**: next to the saved calls. The username is remembered per group; the password is kept in
+  memory only and is gone when the app closes. The app logs in by itself, again when a session
+  expires, and logs out of every device when it quits.
+- **Request**: pick a method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`), type a path (a query string
+  is fine), and add **headers** (one `Name: value` per line) and a raw **body** (**Format JSON** tidies
+  it). **Send** runs a GET on the ticked units; anything else opens a review first.
+- **Saved calls**: save a request with a title, optionally into a **folder**. Click a name to load it
+  into the request builder; the play button runs it (a GET at once, anything else after a review).
+  **Run all** and a folder's play button run only the GET calls, so nothing that changes a device
+  ever runs without a review. Deleting a folder keeps its calls.
+- **Results**: a section per unit with a card per call — status, time, size, a table (or JSON) of
+  the answer and its **response headers** (never the session cookies). A picture (PNG, JPEG, GIF,
+  WebP, BMP — for example a device's preview image) is shown as a picture. With several units,
+  **Compare** is one table with the units side by side and the properties that differ highlighted
+  (**Only differences** hides the rest); a unit that did not answer is left out of it and marked.
+- **Changes**: switched off at every start (**Read only** ⇄ **Changes allowed**, top right) and
+  sent to one unit at a time. The review shows exactly what goes out (method, path, headers, body).
+  The manual says the device **deletes** an object it is sent empty (`{"Device":{"DeviceSpecific":{}}}`),
+  so an empty object in a body is named in a warning and the button becomes **Send anyway**; nothing
+  is blocked. Afterwards it shows the device's own answer (applied / restart needed / the reason it
+  was refused). A POST of properties to `/Device` — the manual's way of changing a setting — is also
+  read back, and the value on screen follows what the device now reports. With changes allowed, the
+  values in the results also get a pencil for editing one in place (the device refuses a read-only
+  one and says so). Every change of the session is listed under **Changes this session**, with
+  **Copy log** for a case note (not saved).
 
-Safety: only private network addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x) are accepted,
-so the app can never be pointed at the internet; the self-signed certificate is accepted for
-those requests only; a failed login stops the run for that unit instead of retrying, so a wrong
-password cannot lock an account; and a device that does not answer is given up on after 10 seconds. Units and calls are saved in `nvx.json` in the linked folder (and in
-your full backup); passwords never are.
+What the app takes care of: only private network addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x)
+are accepted, so it can never be pointed at the internet; the self-signed certificate is accepted for
+those requests only; headers the app manages (`Cookie`, `Host`, `Content-Length`, …) cannot be
+overridden; a failed login stops the run for that unit instead of retrying, so a wrong password
+cannot lock an account; and a device that does not answer is given up on after 10 seconds. Groups,
+units, folders and saved calls (including headers and bodies) are saved in `nvx.json` in the linked
+folder, and in your full backup; passwords never are, so do not put one in a header or body you save.
 
 ## Sharing
 
