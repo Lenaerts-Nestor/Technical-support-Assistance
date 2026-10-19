@@ -54,6 +54,35 @@ The **Sync** page (bottom of the sidebar) moves one part at a time:
 | Guides | `.zip` with the guide's folder | **Export guide** here or in the guide view; **Import guide package** merges by guide id (replace / keep both / skip). A guide folder zipped by hand works too. |
 | Full backup | `.zip` of the whole folder | restores into a folder that holds no other files yet |
 
+## Desktop app (Windows)
+
+The same pages also run as a desktop app (Electron). It is a window around the built site, so
+every page works as on the web, and nothing is sent anywhere: data stays on the computer.
+
+```
+npm run desktop        # build, then open the app on this computer
+npm run desktop:pack   # build the Windows files into release/ (run it on Windows)
+```
+
+The **Desktop app** workflow (Actions tab → *Run workflow*, or push a tag like `desktop-v0.1.0`)
+builds on a Windows runner and attaches two files to the run, under *Artifacts*:
+
+| File | What it is |
+|---|---|
+| `SupportHub-<version>-portable.exe` | Runs from anywhere with no install. Starts a few seconds slower. |
+| `SupportHub-<version>-setup.exe` | Per-user installer (no administrator rights). |
+
+Good to know:
+
+- The files are **not code-signed**, so Windows SmartScreen may warn ("More info" → "Run anyway"),
+  and a managed laptop may block unknown programs.
+- Drafts (Voice Call, RMA, Cases) live in the app's own profile, `%APPDATA%\Support Hub`.
+  Guides, links, snippets and the calendar live in the linked folder — pick it once on **Sync**.
+  Choose a folder outside OneDrive if the data must stay off the cloud.
+- Only one window runs at a time; starting it again focuses the open one.
+- F12 or Ctrl+Shift+I opens the developer tools.
+- Web links open in your normal browser.
+
 ## Development
 
 ```

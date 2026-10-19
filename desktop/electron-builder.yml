@@ -1,0 +1,22 @@
+appId: com.supporthub.app
+productName: Support Hub
+directories:
+  output: release
+files:
+  - dist/**
+  - desktop/main.cjs
+  - desktop/preload.cjs
+  - package.json
+  # The web app is already bundled into dist/, so no node_modules are needed at runtime.
+  - '!node_modules'
+win:
+  target:
+    - portable
+    - nsis
+portable:
+  artifactName: SupportHub-${version}-portable.exe
+nsis:
+  # Per-user install: no administrator rights needed.
+  oneClick: true
+  perMachine: false
+  artifactName: SupportHub-${version}-setup.exe
