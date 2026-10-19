@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildChangeBody,
   defaultGroups,
+  describeStatus,
+  getAtPath,
+  isEditable,
+  normalizeStreamUrl,
+  parseChangeStatuses,
+  propertyUrl,
+  setAtPath,
+  showSetting,
+  changeLine,
+  summarizeStatuses,
+  formatChangeLog,
   flatten,
   formatReport,
   formatResult,
@@ -13,7 +25,7 @@ import {
   prettyAnswer,
   reviveGroups,
 } from './nvxData'
-import type { RunResult } from './types'
+import type { ChangeLogEntry, ChangeStatus, RunResult } from './types'
 
 const unit = { id: 'u', label: 'Lab encoder', ip: '10.0.0.5' }
 const ok = (data: unknown): RunResult => ({
@@ -225,5 +237,122 @@ describe('compareRows', () => {
 
   it('is empty when nothing answered', () => {
     expect(compareRows([failure(unitA)], [unitA])).toEqual([])
+  })
+})
+
+describe('normalizeStreamUrl', () => {
+  it('keeps an rtsp address on an IPv4 host, and treats nothing as none', () => {
+    expect(normalizeStreamUrl(' rtsp://172.16.4.224/live/main ')).toBe('rtsp://172.16.4.224/live/main')
+    expect(normalizeStreamUrl('rtsps://10.0.0.5:8554')).toBe('rtsps://10.0.0.5:8554')
+    expect(normalizeStreamUrl('   ')).toBe('')
+  })
+
+  it('refuses a password in the address, a name instead of an address, and other kinds of URL', () => {
+    for (const text of ['rtsp://admin:pw@10.0.0.5/x', 'rtsp://camera.local/x', 'http://10.0.0.5/x', 'rtsp://10.0.0.5/a b', '10.0.0.5']) {
+      expect(normalizeStreamUrl(text)).toBeNull()
+    }
+  })
+
+  it('is kept on a unit when the file is read, and dropped when it is not usable', () => {
+    const [group] = reviveGroups([
+      { id: 'g', name: 'X', units: [{ id: 'a', ip: '10.0.0.1', streamUrl: 'rtsp://10.0.0.1/live' }, { id: 'b', ip: '10.0.0.2', streamUrl: 'rtsp://u:p@10.0.0.2/x' }] },
+    ])!
+    expect(group.units[0].streamUrl).toBe('rtsp://10.0.0.1/live')
+    expect(group.units[1].streamUrl).toBeUndefined()
+  })
+})
+
+describe('building a change', () => {
+  it('nests the property under its path', () => {
+    expect(buildChangeBody('Device.Ethernet.HostName', 'NVX-1')).toEqual({ Device: { Ethernet: { HostName: 'NVX-1' } } })
+    expect(buildChangeBody('Device.Vlan', 20)).toEqual({ Device: { Vlan: 20 } })
+    expect(buildChangeBody('Device.A.B.C', false)).toEqual({ Device: { A: { B: { C: false } } } })
+  })
+
+  it('refuses paths that are not a plain Device property', () => {
+    expect(buildChangeBody('Other.A', 1)).toBeNull()
+    expect(buildChangeBody('Device.List[0].Ip', '10.0.0.1')).toBeNull()
+  })
+
+  it('turns a property path into the address to read it back from', () => {
+    expect(propertyUrl('Device.Ethernet.HostName')).toBe('/Device/Ethernet/HostName')
+    expect(propertyUrl('Device.List[0].Ip')).toBeNull()
+  })
+
+  it('says which values can be edited in place', () => {
+    expect(isEditable('Device.A.B', 'x')).toBe(true)
+    expect(isEditable('Device.A.B', 5)).toBe(true)
+    expect(isEditable('Device.A.B', false)).toBe(true)
+    expect(isEditable('Device.A.B', null)).toBe(false)
+    expect(isEditable('Device.A[0]', 'x')).toBe(false)
+    expect(isEditable('Elsewhere.A', 'x')).toBe(false)
+  })
+
+  it('reads and replaces a value at a path without touching the original', () => {
+    const data = { Device: { Ethernet: { HostName: 'old', Dhcp: true } } }
+    expect(getAtPath(data, 'Device.Ethernet.HostName')).toBe('old')
+    expect(getAtPath(data, 'Device.Nope.HostName')).toBeUndefined()
+    const next = setAtPath(data, 'Device.Ethernet.HostName', 'new')
+    expect(next).toEqual({ Device: { Ethernet: { HostName: 'new', Dhcp: true } } })
+    expect(data.Device.Ethernet.HostName).toBe('old')
+    expect(setAtPath(data, 'Device.Missing', 'x')).toBe(data)
+  })
+})
+
+describe('the device’s answer to a change', () => {
+  const answer = (...results: object[]) => ({ Actions: [{ Operation: 'SetPartial', Results: results, TargetObject: 'Ethernet', Version: '2.1.0' }] })
+
+  it('reads the status of each property', () => {
+    expect(parseChangeStatuses(answer({ Path: 'Device.Ethernet', Property: 'HostName', StatusId: 1, StatusInfo: 'Reboot needed' }))).toEqual([
+      { path: 'Device.Ethernet', property: 'HostName', statusId: 1, statusInfo: 'Reboot needed' },
+    ])
+  })
+
+  it('gives nothing for an answer that is not a result list', () => {
+    for (const data of [undefined, null, 'x', {}, { Actions: 'x' }, { Actions: [null, { Results: 'x' }, { Results: [{ Property: 'P' }] }] }]) {
+      expect(parseChangeStatuses(data)).toEqual([])
+    }
+  })
+
+  it('says what each code means', () => {
+    expect(describeStatus(0)).toBe('OK')
+    expect(describeStatus(1)).toContain('restart')
+    expect(describeStatus(-2)).toContain('read only')
+    expect(describeStatus(-1)).toContain('range')
+    expect(describeStatus(-9)).toContain('-9')
+  })
+
+  it('judges the whole change: applied, restart needed, or not applied', () => {
+    const status = (statusId: number, property = 'P', statusInfo = ''): ChangeStatus => ({ path: 'Device.X', property, statusId, statusInfo })
+    expect(summarizeStatuses([status(0)]).outcome).toBe('applied')
+    expect(summarizeStatuses([]).outcome).toBe('applied')
+    expect(summarizeStatuses([status(0), status(1, 'HostName', 'Reboot needed')])).toEqual({
+      outcome: 'restart',
+      detail: 'HostName: A device restart is required for this to take effect (Reboot needed)',
+    })
+    expect(summarizeStatuses([status(1), status(-2, 'MacAddress')]).outcome).toBe('failed')
+    expect(summarizeStatuses([status(3, 'Thing')]).outcome).toBe('failed')
+  })
+
+  it('writes the log as plain text for a case note, oldest first', () => {
+    const entry = (at: number, label: string): ChangeLogEntry => ({
+      id: String(at),
+      at,
+      unit: { id: 'u', label, ip: '10.0.0.5' },
+      lines: ['Device.Ethernet.HostName: "A" → "B"'],
+      outcome: 'restart',
+      detail: 'HostName: A device restart is required for this to take effect',
+    })
+    const text = formatChangeLog([entry(new Date(2026, 9, 20, 15, 30).getTime(), 'Second'), entry(new Date(2026, 9, 20, 14, 5).getTime(), '')])
+    expect(text.split('\n\n')).toHaveLength(2)
+    expect(text.startsWith('2026-10-20 14:05 · 10.0.0.5 (10.0.0.5) · Applied, restart needed\n  Device.Ethernet.HostName: "A" → "B"\n  HostName:')).toBe(true)
+    expect(text).toContain('2026-10-20 15:30 · Second (10.0.0.5)')
+    expect(showSetting('x')).toBe('"x"')
+    expect(showSetting(5)).toBe('5')
+    expect(showSetting({})).toBe('{}')
+    expect(showSetting({ A: 1 })).toBe('{"A":1}')
+    expect(changeLine('Device.A.B', 'new', 'old')).toBe('Device.A.B: "old" → "new"')
+    expect(changeLine('Device.A.B', 5)).toBe('Device.A.B: 5')
+    expect(changeLine('Device.A.B', 'new', 'old', 'new')).toBe('Device.A.B: "old" → "new" · the device now reports "new"')
   })
 })

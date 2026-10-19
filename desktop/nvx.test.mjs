@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { generate } from 'selfsigned'
 
-const { createNvxClient, isPrivateIPv4, isValidPath, updateJar } = createRequire(import.meta.url)('./nvx.cjs')
+const { createNvxClient, isPrivateIPv4, isValidPath, updateJar, validateChangeBody } = createRequire(import.meta.url)('./nvx.cjs')
 
 /** A throwaway self-signed certificate, like the one an NVX ships with. Made fresh for each run. */
 let tls
@@ -22,8 +22,8 @@ const token = () => randomBytes(8).toString('hex')
  * a POST that needs Cookie + Origin + Referer, six cookies back, AuthByPasswd that changes on
  * every response, 403 when the session is wrong, and GET /logout.
  */
-async function startMockDevice({ user = 'admin', password = 'secret' } = {}) {
-  const state = { sessions: new Map(), pending: new Set(), loginPosts: [], forbidden: 0, requests: [], logouts: 0 }
+async function startMockDevice({ user = 'admin', password = 'secret', denyChanges = false, requireXsrf = false } = {}) {
+  const state = { sessions: new Map(), pending: new Set(), loginPosts: [], forbidden: 0, requests: [], logouts: 0, changes: [], hostName: 'NVX-LAB' }
   const server = https.createServer(tls, (req, res) => {
     const cookies = parseCookies(req.headers.cookie)
     const reply = (status, body, headers = {}) => {
@@ -56,6 +56,7 @@ async function startMockDevice({ user = 'admin', password = 'secret' } = {}) {
             'tag=bb; Path=/; Secure; HttpOnly',
             'userid=cc; Path=/; Secure; HttpOnly',
             'userstr=dd; Path=/; Secure; HttpOnly',
+            ...(requireXsrf ? ['CREST-XSRF-TOKEN=tok123; Path=/; Secure'] : []),
           ],
         })
       })
@@ -71,11 +72,35 @@ async function startMockDevice({ user = 'admin', password = 'secret' } = {}) {
       state.sessions.delete(cookies.TRACKID)
       return reply(200, 'bye', { 'Set-Cookie': ['AuthByPasswd=; Max-Age=0; Path=/', 'TRACKID=; Max-Age=0; Path=/'] })
     }
+    if (req.method === 'POST' && req.url === '/Device') {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => {
+        if (denyChanges || (requireXsrf && req.headers['x-crest-xsrf-token'] !== 'tok123')) {
+          state.forbidden++
+          return reply(403, 'Forbidden')
+        }
+        const sent = JSON.parse(body)
+        state.changes.push({ body: sent, contentType: req.headers['content-type'], origin: req.headers.origin, referer: req.headers.referer })
+        session.auth = token()
+        const results = []
+        const eth = sent.Device?.Ethernet ?? {}
+        if ('HostName' in eth) {
+          state.hostName = eth.HostName
+          results.push({ Path: 'Device.Ethernet', Property: 'HostName', StatusId: 1, StatusInfo: 'Reboot needed' })
+        }
+        if ('MacAddress' in eth) results.push({ Path: 'Device.Ethernet', Property: 'MacAddress', StatusId: -2, StatusInfo: 'Read only' })
+        reply(200, JSON.stringify({ Actions: [{ Operation: 'SetPartial', Results: results, TargetObject: 'Ethernet', Version: '2.1.0' }] }), {
+          'Set-Cookie': [`AuthByPasswd=${session.auth}; Path=/; Secure; HttpOnly`],
+        })
+      })
+      return
+    }
     state.requests.push({ url: req.url, referer: req.headers.referer })
     session.auth = token()
     const headers = { 'Set-Cookie': [`AuthByPasswd=${session.auth}; Path=/; Secure; HttpOnly`] }
     if (req.url === '/Device/DeviceInfo') return reply(200, JSON.stringify({ Device: { DeviceInfo: { Model: 'DM-NVX-E30', Name: 'Lab encoder' } } }), headers)
-    if (req.url === '/Device/Ethernet/HostName') return reply(200, JSON.stringify({ Device: { Ethernet: { HostName: 'NVX-LAB' } } }), headers)
+    if (req.url === '/Device/Ethernet/HostName') return reply(200, JSON.stringify({ Device: { Ethernet: { HostName: state.hostName } } }), headers)
     if (req.url === '/plain') return reply(200, 'not json', headers)
     if (req.url === '/hang') return // the device never answers
     return reply(404, 'nope', headers)
@@ -174,6 +199,103 @@ describe('device login', () => {
     await client.request({ ip: '127.0.0.1', path: '/Device/DeviceInfo', ...creds })
     await client.logoutAll()
     expect(device.state.logouts).toBe(1)
+  })
+})
+
+describe('changing settings', () => {
+  const change = (client, body, extra = {}) => client.change({ ip: '127.0.0.1', body, ...creds, ...extra })
+  const hostName = { Device: { Ethernet: { HostName: 'NVX-NEW' } } }
+
+  it('posts a partial object to /Device and returns what the device answered', async () => {
+    device = await startMockDevice()
+    const client = clientFor(device)
+    const result = await change(client, hostName)
+    expect(result.ok).toBe(true)
+    expect(result.data.Actions[0].Results[0]).toMatchObject({ Property: 'HostName', StatusId: 1, StatusInfo: 'Reboot needed' })
+    expect(device.state.changes).toHaveLength(1)
+    expect(device.state.changes[0]).toMatchObject({ body: hostName, contentType: 'application/json', origin: 'https://127.0.0.1', referer: 'https://127.0.0.1/' })
+    // and the device really changed
+    expect((await client.request({ ip: '127.0.0.1', path: '/Device/Ethernet/HostName', ...creds })).data).toEqual(hostName)
+  })
+
+  it('reports a status the device gives for one property', async () => {
+    device = await startMockDevice()
+    const result = await change(clientFor(device), { Device: { Ethernet: { MacAddress: '00.00.00.00.00.00' } } })
+    expect(result.data.Actions[0].Results[0]).toMatchObject({ Property: 'MacAddress', StatusId: -2 })
+  })
+
+  it('logs in again when the session has dropped and still applies the change once', async () => {
+    device = await startMockDevice()
+    const client = clientFor(device)
+    await client.request({ ip: '127.0.0.1', path: '/Device/DeviceInfo', ...creds })
+    device.state.sessions.clear()
+    expect((await change(client, hostName)).ok).toBe(true)
+    expect(device.state.loginPosts).toHaveLength(2)
+    expect(device.state.changes).toHaveLength(1)
+  })
+
+  it('says so when the device keeps refusing the change after a fresh login', async () => {
+    device = await startMockDevice({ denyChanges: true })
+    const result = await change(clientFor(device), hostName)
+    expect(result).toMatchObject({ ok: false, status: 403, kind: 'http' })
+    expect(result.error).toContain('refused the change')
+    expect(device.state.changes).toHaveLength(0)
+  })
+
+  it('sends the security token back as a header when the device hands it out as a cookie', async () => {
+    device = await startMockDevice({ requireXsrf: true })
+    const result = await change(clientFor(device), hostName)
+    expect(result.ok).toBe(true)
+    expect(device.state.changes).toHaveLength(1)
+  })
+
+  it('never contacts the device with a change it will not send', async () => {
+    device = await startMockDevice()
+    const client = clientFor(device)
+    for (const body of [{ Device: { Ethernet: {} } }, { Device: {} }, { Nope: { A: 1 } }, 'text', null, { Device: { A: [1] } }]) {
+      expect(await change(client, body)).toMatchObject({ ok: false, kind: 'invalid' })
+    }
+    expect(device.state.loginPosts).toHaveLength(0)
+    expect(device.state.changes).toHaveLength(0)
+  })
+
+  it('needs a private address and a login like a read does', async () => {
+    const client = createNvxClient()
+    expect(await change(client, hostName, { ip: '8.8.8.8' })).toMatchObject({ kind: 'invalid' })
+    expect(await change(client, hostName, { ip: '10.0.0.5', username: '' })).toMatchObject({ kind: 'invalid' })
+  })
+})
+
+describe('validateChangeBody', () => {
+  it('accepts nested objects that end in text, numbers and true/false', () => {
+    expect(validateChangeBody({ Device: { Ethernet: { HostName: 'x', Vlan: 20, Dhcp: false } } })).toBeNull()
+  })
+
+  it('refuses an empty object anywhere, because the device would delete it', () => {
+    expect(validateChangeBody({ Device: { DeviceSpecific: {} } })).toBe(
+      'Device.DeviceSpecific is an empty object. The device deletes an object it is sent empty, so this is blocked.',
+    )
+    expect(validateChangeBody({ Device: {} })).toContain('delete')
+  })
+
+  it('refuses what is not understood: lists, null, other roots, odd names', () => {
+    expect(validateChangeBody({ Device: { A: [1] } })).toContain('list')
+    expect(validateChangeBody({ Device: { A: null } })).toContain('null')
+    expect(validateChangeBody({ Other: { A: 1 } })).toContain('Device')
+    expect(validateChangeBody({ Device: { A: 1 }, Extra: 1 })).toContain('Device')
+    expect(validateChangeBody({ Device: { 'A B': 1 } })).toContain('property name')
+    expect(validateChangeBody({ Device: { A: Infinity } })).toContain('number')
+    expect(validateChangeBody({ Device: { A: undefined } })).toContain('unsupported')
+    expect(validateChangeBody([])).not.toBeNull()
+  })
+
+  it('limits how much one change can do', () => {
+    const many = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`P${i}`, i]))
+    expect(validateChangeBody({ Device: many })).toContain('at most')
+    expect(validateChangeBody({ Device: { Text: 'x'.repeat(11_000) } })).toContain('too large')
+    let deep = { Leaf: 1 }
+    for (let i = 0; i < 12; i++) deep = { [`L${i}`]: deep }
+    expect(validateChangeBody({ Device: deep })).toContain('deeply')
   })
 })
 

@@ -1,15 +1,21 @@
 import { useState } from 'react'
 import { useNvxData } from '../../app/appDataContext'
+import { useCopyToClipboard } from '../../shared/hooks/useCopyToClipboard'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
-import { PAGE_SUBTITLE, PAGE_TITLE, PANEL } from '../../shared/ui/styles'
+import { GHOST_BTN, PAGE_SUBTITLE, PAGE_TITLE, PANEL } from '../../shared/ui/styles'
+import { AllowChanges } from './components/AllowChanges'
 import { CallsCard } from './components/CallsCard'
+import { ChangesCard } from './components/ChangesCard'
+import { ConfirmChangeDialog } from './components/ConfirmChangeDialog'
+import type { PendingChange } from './components/ConfirmChangeDialog'
 import { ConnectionPanel } from './components/ConnectionPanel'
 import { CallDialog, GroupDialog, UnitDialog } from './components/Dialogs'
 import { ExplorerCard } from './components/ExplorerCard'
 import { GroupBar } from './components/GroupBar'
 import { ResultsCard } from './components/ResultsCard'
+import { buildChangeBody, changeLine, flatten, getAtPath } from './nvxData'
 import { useNvxRunner } from './useNvxRunner'
-import type { NvxCall, NvxUnit } from './types'
+import type { NvxCall, NvxUnit, SettingValue } from './types'
 
 type Dialog =
   | { kind: 'newGroup' }
@@ -38,6 +44,11 @@ export function NvxPage() {
   )
   const [explorerPath, setExplorerPath] = useState('/Device/DeviceInfo')
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  /** Off at every start: the page only reads until the user turns this on. */
+  const [writesEnabled, setWritesEnabled] = useState(false)
+  const [pending, setPending] = useState<PendingChange | null>(null)
+  const [streamNotice, setStreamNotice] = useState<{ ok: boolean; text: string; url: string } | null>(null)
+  const { copied, copy } = useCopyToClipboard()
 
   const group = nvx.groups.find((g) => g.id === activeId) ?? nvx.groups[0]
   const password = group ? (passwords[group.id] ?? '') : ''
@@ -60,6 +71,34 @@ export function NvxPage() {
             ? 'Enter the password.'
             : null
 
+  const login = { username: group?.username ?? '', password }
+  const canChange = writesEnabled && runner.available && login.username !== '' && password !== '' && !runner.running
+  const changeBlockedReason = !writesEnabled
+    ? 'Switch on “Changes allowed” (top right) to send a change.'
+    : (blockedReason ?? (targets.length !== 1 ? 'Tick exactly one unit to change settings.' : null))
+
+  /** Ask for confirmation before anything is sent. */
+  const requestChange = (unit: NvxUnit, body: Record<string, unknown>) => {
+    const shown = (path: string) =>
+      runner.results
+        .filter((r) => r.unit.id === unit.id)
+        .map((r) => getAtPath(r.reply.data, path))
+        .find((v) => v !== undefined)
+    setPending({ unit, body, lines: flatten(body).map(({ path }) => changeLine(path, getAtPath(body, path), shown(path))) })
+  }
+
+  const changeValue = (unit: NvxUnit, path: string, value: SettingValue) => {
+    const body = buildChangeBody(path, value)
+    if (body) requestChange(unit, body)
+  }
+
+  const openStream = async (unit: NvxUnit) => {
+    if (!unit.streamUrl) return
+    const result = (await window.desktop?.openStream(unit.streamUrl)) ?? { ok: false, error: 'Streams open from the Support Hub desktop app.' }
+    const label = unit.label || unit.ip
+    setStreamNotice({ ok: result.ok, text: result.ok ? `Opening ${label} in VLC…` : (result.error ?? 'The stream could not be opened.'), url: unit.streamUrl })
+  }
+
   const runCalls = (calls: Pick<NvxCall, 'title' | 'path'>[]) => {
     if (group && targets.length > 0) void runner.run(targets, { username: group.username, password }, calls)
   }
@@ -76,13 +115,16 @@ export function NvxPage() {
             {nvx.savedToFile && <span className="text-ink-faint"> · saved to nvx.json</span>}
           </p>
         </div>
-        <GroupBar
-          groups={nvx.groups}
-          activeId={group?.id ?? null}
-          onSelect={setActiveId}
-          onAdd={() => setDialog({ kind: 'newGroup' })}
-          onEdit={() => setDialog({ kind: 'editGroup' })}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <GroupBar
+            groups={nvx.groups}
+            activeId={group?.id ?? null}
+            onSelect={setActiveId}
+            onAdd={() => setDialog({ kind: 'newGroup' })}
+            onEdit={() => setDialog({ kind: 'editGroup' })}
+          />
+          {group && <AllowChanges on={writesEnabled} onChange={setWritesEnabled} />}
+        </div>
       </header>
 
       {!group ? (
@@ -104,6 +146,7 @@ export function NvxPage() {
             onSelectAll={(on) => setSelected(on ? group.units.map((u) => u.id) : [])}
             onAddUnit={() => setDialog({ kind: 'unit' })}
             onEditUnit={(u) => setDialog({ kind: 'unit', unit: u })}
+            onOpenStream={(u) => void openStream(u)}
             username={group.username}
             password={password}
             onUsername={(name) => nvx.setUsername(group.id, name)}
@@ -127,11 +170,43 @@ export function NvxPage() {
             running={runner.running}
             onSend={(path) => runCalls([{ title: 'Explorer', path }])}
             onSave={(path) => setDialog({ kind: 'call', path })}
+            changeBlockedReason={changeBlockedReason}
+            onChange={(body) => targets[0] && requestChange(targets[0], body)}
           />
-          <ResultsCard results={runner.results} units={runner.units} running={runner.running} onClear={runner.clear} />
+          {streamNotice && (
+            <p role="status" className={`${PANEL} flex flex-wrap items-center gap-3 px-4 py-3 text-sm ${streamNotice.ok ? 'text-ink-muted' : 'text-rose-200'}`}>
+              {streamNotice.text}
+              {!streamNotice.ok && (
+                <button type="button" className={GHOST_BTN} onClick={() => void copy(streamNotice.url)}>
+                  {copied ? 'Copied' : 'Copy address'}
+                </button>
+              )}
+              <button type="button" className={`${GHOST_BTN} ml-auto`} onClick={() => setStreamNotice(null)}>
+                Dismiss
+              </button>
+            </p>
+          )}
+          <ResultsCard
+            results={runner.results}
+            units={runner.units}
+            running={runner.running}
+            onClear={runner.clear}
+            canChange={canChange}
+            onChange={changeValue}
+            onOpenStream={(u) => void openStream(u)}
+          />
+          {runner.changes.length > 0 && <ChangesCard entries={runner.changes} onClear={runner.clearChanges} />}
         </>
       )}
 
+      {pending && (
+        <ConfirmChangeDialog
+          key={pending.lines.join('|')}
+          change={pending}
+          onApply={() => runner.apply(pending.unit, login, pending.body)}
+          onClose={() => setPending(null)}
+        />
+      )}
       {dialog?.kind === 'newGroup' && (
         <GroupDialog
           onClose={closeDialog}

@@ -1,4 +1,4 @@
-import type { CompareRow, DeviceReply, NvxCall, NvxGroup, NvxUnit, RunResult } from './types'
+import type { ChangeLogEntry, ChangeOutcome, ChangeStatus, CompareRow, DeviceReply, NvxCall, NvxGroup, NvxUnit, RunResult, SettingValue } from './types'
 
 export const NAME_MAX_LENGTH = 40
 const PATH_MAX_LENGTH = 500
@@ -59,6 +59,17 @@ export function normalizePath(input: string): string | null {
   if (!text.startsWith('/')) text = `/${text}`
   if (text.length > PATH_MAX_LENGTH || text.startsWith('//') || !/^\/[\x21-\x7e]*$/.test(text)) return null
   return text
+}
+
+/**
+ * A stream address as it will be stored: `rtsp://` or `rtsps://` and an IPv4 address, with no user
+ * name or password (the player asks for those, so they never end up in `nvx.json`). `''` means none;
+ * `null` means what was typed cannot be used.
+ */
+export function normalizeStreamUrl(input: string): string | null {
+  const text = input.trim()
+  if (!text) return ''
+  return /^rtsps?:\/\/(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?(\/[\x21-\x7e]*)?$/i.test(text) ? text : null
 }
 
 /* -- Showing an answer --------------------------------------------------- */
@@ -155,7 +166,9 @@ const asId = (value: unknown) => (typeof value === 'string' && value ? value : n
 function reviveUnit(raw: unknown): NvxUnit | null {
   const r = raw as Partial<NvxUnit> | null
   const ip = normalizeIp(asText(r?.ip, 20))
-  return r && ip ? { id: asId(r.id), label: asText(r.label, NAME_MAX_LENGTH), ip } : null
+  if (!r || !ip) return null
+  const streamUrl = normalizeStreamUrl(asText(r.streamUrl, 300))
+  return { id: asId(r.id), label: asText(r.label, NAME_MAX_LENGTH), ip, ...(streamUrl ? { streamUrl } : {}) }
 }
 
 function reviveCall(raw: unknown): NvxCall | null {
@@ -190,4 +203,128 @@ export function reviveGroups(raw: unknown): NvxGroup[] | null {
     })
   }
   return groups
+}
+
+/* -- Changing settings --------------------------------------------------- */
+
+/** `Device.Ethernet.HostName` → `/Device/Ethernet/HostName`, to read a property back. `null` for a path with a list index. */
+export function propertyUrl(path: string): string | null {
+  return path.startsWith('Device.') && !path.includes('[') ? `/${path.replaceAll('.', '/')}` : null
+}
+
+/** The partial object to send for one property: `Device.A.B` and `x` → `{"Device":{"A":{"B":"x"}}}`. `null` for a path that cannot be sent. */
+export function buildChangeBody(path: string, value: SettingValue): Record<string, unknown> | null {
+  if (!propertyUrl(path)) return null
+  const keys = path.split('.')
+  return keys.reduceRight<unknown>((inner, key) => ({ [key]: inner }), value) as Record<string, unknown>
+}
+
+/** Whether a value in an answer can be edited in place: a plain value on a plain `Device.…` path. */
+export const isEditable = (path: string, value: unknown): value is SettingValue =>
+  propertyUrl(path) !== null && ['string', 'number', 'boolean'].includes(typeof value)
+
+/** The value at a dotted path (no list indices), or `undefined`. */
+export function getAtPath(data: unknown, path: string): unknown {
+  let node = data
+  for (const key of path.split('.')) {
+    if (node === null || typeof node !== 'object' || Array.isArray(node) || !(key in node)) return undefined
+    node = (node as Record<string, unknown>)[key]
+  }
+  return node
+}
+
+/** A copy of `data` with the value at `path` replaced, or `data` itself when that path is not in it. */
+export function setAtPath<T>(data: T, path: string, value: SettingValue): T {
+  if (getAtPath(data, path) === undefined) return data
+  const set = (node: unknown, keys: string[]): unknown =>
+    keys.length === 0 ? value : { ...(node as Record<string, unknown>), [keys[0]]: set((node as Record<string, unknown>)[keys[0]], keys.slice(1)) }
+  return set(data, path.split('.')) as T
+}
+
+/** What the device means by a `StatusId` (see "Results Object" in the manual). */
+export function describeStatus(statusId: number): string {
+  switch (statusId) {
+    case 0:
+      return 'OK'
+    case 1:
+      return 'A device restart is required for this to take effect'
+    case 2:
+      return 'An out-of-the-box application reset is required'
+    case 3:
+      return 'The property is not supported'
+    case -1:
+      return 'The value is out of the allowed range'
+    case -2:
+      return 'The property is read only'
+    case -3:
+      return 'A required property is missing'
+    case -4:
+      return 'The device reported an error'
+    default:
+      return statusId < 0 ? `The device reported error ${statusId}` : `The device reported status ${statusId}`
+  }
+}
+
+/** The per-property results out of a device's reply to a change (`Actions[].Results[]`). */
+export function parseChangeStatuses(data: unknown): ChangeStatus[] {
+  const actions = (data as { Actions?: unknown } | null)?.Actions
+  if (!Array.isArray(actions)) return []
+  return actions.flatMap((action) => {
+    const results = (action as { Results?: unknown } | null)?.Results
+    if (!Array.isArray(results)) return []
+    return results.flatMap((raw): ChangeStatus[] => {
+      const r = raw as { Path?: unknown; Property?: unknown; StatusId?: unknown; StatusInfo?: unknown } | null
+      if (!r || typeof r.StatusId !== 'number') return []
+      return [{ path: String(r.Path ?? ''), property: String(r.Property ?? ''), statusId: r.StatusId, statusInfo: typeof r.StatusInfo === 'string' ? r.StatusInfo : '' }]
+    })
+  })
+}
+
+/**
+ * How a change went overall: failed when any property was refused (an error, or "not supported"),
+ * restart when everything was taken but something needs a restart or reset, applied otherwise.
+ */
+export function summarizeStatuses(statuses: ChangeStatus[]): { outcome: ChangeOutcome; detail: string } {
+  if (statuses.length === 0) return { outcome: 'applied', detail: 'The device accepted the change and gave no list of results.' }
+  const failed = statuses.filter((s) => s.statusId < 0 || s.statusId === 3)
+  const restart = statuses.filter((s) => s.statusId === 1 || s.statusId === 2)
+  const words = (list: ChangeStatus[]) =>
+    list.map((s) => `${s.property || s.path}: ${describeStatus(s.statusId)}${s.statusInfo ? ` (${s.statusInfo})` : ''}`).join('; ')
+  if (failed.length > 0) return { outcome: 'failed', detail: words(failed) }
+  if (restart.length > 0) return { outcome: 'restart', detail: words(restart) }
+  return { outcome: 'applied', detail: 'The device reported OK.' }
+}
+
+export const OUTCOME_LABEL: Record<ChangeOutcome, string> = {
+  applied: 'Applied',
+  restart: 'Applied, restart needed',
+  failed: 'Not applied',
+}
+
+/** A value as shown in a change line: text in quotes, the rest as it is. */
+export const showSetting = (value: unknown) =>
+  typeof value === 'string' ? `"${value}"` : typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)
+
+/**
+ * One line of a change: `Device.Ethernet.HostName: "old" → "new"`, with what the device reports
+ * afterwards when that is known. `before` is left out when the old value was not on screen.
+ */
+export function changeLine(path: string, after: unknown, before?: unknown, now?: unknown): string {
+  const from = before === undefined ? '' : `${showSetting(before)} → `
+  const reported = now === undefined ? '' : ` · the device now reports ${showSetting(now)}`
+  return `${path}: ${from}${showSetting(after)}${reported}`
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** The session's changes as plain text for a case note, oldest first. */
+export function formatChangeLog(entries: ChangeLogEntry[]): string {
+  return [...entries]
+    .sort((a, b) => a.at - b.at)
+    .map((entry) => {
+      const d = new Date(entry.at)
+      const when = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+      return [`${when} · ${entry.unit.label || entry.unit.ip} (${entry.unit.ip}) · ${OUTCOME_LABEL[entry.outcome]}`, ...entry.lines.map((l) => `  ${l}`), ...(entry.detail ? [`  ${entry.detail}`] : [])].join('\n')
+    })
+    .join('\n\n')
 }

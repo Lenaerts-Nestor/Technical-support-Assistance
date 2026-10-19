@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal } from '../../../shared/ui/Modal'
 import { DANGER_BTN, GHOST_BTN_MD, INPUT_LG, PRIMARY_BTN } from '../../../shared/ui/styles'
-import { NAME_MAX_LENGTH, normalizeIp, normalizePath } from '../nvxData'
+import { NAME_MAX_LENGTH, normalizeIp, normalizePath, normalizeStreamUrl } from '../nvxData'
 import type { NvxCall, NvxGroup, NvxUnit } from '../types'
 
 /** Delete asks twice: the first press turns the button into the confirmation. */
@@ -111,7 +111,7 @@ export function GroupDialog({ group, onSave, onDelete, onClose }: GroupDialogPro
 
 type UnitDialogProps = {
   unit?: NvxUnit
-  onSave: (unit: { label: string; ip: string }) => void
+  onSave: (unit: { label: string; ip: string; streamUrl?: string }) => void
   onDelete?: () => void
   onClose: () => void
 }
@@ -119,13 +119,15 @@ type UnitDialogProps = {
 export function UnitDialog({ unit, onSave, onDelete, onClose }: UnitDialogProps) {
   const [label, setLabel] = useState(unit?.label ?? '')
   const [ip, setIp] = useState(unit?.ip ?? '')
+  const [stream, setStream] = useState(unit?.streamUrl ?? '')
   const clean = normalizeIp(ip)
+  const cleanStream = normalizeStreamUrl(stream)
   return (
     <DialogFrame
       title={unit ? 'Edit unit' : 'Add unit'}
       formId="nvx-unit"
-      canSave={clean !== null}
-      onSubmit={() => clean && onSave({ label: label.trim(), ip: clean })}
+      canSave={clean !== null && cleanStream !== null}
+      onSubmit={() => clean && cleanStream !== null && onSave({ label: label.trim(), ip: clean, ...(cleanStream ? { streamUrl: cleanStream } : {}) })}
       onClose={onClose}
       onDelete={onDelete && { what: 'this unit', run: onDelete }}
     >
@@ -138,6 +140,15 @@ export function UnitDialog({ unit, onSave, onDelete, onClose }: UnitDialogProps)
         mono
         error={ip.trim() && !clean ? 'Enter four numbers from 0 to 255, like 10.0.0.5.' : null}
       />
+      <Field
+        label="Stream address (optional)"
+        value={stream}
+        onChange={setStream}
+        placeholder="rtsp://10.0.0.5/…"
+        mono
+        error={cleanStream === null ? 'Use rtsp://, then the unit’s IP address and path. Leave out any user name and password.' : null}
+      />
+      <p className="text-ink-muted text-xs">Opens in VLC from a button on the unit. VLC asks for the password itself; it is never saved here.</p>
     </DialogFrame>
   )
 }

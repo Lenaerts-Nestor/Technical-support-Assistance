@@ -57,11 +57,25 @@ groups, units and calls.
   device's IPv4 address; tick one or several, and calls run on every ticked unit.
 - **Saved calls**: a title and a path such as `/Device/DeviceInfo`. One click runs it on the ticked
   units; **Run all** gathers every call into one report, with **Copy report** for a case note.
-- **Explorer**: try any path (`GET` only for now), then **Save as call**.
+- **Explorer**: try any path with `GET`, then **Save as call**. `POST` sends a change (see below).
 - **Results**: a section per unit with a card per call (as a table or as JSON), or — with several
   units — **Compare**, one table with the units side by side and the properties that differ
   highlighted (**Only differences** hides the rest). A unit that could not be reached is left out
   of the comparison and marked.
+- **Changing settings**: switched off at every start (**Read only** ⇄ **Changes allowed**, top right).
+  With it on, a value in the results gets a pencil: edit it, press **Change…**, and the app shows
+  exactly what it will send (`POST /Device` with a partial object, as in *Make API Calls*). Nothing
+  is sent until you press **Apply change**. Afterwards it shows the device's own answer
+  (applied / restart needed / the reason it was refused), reads the property back and shows what
+  the device now reports. The explorer's **POST** mode sends any partial object the same way. Every
+  change of the session is listed under **Changes this session**, with **Copy log** for a case note
+  (not saved). Changes go to one unit at a time. The app cannot tell which properties are writable;
+  a read-only one is refused by the device and says so. Only plain values (text, numbers, true/false)
+  are sent: an empty object is blocked because the device **deletes** an object it is sent empty, and
+  lists and `null` are blocked because their meaning on the device is not known.
+- **Stream**: give a unit a stream address (`rtsp://<its IP>/…`, no password in it) and a play button
+  opens it in **VLC** (it must be installed). VLC asks for the password itself, so it is never saved.
+  Playing video inside the app is not built; it needs a bundled converter and a known-good address first.
 - **Login**: the username is remembered per group; the password is kept in memory only and is
   gone when the app closes. The app logs in by itself, again when a session expires, and logs out
   of every device when it quits.

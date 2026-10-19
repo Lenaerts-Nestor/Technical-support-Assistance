@@ -1,6 +1,6 @@
 import { PlusIcon } from '../../../shared/ui/icons'
 import { CARD, COUNT_BADGE, GHOST_BTN, ICON_BTN, INPUT, SECTION_LABEL } from '../../../shared/ui/styles'
-import { PencilIcon } from './icons'
+import { PencilIcon, PlayIcon } from './icons'
 import type { NvxUnit } from '../types'
 
 type ConnectionPanelProps = {
@@ -10,6 +10,7 @@ type ConnectionPanelProps = {
   onSelectAll: (on: boolean) => void
   onAddUnit: () => void
   onEditUnit: (unit: NvxUnit) => void
+  onOpenStream: (unit: NvxUnit) => void
   username: string
   password: string
   onUsername: (username: string) => void
@@ -103,6 +104,11 @@ export function ConnectionPanel(props: ConnectionPanelProps) {
                           <span className="text-ink-muted block font-mono text-xs">{unit.ip}</span>
                         </span>
                       </label>
+                      {unit.streamUrl && (
+                        <button type="button" className={ICON_BTN} aria-label={`Open the stream of ${unit.label || unit.ip}`} title={`Open ${unit.streamUrl} in VLC`} onClick={() => props.onOpenStream(unit)}>
+                          <PlayIcon className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       <button type="button" className={ICON_BTN} aria-label={`Edit ${unit.label || unit.ip}`} onClick={() => props.onEditUnit(unit)}>
                         <PencilIcon className="h-3.5 w-3.5" />
                       </button>

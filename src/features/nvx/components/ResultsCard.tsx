@@ -6,7 +6,7 @@ import { formatReport, sortResults } from '../nvxData'
 import { CompareTable } from './CompareTable'
 import { UnitResults } from './UnitResults'
 import type { AnswerFormat } from './UnitResults'
-import type { NvxUnit, RunResult } from '../types'
+import type { NvxUnit, RunResult, SettingValue } from '../types'
 
 type View = 'units' | 'compare'
 
@@ -37,10 +37,13 @@ type ResultsCardProps = {
   units: NvxUnit[]
   running: boolean
   onClear: () => void
+  canChange: boolean
+  onChange: (unit: NvxUnit, path: string, value: SettingValue) => void
+  onOpenStream: (unit: NvxUnit) => void
 }
 
 /** The answers of the last run: a section per unit, or — with several units — one table comparing them. */
-export function ResultsCard({ results, units, running, onClear }: ResultsCardProps) {
+export function ResultsCard({ results, units, running, onClear, canChange, onChange, onOpenStream }: ResultsCardProps) {
   const [view, setView] = useState<View>('units')
   const [format, setFormat] = useState<AnswerFormat>('table')
   const [onlyDifferences, setOnlyDifferences] = useState(false)
@@ -96,7 +99,16 @@ export function ResultsCard({ results, units, running, onClear }: ResultsCardPro
         {units.length > 0 &&
           shownView === 'units' &&
           units.map((unit) => (
-            <UnitResults key={unit.id} unit={unit} results={sorted.filter((r) => r.unit.id === unit.id)} running={running} format={format} />
+            <UnitResults
+              key={unit.id}
+              unit={unit}
+              results={sorted.filter((r) => r.unit.id === unit.id)}
+              running={running}
+              format={format}
+              canChange={canChange}
+              onChange={onChange}
+              onOpenStream={onOpenStream}
+            />
           ))}
       </div>
     </section>
