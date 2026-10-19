@@ -1,0 +1,28 @@
+name: Desktop app
+
+# Builds the Windows app (portable .exe and per-user installer).
+# Run it by hand from the Actions tab, or push a tag such as desktop-v0.1.0.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run desktop:pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: support-hub-windows
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 30

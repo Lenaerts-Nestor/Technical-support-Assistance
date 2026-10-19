@@ -27,3 +27,6 @@ claude.md
 
 # Guide data lives in the linked local folder, never in the repo
 guides-backup*.json
+
+# Desktop app build output
+release
