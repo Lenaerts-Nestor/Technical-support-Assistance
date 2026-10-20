@@ -38,6 +38,7 @@ interface Window {
           message:
             | { type: 'data'; id: string; data: Uint8Array }
             | { type: 'info'; id: string; hostname?: string; firmware?: string; puf?: string }
+            | { type: 'commands'; id: string; commands: string[] }
             | { type: 'closed'; id: string; reason: string },
         ) => void,
       ) => () => void

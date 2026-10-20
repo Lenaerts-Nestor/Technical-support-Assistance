@@ -94,18 +94,23 @@ SSH consoles to your units, in the page, like Crestron Toolbox's text console. E
 SSH session to one unit (port 22), drawn with xterm.js; the connection is made by the desktop app
 (`desktop/terminal.cjs`).
 
-- **Login** (top right): a username (remembered) and a password (memory only), used for the terminals you
-  open next. Below it are your **saved units** (the ones from the Device API page): click one and its
-  terminal opens and connects. **Add terminal** types an IP address by hand instead, optionally saving
+- **Login** (top right, a small card): a username (remembered) and a password (memory only), used for the
+  terminals you open next. Below it are your **saved units** (the ones from the Device API page) as
+  chips: click one and its terminal opens and connects. **Add terminal** types an IP address by hand instead, optionally saving
   it as a unit, or using a different login for that terminal only.
 - **Grid**: three terminals side by side, the rest wrap below (**Per row** 1, 2 or 3 if a wide table
   of commands needs more room). While a terminal is open the sidebar shrinks to icons for more width.
   Terminals keep running while you visit other pages. Closing a terminal's card ends its session.
-- **Unit card** above each terminal: host name, firmware and PUF, read automatically with `hostname`
-  and `ver -v` (held back from the screen, so the terminal starts clean at its prompt), and a **Web**
-  button that opens `https://<ip>/` in your browser.
-- **Keys**: select text and press Ctrl+C to copy it (Ctrl+C is the normal interrupt when nothing is
-  selected); Ctrl+V pastes.
+- **Unit card** above each terminal: host name, firmware and PUF, and a **Web** button that opens
+  `https://<ip>/` in your browser. They are read on a second, hidden shell on the same connection, which
+  runs `hostname`, `ver -v` and `help all` and closes, so a slow unit never delays what you type: your
+  terminal is live from the first moment and shows only the unit's own text.
+- **Keys**: **Up / Down** bring back past commands (kept per unit while the app runs, never saved, since a
+  command can hold a password) and **Tab** finishes a command name from the unit's own command list
+  (read with `help all`; several matches are listed under the terminal). They work while you type at the
+  end of the line; after editing with the arrow keys, Home or Ctrl+A, the keys go to the unit untouched
+  until the next Enter. Select text and press Ctrl+C to copy it (Ctrl+C is the normal interrupt when
+  nothing is selected); Ctrl+V pastes.
 - **Host keys**: the first time a unit is seen its SSH key is remembered (in the app's own folder, like
   OpenSSH's `accept-new`). A different key later is refused with a message, and **Trust the new key and
   connect** accepts it, for a unit that was reset or replaced.

@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { CARD, DANGER_BTN, GHOST_BTN, GHOST_BTN_MD, ICON_BTN } from '../../../shared/ui/styles'
+import { CommandLine, historyFor } from '../lineEditor'
 import type { TerminalEntry } from '../types'
 
 /** Matches the app: a touch darker than the page, bright text, the amber accent for the cursor. */
@@ -48,6 +49,8 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
   const [status, setStatus] = useState<Status>('connecting')
   const [info, setInfo] = useState<Info | null>(null)
   const [problem, setProblem] = useState<{ text: string; keyChanged: boolean } | null>(null)
+  /** The commands Tab could not choose between, shown until the next key. */
+  const [hint, setHint] = useState<string[] | null>(null)
   /** Bumped to connect again: the effect below runs afresh with a clean terminal. */
   const [attempt, setAttempt] = useState(0)
 
@@ -57,6 +60,10 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
     if (!bridge || !host) return
     const id = crypto.randomUUID()
     let disposed = false
+    let connected = false
+    /** The unit's command names, for Tab. They arrive a moment after the terminal opens. */
+    let commands: string[] = []
+    const line = new CommandLine(historyFor(entry.ip))
 
     const term = new Terminal({
       theme: THEME,
@@ -74,13 +81,31 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
       if (host.clientWidth > 0 && host.clientHeight > 0) fit.fit()
     }
     refit()
-    // Ctrl+C copies when text is selected, and is the usual interrupt otherwise.
     term.attachCustomKeyEventHandler((event) => {
-      if (event.type === 'keydown' && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && term.hasSelection()) {
+      if (event.type !== 'keydown') return true
+      // Ctrl+C copies when text is selected, and is the usual interrupt otherwise.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && term.hasSelection()) {
         void navigator.clipboard.writeText(term.getSelection())
         return false
       }
-      return true
+      if (!connected || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return true
+      // Up and Down bring back past commands; Tab finishes a command name. When the line is not known
+      // (it was edited with the arrow keys…) or there is nothing to do, the key goes to the unit as usual.
+      let handled: string | null = null
+      if (event.key === 'ArrowUp') handled = line.previous()
+      else if (event.key === 'ArrowDown') handled = line.next()
+      else if (event.key === 'Tab') {
+        const done = line.complete(commands)
+        if (done) {
+          handled = done.send
+          setHint(done.matches.length > 1 ? done.matches : null)
+        }
+      } else return true
+      if (handled === null) return true
+      event.preventDefault() // xterm leaves the key alone when we say false, so the browser must not act on it
+      if (handled) bridge.write(id, handled)
+      if (event.key !== 'Tab') setHint(null)
+      return false
     })
     const observer = new ResizeObserver(refit)
     observer.observe(host)
@@ -89,12 +114,17 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
       if (message.id !== id) return
       if (message.type === 'data') term.write(message.data)
       else if (message.type === 'info') setInfo({ hostname: message.hostname, firmware: message.firmware, puf: message.puf })
+      else if (message.type === 'commands') commands = message.commands
       else {
         setStatus('closed')
         setProblem({ text: message.reason, keyChanged: false })
       }
     })
-    const typing = term.onData((data) => bridge.write(id, data))
+    const typing = term.onData((data) => {
+      line.track(data)
+      setHint(null)
+      bridge.write(id, data)
+    })
     const resizing = term.onResize(({ cols, rows }) => bridge.resize(id, cols, rows))
 
     void bridge.open({ id, ip: entry.ip, username: entry.username, password: entry.password, cols: term.cols, rows: term.rows }).then((result) => {
@@ -103,6 +133,7 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
         return
       }
       if (result.ok) {
+        connected = true
         setStatus('connected')
         term.focus()
       } else {
@@ -164,6 +195,12 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
       </header>
       <div className="relative rounded-b-xl bg-[#121214] p-2">
         <div ref={hostRef} className="h-[26rem]" aria-label={`Terminal for ${entry.label || entry.ip}`} />
+        {hint && (
+          <p className="bg-subtle/95 text-ink absolute inset-x-3 bottom-3 rounded-md px-3 py-1.5 font-mono text-xs" role="status">
+            {hint.slice(0, 14).join('   ')}
+            {hint.length > 14 && `   … +${hint.length - 14}`}
+          </p>
+        )}
         {down && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-b-xl bg-black/75 p-6 text-center" role="alert">
             <p className="text-ink max-w-sm text-sm">{problem?.text ?? 'The terminal is not connected.'}</p>
