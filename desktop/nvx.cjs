@@ -8,6 +8,10 @@
 //   3. keep every cookie; AuthByPasswd changes on each response
 //   4. GET  /logout                 -> ends the session
 // A 403 means bad credentials or an expired session.
+//
+// It is a small Postman: any of GET / POST / PUT / PATCH / DELETE to any path on the device, with
+// your own headers and body, through the same logged-in session. The manual's way to change a
+// setting is a POST of a partial CresNext object to /Device.
 const https = require('node:https')
 const net = require('node:net')
 
@@ -39,6 +43,28 @@ function isValidPath(path) {
   )
 }
 
+const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+const MAX_BODY_BYTES = 100 * 1024
+const MAX_HEADERS = 20
+/** Headers the app sets itself or that could smuggle a second request. */
+const BLOCKED_HEADERS = new Set(['cookie', 'host', 'content-length', 'transfer-encoding', 'connection', 'keep-alive', 'upgrade', 'expect', 'te', 'trailer'])
+/** Pictures the page can show. (SVG is left out: it is treated as text.) */
+const IMAGE_TYPE = /^image\/(png|jpe?g|gif|webp|bmp)\b/i
+
+/** Why `headers` cannot be sent, as a message for the person, or `null` when they can. */
+function checkHeaders(headers) {
+  if (headers === undefined || headers === null) return null
+  if (typeof headers !== 'object' || Array.isArray(headers)) return 'Headers must be a list of name and value pairs.'
+  const entries = Object.entries(headers)
+  if (entries.length > MAX_HEADERS) return `At most ${MAX_HEADERS} headers can be sent.`
+  for (const [name, value] of entries) {
+    if (!/^[A-Za-z0-9-]+$/.test(name)) return `"${name}" is not a valid header name.`
+    if (BLOCKED_HEADERS.has(name.toLowerCase()) || name.toLowerCase().startsWith('proxy-')) return `The ${name} header is set by the app and cannot be changed.`
+    if (typeof value !== 'string' || value.length > 500 || !/^[\x20-\x7e]*$/.test(value)) return `The value of the ${name} header must be plain text on one line.`
+  }
+  return null
+}
+
 /** Fold a response's Set-Cookie headers into the jar; an expired cookie removes its entry. */
 function updateJar(jar, setCookie) {
   for (const line of setCookie ?? []) {
@@ -59,6 +85,15 @@ function updateJar(jar, setCookie) {
 }
 
 const cookieHeader = (jar) => [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
+
+/** What a failed answer means, in a sentence. */
+function describeFailure(status, method, path) {
+  if (status === 404) return `${path} was not found on the device (HTTP 404).`
+  if (status === 403 && method !== 'GET') {
+    return 'The device refused the request (HTTP 403) even after logging in again. The account may not be allowed to do this, or the device wants an extra security header.'
+  }
+  return `The device answered HTTP ${status}.`
+}
 
 class NvxError extends Error {
   constructor(kind, message, status = null) {
@@ -84,10 +119,10 @@ function describeNetworkError(error, ip, port) {
 }
 
 /**
- * One HTTPS exchange. Resolves with the status, headers and text, whatever the status is;
+ * One HTTPS exchange. Resolves with the status, headers and body bytes, whatever the status is;
  * rejects only when nothing came back.
  */
-function send({ ip, port, method, path, headers, body, jar }) {
+function send({ ip, port, method, path, headers, body, jar, timeoutMs }) {
   return new Promise((resolve, reject) => {
     const cookies = cookieHeader(jar)
     const request = https.request(
@@ -98,9 +133,9 @@ function send({ ip, port, method, path, headers, body, jar }) {
         path,
         agent: insecureAgent,
         headers: {
-          Accept: 'application/json, text/html, */*',
-          ...(cookies ? { Cookie: cookies } : {}),
-          ...(body === undefined ? {} : { 'Content-Length': Buffer.byteLength(body) }),
+          accept: 'application/json, text/html, image/*, */*',
+          ...(cookies ? { cookie: cookies } : {}),
+          ...(body === undefined ? {} : { 'content-length': Buffer.byteLength(body) }),
           ...headers,
         },
       },
@@ -117,12 +152,15 @@ function send({ ip, port, method, path, headers, body, jar }) {
         })
         response.on('end', () => {
           updateJar(jar, response.headers['set-cookie'])
-          resolve({ status: response.statusCode ?? 0, headers: response.headers, text: Buffer.concat(chunks).toString('utf8') })
+          resolve({ status: response.statusCode ?? 0, headers: response.headers, body: Buffer.concat(chunks) })
         })
         response.on('error', reject)
       },
     )
-    request.setTimeout(REQUEST_TIMEOUT_MS, () => request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })))
+    // One deadline for the whole exchange. `request.setTimeout` only starts once connected, so an
+    // address that silently drops packets (a mistyped IP) would wait for the OS's own, much longer, limit.
+    const deadline = setTimeout(() => request.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })), timeoutMs)
+    request.on('close', () => clearTimeout(deadline))
     request.on('error', (error) => reject(error instanceof NvxError ? error : new NvxError('network', describeNetworkError(error, ip, port))))
     if (body !== undefined) request.write(body)
     request.end()
@@ -133,7 +171,7 @@ function send({ ip, port, method, path, headers, body, jar }) {
  * Keeps one logged-in session per device and runs GET requests through it. Requests to the
  * same device go one at a time, because AuthByPasswd rotates on every response.
  */
-function createNvxClient({ port = 443, allowLoopback = false } = {}) {
+function createNvxClient({ port = 443, allowLoopback = false, timeoutMs = REQUEST_TIMEOUT_MS } = {}) {
   /** ip -> { jar, username, password, queue } */
   const sessions = new Map()
 
@@ -149,7 +187,7 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
   async function login(ip, session, username, password) {
     session.jar.clear()
     const base = `https://${ip}`
-    const first = await send({ ip, port, method: 'GET', path: '/userlogin.html', jar: session.jar })
+    const first = await send({ ip, port, method: 'GET', path: '/userlogin.html', jar: session.jar, timeoutMs })
     if (!session.jar.has('TRACKID')) {
       throw new NvxError('auth', `${ip} did not offer a login (no TRACKID cookie). Is authentication enabled on the device?`, first.status)
     }
@@ -160,12 +198,13 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
       method: 'POST',
       path: '/userlogin.html',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Origin: base,
-        Referer: `${base}/userlogin.html`,
+        'content-type': 'application/x-www-form-urlencoded',
+        origin: base,
+        referer: `${base}/userlogin.html`,
       },
       body,
       jar: session.jar,
+      timeoutMs,
     })
     // A good login redirects to "/" (or answers 200 when a client follows it) and sets AuthByPasswd.
     const accepted = (second.status === 302 || second.status === 200) && session.jar.has('AuthByPasswd')
@@ -178,17 +217,22 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
     session.password = password
   }
 
-  async function get(ip, path, { username, password }) {
+  /** The double-submit token some Crestron web services want back as a header, when the device hands one out as a cookie. */
+  const xsrfHeader = (jar) => (jar.has('CREST-XSRF-TOKEN') ? { 'x-crest-xsrf-token': jar.get('CREST-XSRF-TOKEN') } : {})
+
+  /** One request through the device's session: logs in when needed, and again once if the device says 403. */
+  async function exchange(ip, { username, password }, { method, path, headers, body }) {
     const session = sessionFor(ip)
     const run = async () => {
       const sameLogin = session.username === username && session.password === password
       if (!sameLogin || !session.jar.has('AuthByPasswd')) await login(ip, session, username, password)
-      const request = () => send({ ip, port, method: 'GET', path, headers: { Referer: `https://${ip}/` }, jar: session.jar })
-      let response = await request()
+      const attempt = () =>
+        send({ ip, port, method, path, headers: { referer: `https://${ip}/`, ...xsrfHeader(session.jar), ...headers }, body, jar: session.jar, timeoutMs })
+      let response = await attempt()
       if (response.status === 403) {
         // Expired session: log in again once and retry.
         await login(ip, session, username, password)
-        response = await request()
+        response = await attempt()
       }
       return response
     }
@@ -204,7 +248,7 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
     sessions.delete(ip)
     if (!session.jar.size) return
     try {
-      await send({ ip, port, method: 'GET', path: '/logout', headers: { Referer: `https://${ip}/` }, jar: session.jar })
+      await send({ ip, port, method: 'GET', path: '/logout', headers: { referer: `https://${ip}/` }, jar: session.jar, timeoutMs })
     } catch {
       // Best effort: the device drops idle sessions on its own.
     }
@@ -212,22 +256,50 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
 
   const logoutAll = () => Promise.all([...sessions.keys()].map(logout))
 
+  /** The request as it will go on the wire, or `{ error }` for the person when it cannot be sent. */
+  function build({ ip, method = 'GET', path, headers, body }) {
+    const verb = typeof method === 'string' ? method.toUpperCase() : ''
+    if (!METHODS.has(verb)) return { error: `The method must be one of ${[...METHODS].join(', ')}.` }
+    if (!isValidPath(path)) return { error: 'The path must start with / and contain no spaces (for example /Device/DeviceInfo).' }
+    const headerProblem = checkHeaders(headers)
+    if (headerProblem) return { error: headerProblem }
+    if (body !== undefined && typeof body !== 'string') return { error: 'The body must be text.' }
+    const hasBody = typeof body === 'string' && body !== ''
+    if (hasBody && verb === 'GET') return { error: 'A GET request has no body. Use POST (or PUT, PATCH, DELETE) to send one.' }
+    if (hasBody && Buffer.byteLength(body) > MAX_BODY_BYTES) return { error: 'The body is too large.' }
+    const own = Object.fromEntries(Object.entries(headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]))
+    return {
+      request: {
+        method: verb,
+        path,
+        body: hasBody ? body : undefined,
+        // Like a browser: a body is JSON unless said otherwise, and a change names its origin. Your own headers win.
+        headers: { ...(hasBody ? { 'content-type': 'application/json' } : {}), ...(verb === 'GET' ? {} : { origin: `https://${ip}` }), ...own },
+      },
+    }
+  }
+
   /**
-   * What the page calls. Validates the request, runs it and turns every outcome (including a
-   * failure) into a plain object, so the page never sees an exception.
+   * What the page calls. Validates the request, runs it and turns every outcome (including a failure)
+   * into a plain object, so the page never sees an exception.
    */
   async function request(input) {
     const started = Date.now()
     const done = (fields) => ({ ok: false, status: null, ms: Date.now() - started, ...fields })
-    const { ip, username, password, path } = input ?? {}
+    const { ip, username, password } = input ?? {}
     if (!isPrivateIPv4(ip, { allowLoopback })) return done({ kind: 'invalid', error: 'Enter the device IPv4 address on your network (for example 10.0.0.5).' })
-    if (!isValidPath(path)) return done({ kind: 'invalid', error: 'The path must start with / and contain no spaces (for example /Device/DeviceInfo).' })
     if (typeof username !== 'string' || !username || typeof password !== 'string') return done({ kind: 'invalid', error: 'Enter the username and password for the device.' })
+    const built = build(input)
+    if (built.error) return done({ kind: 'invalid', error: built.error })
+    const { method, path } = built.request
     try {
-      const response = await get(ip, path, { username, password })
+      const response = await exchange(ip, { username, password }, built.request)
+      const type = String(response.headers['content-type'] ?? '')
+      const isImage = IMAGE_TYPE.test(type) && response.body.length > 0
+      const text = isImage ? undefined : response.body.toString('utf8')
       let data
       try {
-        data = JSON.parse(response.text)
+        data = text === undefined ? undefined : JSON.parse(text)
       } catch {
         data = undefined
       }
@@ -235,9 +307,13 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
       return done({
         ok,
         status: response.status,
+        bytes: response.body.length,
+        // Everything but the session cookies, which are the keys to the device.
+        headers: Object.fromEntries(Object.entries(response.headers).filter(([name, value]) => name !== 'set-cookie' && typeof value === 'string')),
         data,
-        text: response.text,
-        ...(ok ? {} : { kind: 'http', error: response.status === 404 ? `${path} was not found on the device (HTTP 404).` : `The device answered HTTP ${response.status}.` }),
+        text,
+        ...(isImage ? { image: { type: type.split(';')[0].trim(), base64: response.body.toString('base64') } } : {}),
+        ...(ok ? {} : { kind: 'http', error: describeFailure(response.status, method, path) }),
       })
     } catch (error) {
       if (error instanceof NvxError) return done({ kind: error.kind, status: error.status, error: error.message })
@@ -253,7 +329,7 @@ function createNvxClient({ port = 443, allowLoopback = false } = {}) {
  * `isTrusted(event)` decides who that is.
  */
 function registerNvxIpc(ipcMain, client, isTrusted) {
-  ipcMain.handle('nvx:get', (event, input) => {
+  ipcMain.handle('nvx:request', (event, input) => {
     if (!isTrusted(event)) throw new Error('Untrusted sender')
     return client.request(input)
   })
@@ -263,4 +339,4 @@ function registerNvxIpc(ipcMain, client, isTrusted) {
   })
 }
 
-module.exports = { createNvxClient, registerNvxIpc, isPrivateIPv4, isValidPath, updateJar }
+module.exports = { createNvxClient, registerNvxIpc, isPrivateIPv4, isValidPath, updateJar, checkHeaders }

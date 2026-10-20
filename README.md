@@ -46,26 +46,72 @@ part of a Links or Snippets export — only your full backup carries it.
 
 ## Device API (desktop app only)
 
-Reads settings from Crestron devices (DM NVX and others that use the same REST API) over
-HTTPS. A web page cannot do the device login — it has to set `Cookie`, `Origin` and `Referer`
-headers and keep HttpOnly cookies — so the desktop app does it (`desktop/nvx.cjs`), following
-*Authentication* in the DM NVX API manual. On the website the page only lets you prepare
-groups, units and calls.
+A small Postman for Crestron devices (DM NVX and others that use the same REST API). A web page
+cannot do the device login — it has to set `Cookie`, `Origin` and `Referer` headers and keep
+HttpOnly cookies — so the desktop app does it (`desktop/nvx.cjs`), following *Authentication* in the
+DM NVX API manual. On the website the page only lets you prepare groups, units and calls.
 
-- **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls and username.
-- **Units**: a name and the device's IPv4 address. The selected unit is where calls run.
-- **Saved calls**: a title and a path such as `/Device/DeviceInfo`. One click runs it on the
-  selected unit; **Run all** gathers every call into one report, with **Copy report** for a case note.
-- **Explorer**: try any path (`GET` only for now), then **Save as call**.
-- **Login**: the username is remembered per group; the password is kept in memory only and is
-  gone when the app closes. The app logs in by itself, again when a session expires, and logs out
-  of every device when it quits.
+- **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls, folders and username.
+- **Units**: a name and the device's IPv4 address, in a panel that folds down to one line. Tick one
+  or several; requests run on every ticked unit.
+- **Login**: next to the saved calls. The username is remembered per group; the password is kept in
+  memory only and is gone when the app closes. The app logs in by itself, again when a session
+  expires, and logs out of every device when it quits.
+- **Request**: pick a method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`), type a path (a query string
+  is fine), and add **headers** (one `Name: value` per line) and a raw **body** (**Format JSON** tidies
+  it). **Send** runs a GET on the ticked units; anything else opens a review first.
+- **Saved calls**: save a request with a title, optionally into a **folder**. Click a name to load it
+  into the request builder; the play button runs it (a GET at once, anything else after a review).
+  **Run all** and a folder's play button run only the GET calls, so nothing that changes a device
+  ever runs without a review. Deleting a folder keeps its calls.
+- **Results**: a section per unit with a card per call — status, time, size, a table (or JSON) of
+  the answer and its **response headers** (never the session cookies). A picture (PNG, JPEG, GIF,
+  WebP, BMP — for example a device's preview image) is shown as a picture. With several units,
+  **Compare** is one table with the units side by side and the properties that differ highlighted
+  (**Only differences** hides the rest); a unit that did not answer is left out of it and marked.
+- **Changes**: switched off at every start (**Read only** ⇄ **Changes allowed**, top right) and
+  sent to one unit at a time. The review shows exactly what goes out (method, path, headers, body).
+  The manual says the device **deletes** an object it is sent empty (`{"Device":{"DeviceSpecific":{}}}`),
+  so an empty object in a body is named in a warning and the button becomes **Send anyway**; nothing
+  is blocked. Afterwards it shows the device's own answer (applied / restart needed / the reason it
+  was refused). A POST of properties to `/Device` — the manual's way of changing a setting — is also
+  read back, and the value on screen follows what the device now reports. With changes allowed, the
+  values in the results also get a pencil for editing one in place (the device refuses a read-only
+  one and says so). Every change of the session is listed under **Changes this session**, with
+  **Copy log** for a case note (not saved).
 
-Safety: only private network addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x) are accepted,
-so the app can never be pointed at the internet; the self-signed certificate is accepted for
-those requests only; and a failed login stops the run instead of retrying, so a wrong password
-cannot lock an account. Units and calls are saved in `nvx.json` in the linked folder (and in
-your full backup); passwords never are.
+What the app takes care of: only private network addresses (10.x, 172.16–31.x, 192.168.x, 169.254.x)
+are accepted, so it can never be pointed at the internet; the self-signed certificate is accepted for
+those requests only; headers the app manages (`Cookie`, `Host`, `Content-Length`, …) cannot be
+overridden; a failed login stops the run for that unit instead of retrying, so a wrong password
+cannot lock an account; and a device that does not answer is given up on after 10 seconds. Groups,
+units, folders and saved calls (including headers and bodies) are saved in `nvx.json` in the linked
+folder, and in your full backup; passwords never are, so do not put one in a header or body you save.
+
+## Terminal (desktop app only)
+
+SSH consoles to your units, in the page, like Crestron Toolbox's text console. Each terminal is one
+SSH session to one unit (port 22), drawn with xterm.js; the connection is made by the desktop app
+(`desktop/terminal.cjs`).
+
+- **Login** (top right): a username (remembered) and a password (memory only), used for the terminals you
+  open next. Below it are your **saved units** (the ones from the Device API page): click one and its
+  terminal opens and connects. **Add terminal** types an IP address by hand instead, optionally saving
+  it as a unit, or using a different login for that terminal only.
+- **Grid**: three terminals side by side, the rest wrap below (**Per row** 1, 2 or 3 if a wide table
+  of commands needs more room). While a terminal is open the sidebar shrinks to icons for more width.
+  Terminals keep running while you visit other pages. Closing a terminal's card ends its session.
+- **Unit card** above each terminal: host name, firmware and PUF, read automatically with `hostname`
+  and `ver -v` (held back from the screen, so the terminal starts clean at its prompt), and a **Web**
+  button that opens `https://<ip>/` in your browser.
+- **Keys**: select text and press Ctrl+C to copy it (Ctrl+C is the normal interrupt when nothing is
+  selected); Ctrl+V pastes.
+- **Host keys**: the first time a unit is seen its SSH key is remembered (in the app's own folder, like
+  OpenSSH's `accept-new`). A different key later is refused with a message, and **Trust the new key and
+  connect** accepts it, for a unit that was reset or replaced.
+- Only private network addresses are accepted, at most 12 terminals at once, and every session is
+  closed when the app quits. A terminal can do anything the console can, so it is not covered by the
+  Device API page's **Changes allowed** switch.
 
 ## Sharing
 

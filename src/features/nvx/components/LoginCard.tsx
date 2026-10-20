@@ -12,7 +12,7 @@ export function LoginCard({ username, password, onUsername, onPassword }: LoginC
   return (
     <section className={CARD} aria-label="Login">
       <header className={CARD_HEADER}>
-        <h3 className={SECTION_LABEL}>Login</h3>
+        <h3 className={SECTION_LABEL}>Login for this group</h3>
       </header>
       <div className="space-y-3 p-4">
         <label className="block">
@@ -21,13 +21,7 @@ export function LoginCard({ username, password, onUsername, onPassword }: LoginC
         </label>
         <label className="block">
           <span className="text-ink-muted mb-1 block text-xs font-medium">Password</span>
-          <input
-            className={INPUT}
-            type="password"
-            value={password}
-            autoComplete="off"
-            onChange={(e) => onPassword(e.target.value)}
-          />
+          <input className={INPUT} type="password" value={password} autoComplete="off" onChange={(e) => onPassword(e.target.value)} />
         </label>
         <p className="text-ink-faint text-xs">The password is kept in memory only and is gone when the app closes.</p>
       </div>

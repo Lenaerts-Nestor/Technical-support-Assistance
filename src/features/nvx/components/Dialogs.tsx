@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Modal } from '../../../shared/ui/Modal'
-import { DANGER_BTN, GHOST_BTN_MD, INPUT_LG, PRIMARY_BTN } from '../../../shared/ui/styles'
-import { NAME_MAX_LENGTH, normalizeIp, normalizePath } from '../nvxData'
-import type { NvxCall, NvxGroup, NvxUnit } from '../types'
+import { DANGER_BTN, GHOST_BTN_MD, INPUT_LG, PRIMARY_BTN, SELECT, TEXTAREA } from '../../../shared/ui/styles'
+import { NAME_MAX_LENGTH, cleanRequest, formatHeaderLines, normalizeIp, normalizePath, parseHeaderLines } from '../nvxData'
+import { HTTP_METHODS } from '../types'
+import type { DeviceRequest, HttpMethod, NvxCall, NvxFolder, NvxGroup, NvxUnit } from '../types'
 
 /** Delete asks twice: the first press turns the button into the confirmation. */
 function DeleteButton({ what, onDelete }: { what: string; onDelete: () => void }) {
@@ -50,6 +51,7 @@ type DialogFrameProps = {
   onSubmit: () => void
   onClose: () => void
   onDelete?: { what: string; run: () => void }
+  wide?: boolean
   children: React.ReactNode
 }
 
@@ -109,6 +111,31 @@ export function GroupDialog({ group, onSave, onDelete, onClose }: GroupDialogPro
   )
 }
 
+type FolderDialogProps = {
+  /** The folder being renamed; `undefined` adds a new one. */
+  folder?: NvxFolder
+  onSave: (name: string) => void
+  onDelete?: () => void
+  onClose: () => void
+}
+
+export function FolderDialog({ folder, onSave, onDelete, onClose }: FolderDialogProps) {
+  const [name, setName] = useState(folder?.name ?? '')
+  return (
+    <DialogFrame
+      title={folder ? 'Rename folder' : 'New folder'}
+      formId="nvx-folder"
+      canSave={name.trim().length > 0}
+      onSubmit={() => onSave(name)}
+      onClose={onClose}
+      onDelete={onDelete && { what: 'the folder', run: onDelete }}
+    >
+      <Field label="Name" value={name} onChange={(v) => setName(v.slice(0, NAME_MAX_LENGTH))} placeholder="Network" autoFocus />
+      {folder && <p className="text-ink-muted text-xs">Deleting a folder keeps its calls: they move to the top of the list.</p>}
+    </DialogFrame>
+  )
+}
+
 type UnitDialogProps = {
   unit?: NvxUnit
   onSave: (unit: { label: string; ip: string }) => void
@@ -145,35 +172,80 @@ export function UnitDialog({ unit, onSave, onDelete, onClose }: UnitDialogProps)
 type CallDialogProps = {
   /** The call being edited; `undefined` saves a new one. */
   call?: NvxCall
-  /** The path to start from for a new call. */
-  initialPath?: string
-  onSave: (call: { title: string; path: string }) => void
+  /** The request to start from for a new call. */
+  initial?: DeviceRequest
+  folders: NvxFolder[]
+  onSave: (call: { title: string; folderId?: string } & DeviceRequest) => void
   onDelete?: () => void
   onClose: () => void
 }
 
-export function CallDialog({ call, initialPath = '', onSave, onDelete, onClose }: CallDialogProps) {
+export function CallDialog({ call, initial, folders, onSave, onDelete, onClose }: CallDialogProps) {
+  const start = call ?? initial
   const [title, setTitle] = useState(call?.title ?? '')
-  const [path, setPath] = useState(call?.path ?? initialPath)
+  const [folderId, setFolderId] = useState(call?.folderId ?? '')
+  const [method, setMethod] = useState<HttpMethod>(start?.method ?? 'GET')
+  const [path, setPath] = useState(start?.path ?? '')
+  const [headers, setHeaders] = useState(formatHeaderLines(start?.headers))
+  const [body, setBody] = useState(start?.body ?? '')
   const clean = normalizePath(path)
+  const parsed = parseHeaderLines(headers)
+  const canSave = clean !== null && title.trim().length > 0 && parsed.error === null
+
   return (
     <DialogFrame
       title={call ? 'Edit call' : 'Save call'}
       formId="nvx-call"
-      canSave={clean !== null && title.trim().length > 0}
-      onSubmit={() => clean && onSave({ title: title.trim(), path: clean })}
+      canSave={canSave}
+      onSubmit={() => clean && onSave({ title: title.trim(), ...(folderId ? { folderId } : {}), ...cleanRequest({ method, path: clean, headers: parsed.headers, body }) })}
       onClose={onClose}
       onDelete={onDelete && { what: 'this call', run: onDelete }}
     >
       <Field label="Title" value={title} onChange={(v) => setTitle(v.slice(0, NAME_MAX_LENGTH))} placeholder="Firmware version" autoFocus />
-      <Field
-        label="Path (GET)"
-        value={path}
-        onChange={setPath}
-        placeholder="/Device/DeviceInfo"
-        mono
-        error={path.trim() && !clean ? 'It must start with / and have no spaces.' : null}
-      />
+      {folders.length > 0 && (
+        <label className="block">
+          <span className="text-ink-muted mb-1 block text-xs font-medium">Folder</span>
+          <select className={`${SELECT} w-full py-2 text-sm`} value={folderId} onChange={(e) => setFolderId(e.target.value)}>
+            <option value="">No folder</option>
+            {folders.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className="flex gap-2">
+        <label className="block">
+          <span className="text-ink-muted mb-1 block text-xs font-medium">Method</span>
+          <select className={`${SELECT} py-2.5 font-mono text-sm font-bold`} value={method} onChange={(e) => setMethod(e.target.value as HttpMethod)}>
+            {HTTP_METHODS.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
+        </label>
+        <div className="flex-1">
+          <Field
+            label="Path"
+            value={path}
+            onChange={setPath}
+            placeholder="/Device/DeviceInfo"
+            mono
+            error={path.trim() && !clean ? 'It must start with / and have no spaces.' : null}
+          />
+        </div>
+      </div>
+      <label className="block">
+        <span className="text-ink-muted mb-1 block text-xs font-medium">Headers (one per line, Name: value)</span>
+        <textarea className={`${TEXTAREA} font-mono text-sm`} rows={2} value={headers} spellCheck={false} onChange={(e) => setHeaders(e.target.value)} />
+        {parsed.error && <span className="mt-1 block text-xs text-rose-300">{parsed.error}</span>}
+      </label>
+      {method !== 'GET' && (
+        <label className="block">
+          <span className="text-ink-muted mb-1 block text-xs font-medium">Body</span>
+          <textarea className={`${TEXTAREA} font-mono text-sm`} rows={5} value={body} spellCheck={false} onChange={(e) => setBody(e.target.value)} />
+        </label>
+      )}
     </DialogFrame>
   )
 }

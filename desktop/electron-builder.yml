@@ -7,9 +7,11 @@ files:
   - desktop/main.cjs
   - desktop/preload.cjs
   - desktop/nvx.cjs
+  - desktop/terminal.cjs
   - package.json
-  # The web app is already bundled into dist/, so no node_modules are needed at runtime.
-  - '!node_modules'
+  # The web app is already bundled into dist/. What the app needs at run time (ssh2 for the terminals) is
+  # listed under "dependencies" in package.json and is packed automatically.
+npmRebuild: false
 win:
   target:
     - portable

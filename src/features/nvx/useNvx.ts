@@ -28,6 +28,11 @@ export type NvxController = {
   /** Add a call, or replace the one with the same id. Returns its id. */
   saveCall: (groupId: string, call: Draft<NvxCall>) => string
   removeCall: (groupId: string, callId: string) => void
+  /** Returns the new folder's id. */
+  addFolder: (groupId: string, name: string) => string
+  renameFolder: (groupId: string, folderId: string, name: string) => void
+  /** Deletes the folder only: its calls move to the top. */
+  deleteFolder: (groupId: string, folderId: string) => void
 }
 
 /** Put `item` into `list`: in place of the entry with its id, else at the end. */
@@ -137,6 +142,34 @@ export function useNvx(folder: FolderLink): NvxController {
     [update],
   )
 
+  const addFolder = useCallback(
+    (groupId: string, name: string) => {
+      const id = newId()
+      update(groupId, (g) => ({ ...g, folders: [...g.folders, { id, name: name.trim().slice(0, NAME_MAX_LENGTH) || 'Folder' }] }))
+      return id
+    },
+    [update],
+  )
+
+  const renameFolder = useCallback(
+    (groupId: string, folderId: string, name: string) =>
+      update(groupId, (g) => ({
+        ...g,
+        folders: g.folders.map((f) => (f.id === folderId ? { ...f, name: name.trim().slice(0, NAME_MAX_LENGTH) || f.name } : f)),
+      })),
+    [update],
+  )
+
+  const deleteFolder = useCallback(
+    (groupId: string, folderId: string) =>
+      update(groupId, (g) => ({
+        ...g,
+        folders: g.folders.filter((f) => f.id !== folderId),
+        calls: g.calls.map(({ folderId: inFolder, ...call }) => (inFolder === folderId ? call : { ...call, ...(inFolder ? { folderId: inFolder } : {}) })),
+      })),
+    [update],
+  )
+
   return {
     groups,
     savedToFile: savedToFile && dir !== null,
@@ -149,5 +182,8 @@ export function useNvx(folder: FolderLink): NvxController {
     removeUnit,
     saveCall,
     removeCall,
+    addFolder,
+    renameFolder,
+    deleteFolder,
   }
 }
