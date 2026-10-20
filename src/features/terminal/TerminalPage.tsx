@@ -44,6 +44,12 @@ export function TerminalPage() {
     () => 3,
     (raw) => (raw === 1 || raw === 2 || raw === 3 ? raw : null),
   )
+  /** Whether the command line is edited here (history, Tab, cursor keys). Off passes every key to the unit. */
+  const [editLines, setEditLines] = usePersistentState<boolean>(
+    storageKey('terminal', 'editLines'),
+    () => true,
+    (raw) => (typeof raw === 'boolean' ? raw : null),
+  )
   // Terminals need width: while any is open the sidebar shrinks to icons.
   useFocusMode('terminal', terminals.length > 0)
 
@@ -108,7 +114,16 @@ export function TerminalPage() {
                 ))}
               </div>
             </div>
-            <span>Up/Down recall past commands, Tab completes a command name. Select text and press Ctrl+C to copy; Ctrl+V pastes.</span>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input type="checkbox" checked={editLines} onChange={(e) => setEditLines(e.target.checked)} className="accent-brand h-4 w-4" />
+              Edit the line here
+            </label>
+            <span>
+              {editLines
+                ? 'Up/Down recall past commands, Tab completes a command name. '
+                : 'Every key goes straight to the unit. '}
+              Select text and press Ctrl+C to copy; Ctrl+V pastes.
+            </span>
           </div>
           {!available && (
             <p className={`${PANEL} text-ink-muted px-4 py-3 text-sm`}>
@@ -129,7 +144,7 @@ export function TerminalPage() {
       ) : (
         <div className={`grid items-start gap-4 ${GRID[perRow]}`}>
           {terminals.map((entry) => (
-            <TerminalCard key={entry.key} entry={entry} onClose={() => setTerminals((prev) => prev.filter((t) => t.key !== entry.key))} />
+            <TerminalCard key={entry.key} entry={entry} editLines={editLines} onClose={() => setTerminals((prev) => prev.filter((t) => t.key !== entry.key))} />
           ))}
         </div>
       )}
