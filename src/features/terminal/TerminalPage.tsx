@@ -74,7 +74,7 @@ export function TerminalPage() {
 
   return (
     <div className="mx-auto max-w-[2000px] space-y-5 px-6 py-7">
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
         <header className="space-y-4">
           <div>
             <h2 className={PAGE_TITLE}>Terminal</h2>
@@ -108,7 +108,7 @@ export function TerminalPage() {
                 ))}
               </div>
             </div>
-            <span>Select text and press Ctrl+C to copy it; Ctrl+V pastes.</span>
+            <span>Up/Down recall past commands, Tab completes a command name. Select text and press Ctrl+C to copy; Ctrl+V pastes.</span>
           </div>
           {!available && (
             <p className={`${PANEL} text-ink-muted px-4 py-3 text-sm`}>

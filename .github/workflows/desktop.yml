@@ -1,25 +1,70 @@
 name: Desktop app
 
-# Builds the Windows app (portable .exe and per-user installer).
-# Run it by hand from the Actions tab, or push a tag such as desktop-v0.1.0.
+# Builds the Windows app and publishes it as a GitHub Release, which is what the app's update check reads.
+# Run it from the Actions tab (Run workflow) and type the version, for example 0.1.0 — it must be higher than
+# the last one published. Pushing a tag such as desktop-v0.1.0 does the same.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish, for example 0.1.0
+        required: true
+        type: string
   push:
     tags: ['desktop-v*']
+
+permissions:
+  contents: write
 
 jobs:
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Work out the version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="$INPUT_VERSION"
+          if [ -z "$VERSION" ]; then VERSION="${GITHUB_REF_NAME#desktop-v}"; fi
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "The version must look like 1.2.3, but it is '$VERSION'."
+            exit 1
+          fi
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The version only exists in this build; it is not committed.
+      - run: npm version "${{ steps.version.outputs.value }}" --no-git-tag-version --allow-same-version
       - run: npm run lint
       - run: npm test
       - run: npm run desktop:pack
+
+      - name: Check the files an update needs
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          ls -la release
+          test -f release/latest.yml || { echo "latest.yml is missing: the app could not see this version."; exit 1; }
+          test -f "release/SupportHub-$VERSION-setup.exe" || { echo "The installer is missing."; exit 1; }
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          gh release create "v$VERSION" release/*.exe release/latest.yml \
+            --title "Support Hub $VERSION" --generate-notes --target "$GITHUB_SHA"
+
       - uses: actions/upload-artifact@v4
         with:
           name: support-hub-windows

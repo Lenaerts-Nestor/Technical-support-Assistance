@@ -1,6 +1,7 @@
 import type { PageId } from './navigation'
 import { NAV_ITEMS } from './navigation'
-import { useFolder } from './appDataContext'
+import { useAppUpdateData, useFolder } from './appDataContext'
+import { hasPendingUpdate } from '../features/sync/appUpdate'
 import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
 import type { FolderStatus } from '../features/sync/useFolderLifecycle'
 import { ICON_BTN } from '../shared/ui/styles'
@@ -124,8 +125,10 @@ export function Sidebar({
 }: SidebarProps) {
   const folder = useFolder()
   const toOrganize = useGuidesToOrganize()
-  const syncStatus =
-    toOrganize > 0 && ['ready', 'saving', 'saved'].includes(folder.status)
+  const { state: update } = useAppUpdateData()
+  const syncStatus = hasPendingUpdate(update)
+    ? { tone: 'bg-brand', label: `A new version (${update?.available?.version ?? ''}) of the app is available`.replace(' ()', ''), pulse: true }
+    : toOrganize > 0 && ['ready', 'saving', 'saved'].includes(folder.status)
       ? { tone: 'bg-amber-400', label: 'Folder linked — guides can be organized into their own folders' }
       : FOLDER_DOT[folder.status]
   const visible = NAV_ITEMS.filter((item) => !item.hidden)

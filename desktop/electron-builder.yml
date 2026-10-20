@@ -8,10 +8,17 @@ files:
   - desktop/preload.cjs
   - desktop/nvx.cjs
   - desktop/terminal.cjs
+  - desktop/updater.cjs
   - package.json
   # The web app is already bundled into dist/. What the app needs at run time (ssh2 for the terminals) is
   # listed under "dependencies" in package.json and is packed automatically.
 npmRebuild: false
+# Written into the app as app-update.yml, and latest.yml next to the installer, which is what an update check reads.
+publish:
+  provider: github
+  owner: Lenaerts-Nestor
+  repo: Technical-support-Assistance
+  private: true
 win:
   target:
     - portable

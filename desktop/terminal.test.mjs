@@ -7,7 +7,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
 const { Server } = require('ssh2')
-const { createTerminalManager, parseUnitInfo, fingerprint, stripAnsi } = require('./terminal.cjs')
+const { createTerminalManager, parseUnitInfo, parseCommandList, fingerprint, stripAnsi } = require('./terminal.cjs')
 
 // What a DM-NAX-8ZSA printed in the screenshots.
 const HOSTNAME_OUTPUT = 'Host Name: Crestron-DM-NAX-8ZSA-2121CRO00284'
@@ -28,8 +28,16 @@ beforeAll(() => {
 })
 
 /** A pretend control console: a banner, a prompt, echo of what is typed, and a few commands. */
-function startConsole({ keyIndex = 0, port = 0, user = 'admin', password = 'secret', prompt = 'DM-MOCK', silent = false } = {}) {
-  const state = { windows: [], typed: [], connections: 0, ended: 0 }
+const HELP_ALL = [
+  '8021XAUthenticate        Administrator       Enable/Disable 802.1x Authentication.',
+  'ADDMaster                Administrator       Add a master to the control system.',
+  'HELP                     Operator            Display help.',
+  'HOSTname                 Administrator       Display/Set the host name.',
+  'VER                      Operator            Display version information.',
+].join('\r\n')
+
+function startConsole({ keyIndex = 0, port = 0, user = 'admin', password = 'secret', prompt = 'DM-MOCK', silent = false, verDelayMs = 0, maxShells = Infinity } = {}) {
+  const state = { windows: [], typed: [], connections: 0, ended: 0, shells: 0 }
   const clients = new Set()
   const server = new Server({ hostKeys: [hostKeys[keyIndex]] }, (client) => {
     state.connections++
@@ -38,7 +46,9 @@ function startConsole({ keyIndex = 0, port = 0, user = 'admin', password = 'secr
     client.on('authentication', (ctx) => (ctx.method === 'password' && ctx.username === user && ctx.password === password ? ctx.accept() : ctx.reject(['password'])))
     client.on('close', () => state.ended++)
     client.on('ready', () => {
-      client.on('session', (accept) => {
+      client.on('session', (accept, reject) => {
+        if (state.shells >= maxShells) return reject()
+        state.shells++
         const session = accept()
         session.on('pty', (ok, _reject, info) => {
           state.windows.push({ cols: info.cols, rows: info.rows })
@@ -61,8 +71,20 @@ function startConsole({ keyIndex = 0, port = 0, user = 'admin', password = 'secr
               }
               state.typed.push(line)
               const reply =
-                line === 'hostname' ? HOSTNAME_OUTPUT : line === 'ver -v' ? VER_OUTPUT : line === 'help' ? 'HELP [ALL|DEV|ETHER]' : line ? `Unknown Parameter: ${line.toUpperCase()}` : ''
-              stream.write(`\r\n${reply}${reply ? '\r\n' : ''}\r\n${prompt}>`)
+                line === 'hostname'
+                  ? HOSTNAME_OUTPUT
+                  : line === 'ver -v'
+                    ? VER_OUTPUT
+                    : line === 'help all'
+                      ? HELP_ALL
+                      : line === 'help'
+                        ? 'HELP [ALL|DEV|ETHER]'
+                        : line
+                          ? `Unknown Parameter: ${line.toUpperCase()}`
+                          : ''
+              const answer = () => stream.write(`\r\n${reply}${reply ? '\r\n' : ''}\r\n${prompt}>`)
+              if (line === 'ver -v' && verDelayMs) setTimeout(answer, verDelayMs)
+              else answer()
               line = ''
             }
           })
@@ -150,6 +172,13 @@ describe('reading the unit’s details', () => {
     expect(parseUnitInfo({ versionOutput: 'DM-NVX-384C v7.4.0255.22319 built' })).toEqual({ firmware: 'v7.4.0255.22319' })
   })
 
+  it('lists the console’s commands from the output of help all', () => {
+    const help = ['help all', HELP_ALL, '', 'DM-NAX-8ZSA>', 'Not a command line', '  ', 'ADDMaster   Administrator   duplicate'].join('\r\n')
+    expect(parseCommandList(help)).toEqual(['8021XAUthenticate', 'ADDMaster', 'HELP', 'HOSTname', 'VER'])
+    expect(parseCommandList('')).toEqual([])
+    expect(parseCommandList(undefined)).toEqual([])
+  })
+
   it('writes a key fingerprint the way OpenSSH does and strips colour codes', () => {
     expect(fingerprint(Buffer.from('abc').toString('hex'))).toBe('SHA256:YWJj')
     expect(stripAnsi('\x1b[1;32mDM-X>\x1b[0m')).toBe('DM-X>')
@@ -157,32 +186,35 @@ describe('reading the unit’s details', () => {
 })
 
 describe('opening a terminal', () => {
-  it('connects, shows the welcome text, and quietly reads the details without showing them', async () => {
+  it('connects and shows only the unit’s own text; the details are read on a hidden shell', async () => {
     const c = await mockConsole()
     const page = listener()
     const result = await newManager(c).open({ ...creds, cols: 100, rows: 30 }, page.emit)
     expect(result).toMatchObject({ ok: true })
     expect(result.newHostKey).toMatch(/^SHA256:/)
 
-    await page.until(() => page.messages.some((m) => m.type === 'info'))
+    await page.until(() => page.messages.some((m) => m.type === 'commands'))
     expect(page.messages.find((m) => m.type === 'info')).toMatchObject({ hostname: 'Crestron-DM-NAX-8ZSA-2121CRO00284', firmware: 'v3.1.0103.18484', puf: '3.1.0103.18484' })
+    expect(page.messages.find((m) => m.type === 'commands').commands).toEqual(['8021XAUthenticate', 'ADDMaster', 'HELP', 'HOSTname', 'VER'])
+    // The terminal itself saw the welcome text and nothing of what the hidden shell did.
     expect(page.text()).toContain('DM-MOCK Control Console')
     expect(page.text().trimEnd().endsWith('DM-MOCK>')).toBe(true)
-    // Held back: the commands that were run and everything they printed.
     expect(page.text()).not.toContain('hostname')
     expect(page.text()).not.toContain('Host Name')
-    expect(page.text()).not.toContain('Build:')
-    expect(c.state.typed).toEqual(['hostname', 'ver -v'])
+    expect(c.state.typed).toEqual(['hostname', 'ver -v', 'help all'])
     expect(c.state.windows[0]).toEqual({ cols: 100, rows: 30 })
+    expect(c.state.shells).toBe(2)
   })
 
-  it('uses the id the page chose, and makes one up when it is not usable', async () => {
-    const c = await mockConsole()
-    const m = newManager(c)
-    const chosen = crypto.randomUUID()
-    expect((await m.open({ ...creds, id: chosen }, () => {})).id).toBe(chosen)
-    expect((await m.open({ ...creds, id: chosen }, () => {})).id).not.toBe(chosen) // already in use
-    expect((await m.open({ ...creds, id: 'not an id' }, () => {})).id).toMatch(/^[0-9a-f-]{36}$/)
+  it('never holds back what is typed, even while a slow unit is still answering the hidden shell', async () => {
+    const c = await mockConsole({ verDelayMs: 700 })
+    const page = listener()
+    const { id } = await newManager(c).open(creds, page.emit)
+    await page.until(() => page.text().includes('DM-MOCK>'))
+    manager.write(id, 'help\r') // straight away: the details are still being read
+    await page.until(() => page.text().includes('HELP [ALL|DEV|ETHER]'), 500)
+    expect(page.messages.some((m) => m.type === 'info')).toBe(false)
+    await page.until(() => page.messages.some((m) => m.type === 'info'))
   })
 
   it('then behaves like a plain terminal: keystrokes go in, the unit’s reply comes out', async () => {
@@ -196,13 +228,13 @@ describe('opening a terminal', () => {
     await page.until(() => page.text().includes('Unknown Parameter: FOO'))
   })
 
-  it('keeps what is typed while the details are being read and sends it afterwards, in order', async () => {
+  it('uses the id the page chose, and makes one up when it is not usable', async () => {
     const c = await mockConsole()
-    const page = listener()
-    const { id } = await newManager(c).open(creds, page.emit)
-    manager.write(id, 'help\r') // typed straight away, before the details are in
-    await page.until(() => page.text().includes('HELP [ALL|DEV|ETHER]'))
-    expect(c.state.typed).toEqual(['hostname', 'ver -v', 'help'])
+    const m = newManager(c)
+    const chosen = crypto.randomUUID()
+    expect((await m.open({ ...creds, id: chosen }, () => {})).id).toBe(chosen)
+    expect((await m.open({ ...creds, id: chosen }, () => {})).id).not.toBe(chosen) // already in use
+    expect((await m.open({ ...creds, id: 'not an id' }, () => {})).id).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('passes a window resize on to the unit', async () => {
@@ -210,18 +242,19 @@ describe('opening a terminal', () => {
     const page = listener()
     const { id } = await newManager(c).open({ ...creds, cols: 80, rows: 24 }, page.emit)
     manager.resize(id, 132, 40)
-    await new Promise((r) => setTimeout(r, 200))
-    expect(c.state.windows.at(-1)).toEqual({ cols: 132, rows: 40 })
+    await new Promise((r) => setTimeout(r, 300))
+    // Only the terminal's own shell is resized; the hidden one keeps its wide window.
+    expect(c.state.windows.filter((w) => w.cols === 132 && w.rows === 40)).toHaveLength(1)
+    expect(c.state.windows).toContainEqual({ cols: 200, rows: 50 })
   })
 
-  it('tells the page when the terminal is closed, and closing ends the connection', async () => {
+  it('closing a terminal ends the connection, hidden shell included, and writing to it afterwards does nothing', async () => {
     const c = await mockConsole()
     const page = listener()
     const { id } = await newManager(c).open(creds, page.emit)
     manager.close(id)
     await new Promise((r) => setTimeout(r, 200))
     expect(c.state.ended).toBe(1)
-    // writing to a closed terminal does nothing and does not throw
     expect(() => manager.write(id, 'x')).not.toThrow()
   })
 
@@ -234,25 +267,35 @@ describe('opening a terminal', () => {
     expect(page.messages.find((m) => m.type === 'closed').reason).toMatch(/closed|lost/)
   })
 
-  it('shows everything after all when the prompt never comes, and still works as a terminal', async () => {
+  it('still works as a terminal when the unit prints no prompt, and the card gets no details', async () => {
     const c = await mockConsole({ silent: true })
     const page = listener()
     const { id } = await newManager(c, { bannerTimeoutMs: 300 }).open(creds, page.emit)
     await page.until(() => page.messages.some((m) => m.type === 'info'))
     expect(page.messages.find((m) => m.type === 'info')).toEqual({ type: 'info', id })
+    expect(page.messages.some((m) => m.type === 'commands')).toBe(false)
     manager.write(id, 'help\r')
     await page.until(() => page.text().includes('HELP [ALL|DEV|ETHER]'))
   })
 
-  it('shows what it held back when the unit does not answer the commands', async () => {
-    const c = await mockConsole({ prompt: 'DM-MOCK' })
-    // A unit that answers "hostname" with a prompt-less reply: simulate by a very short wait.
+  it('still works as a terminal when the unit will not open a second shell, and the card gets no details', async () => {
+    const c = await mockConsole({ maxShells: 1 })
     const page = listener()
-    await newManager(c, { infoTimeoutMs: 1 }).open(creds, page.emit)
+    const { id } = await newManager(c).open(creds, page.emit)
     await page.until(() => page.messages.some((m) => m.type === 'info'))
-    // Nothing is lost: whatever was held back came out on the screen (the commands, or what they printed).
-    await new Promise((r) => setTimeout(r, 300))
+    expect(page.messages.find((m) => m.type === 'info')).toEqual({ type: 'info', id })
+    manager.write(id, 'help\r')
+    await page.until(() => page.text().includes('HELP [ALL|DEV|ETHER]'))
     expect(page.text()).toContain('DM-MOCK Control Console')
+  })
+
+  it('gives the page a partial card when a command is slow, without ever blocking the terminal', async () => {
+    const c = await mockConsole({ verDelayMs: 600 })
+    const page = listener()
+    await newManager(c, { commandTimeoutMs: 150 }).open(creds, page.emit)
+    await page.until(() => page.messages.some((m) => m.type === 'info'))
+    expect(page.messages.find((m) => m.type === 'info')).toMatchObject({ hostname: 'Crestron-DM-NAX-8ZSA-2121CRO00284' })
+    expect(page.messages.find((m) => m.type === 'info').firmware).toBeUndefined()
   })
 })
 

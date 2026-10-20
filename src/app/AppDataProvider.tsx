@@ -6,9 +6,11 @@ import { useLinks } from '../features/links/useLinks'
 import { useSnippets } from '../features/cases/useSnippets'
 import { useCalendar } from '../features/calendar/useCalendar'
 import { useNvx } from '../features/nvx/useNvx'
+import { useAppUpdate } from '../features/sync/useAppUpdate'
 import {
   CalendarContext,
   EditingContext,
+  AppUpdateContext,
   FolderContext,
   GuidesContext,
   LinksContext,
@@ -24,6 +26,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const snippets = useSnippets(folder)
   const calendar = useCalendar(folder)
   const nvx = useNvx(folder)
+  const appUpdate = useAppUpdate()
   const [editing, setEditing] = useState(false)
   const editingValue = useMemo(() => ({ editing, setEditing }), [editing])
 
@@ -34,7 +37,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           <SnippetsContext value={snippets}>
             <CalendarContext value={calendar}>
               <NvxContext value={nvx}>
-                <EditingContext value={editingValue}>{children}</EditingContext>
+                <AppUpdateContext value={appUpdate}>
+                  <EditingContext value={editingValue}>{children}</EditingContext>
+                </AppUpdateContext>
               </NvxContext>
             </CalendarContext>
           </SnippetsContext>

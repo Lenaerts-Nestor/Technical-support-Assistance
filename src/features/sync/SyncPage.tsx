@@ -4,6 +4,7 @@ import { FolderCard } from './components/FolderCard'
 import { GuidesCard } from './components/GuidesCard'
 import { LinksCard } from './components/LinksCard'
 import { SnippetsCard } from './components/SnippetsCard'
+import { UpdateCard } from './components/UpdateCard'
 
 /**
  * Sync: link the folder everything is saved in, and move parts of the Support
@@ -18,6 +19,8 @@ export function SyncPage() {
           Link a folder to keep everything saved on disk, then export or import just the part you need.
         </p>
       </header>
+
+      <UpdateCard />
 
       <FolderCard />
 

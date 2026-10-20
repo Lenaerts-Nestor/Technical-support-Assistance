@@ -1,11 +1,13 @@
 // Electron shell for Support Hub: loads the built web app in a window.
 // Everything the pages store stays on this computer; nothing here talks to the network.
-const { app, BrowserWindow, Menu, ipcMain, net, protocol, session, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, net, protocol, safeStorage, session, shell } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { createNvxClient, registerNvxIpc } = require('./nvx.cjs')
 const { createTerminalManager, registerTerminalIpc } = require('./terminal.cjs')
+const { createUpdater, registerUpdaterIpc } = require('./updater.cjs')
 
 const SCHEME = 'app'
 const HOST = 'support-hub'
@@ -33,6 +35,9 @@ function serveApp(request) {
   const isFile = fs.existsSync(requested) && fs.statSync(requested).isFile()
   return net.fetch(pathToFileURL(isFile ? requested : path.join(DIST_DIR, 'index.html')).toString())
 }
+
+/** Where new versions are published (releases of the private repository, read with the person's token). */
+const UPDATE_REPO = { owner: 'Lenaerts-Nestor', repo: 'Technical-support-Assistance' }
 
 const nvx = createNvxClient()
 /** Created once the app is ready, because it keeps its remembered SSH host keys in the user-data folder. */
@@ -122,7 +127,18 @@ if (!app.requestSingleInstanceLock()) {
     registerNvxIpc(ipcMain, nvx, isTrustedSender)
     terminals = createTerminalManager({ knownHostsFile: path.join(app.getPath('userData'), 'known-hosts.json') })
     registerTerminalIpc(ipcMain, terminals, isTrustedSender)
+    const updater = createUpdater({
+      autoUpdater,
+      app,
+      safeStorage,
+      tokenFile: path.join(app.getPath('userData'), 'update-token.bin'),
+      repo: UPDATE_REPO,
+      emit: (state) => BrowserWindow.getAllWindows().forEach((win) => win.webContents.send('updater:state', state)),
+    })
+    registerUpdaterIpc(ipcMain, updater, isTrustedSender)
     createWindow()
+    // A quiet check a moment after start-up (only with a token, and only in an installed app).
+    setTimeout(() => void updater.startupCheck(), 5000)
   })
 
   app.on('window-all-closed', () => app.quit())

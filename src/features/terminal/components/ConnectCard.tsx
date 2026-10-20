@@ -1,5 +1,4 @@
-import { CARD, CARD_HEADER, COUNT_BADGE, INPUT, SECTION_LABEL } from '../../../shared/ui/styles'
-import { PlayIcon } from '../../nvx/components/icons'
+import { CARD, INPUT } from '../../../shared/ui/styles'
 import type { NvxGroup, NvxUnit } from '../../nvx/types'
 
 type ConnectCardProps = {
@@ -13,62 +12,52 @@ type ConnectCardProps = {
   onOpen: (unit: NvxUnit) => void
 }
 
-/** The login for new terminals, and the saved units: one click on a unit opens its terminal. */
+const LABEL = 'text-ink-muted mb-0.5 block text-[11px] font-medium'
+
+/** The login for new terminals, and the saved units as chips: one click on a unit opens its terminal. */
 export function ConnectCard({ username, password, onUsername, onPassword, groups, onOpen }: ConnectCardProps) {
-  const withUnits = groups.filter((g) => g.units.length > 0)
-  const total = groups.reduce((sum, g) => sum + g.units.length, 0)
+  const units = groups.flatMap((group) => group.units.map((unit) => ({ unit, group })))
   return (
-    <section className={CARD} aria-label="Login and saved units">
-      <header className={CARD_HEADER}>
-        <h3 className={SECTION_LABEL}>Login</h3>
-      </header>
-      <div className="space-y-3 p-4">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-ink-muted mb-1 block text-xs font-medium">Username</span>
-            <input className={INPUT} value={username} autoComplete="off" spellCheck={false} onChange={(e) => onUsername(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className="text-ink-muted mb-1 block text-xs font-medium">Password</span>
-            <input className={INPUT} type="password" value={password} autoComplete="off" onChange={(e) => onPassword(e.target.value)} />
-          </label>
-        </div>
-        <p className="text-ink-faint text-xs">Used for the terminals you open next. The password stays in memory and is gone when the app closes.</p>
+    <section className={`${CARD} space-y-2.5 p-3`} aria-label="Login and saved units">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className={LABEL}>Username</span>
+          <input className={`${INPUT} py-1`} value={username} autoComplete="off" spellCheck={false} onChange={(e) => onUsername(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className={LABEL}>Password</span>
+          <input
+            className={`${INPUT} py-1`}
+            type="password"
+            value={password}
+            autoComplete="off"
+            title="Kept in memory only, gone when the app closes. Used for the terminals you open next."
+            onChange={(e) => onPassword(e.target.value)}
+          />
+        </label>
       </div>
-      <header className="border-line-soft bg-subtle flex items-center gap-2 border-y px-4 py-2">
-        <h3 className={`${SECTION_LABEL} flex items-center gap-2`}>
-          Saved units <span className={COUNT_BADGE}>{total}</span>
-        </h3>
-      </header>
-      {withUnits.length === 0 ? (
-        <p className="text-ink-muted px-4 py-5 text-sm">No saved units yet. Add them on the Device API page, or open a terminal by typing an IP address.</p>
-      ) : (
-        <div className="max-h-72 overflow-y-auto py-1">
-          {withUnits.map((group) => (
-            <div key={group.id}>
-              {withUnits.length > 1 && <p className="text-ink-faint px-4 pt-2 pb-1 text-[11px] font-semibold tracking-wide uppercase">{group.name}</p>}
-              <ul>
-                {group.units.map((unit) => (
-                  <li key={unit.id}>
-                    <button
-                      type="button"
-                      onClick={() => onOpen(unit)}
-                      className="hover:bg-subtle group flex w-full items-center gap-3 px-4 py-2 text-left"
-                      aria-label={`Open a terminal for ${unit.label || unit.ip}`}
-                    >
-                      <PlayIcon className="text-brand h-3.5 w-3.5 shrink-0" />
-                      <span className="min-w-0 flex-1">
-                        <span className="text-ink block truncate text-sm font-medium">{unit.label || unit.ip}</span>
-                        <span className="text-ink-muted block font-mono text-xs">{unit.ip}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
+      <div>
+        <span className={LABEL}>Saved units{units.length > 0 && ` · click to open`}</span>
+        {units.length === 0 ? (
+          <p className="text-ink-faint text-xs">None yet. Add them on the Device API page, or use Add terminal.</p>
+        ) : (
+          <ul className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+            {units.map(({ unit, group }) => (
+              <li key={unit.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpen(unit)}
+                  title={`${unit.ip}${groups.length > 1 ? ` · ${group.name}` : ''}`}
+                  aria-label={`Open a terminal for ${unit.label || unit.ip}`}
+                  className="border-line hover:border-brand hover:text-brand text-ink rounded-md border px-2 py-0.5 text-xs font-medium transition-colors"
+                >
+                  {unit.label || unit.ip}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   )
 }

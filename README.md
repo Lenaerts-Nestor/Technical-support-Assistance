@@ -44,6 +44,25 @@ grid. The calendar follows today's date by itself. Entries are plain JSON
 in `calendar.json` in your own linked folder. It has no Sync card of its own, so it is never
 part of a Links or Snippets export — only your full backup carries it.
 
+## Updates
+
+On the **Sync** page, **App updates** shows the version, checks for a newer one, and installs it: **Check
+for updates** → *Version X is available* with its release notes → **Download and install** (a progress
+bar) → **Restart and install**. Nothing installs without a click, and your drafts and data folder are
+kept. The Sync entry in the sidebar shows a pulsing dot while an update is waiting. A quiet check also
+runs a few seconds after the app starts.
+
+- **Installed version only.** The setup version replaces itself; the portable file can find out that a
+  newer version exists but cannot install it. Install `…-setup.exe` once by hand; every later version
+  arrives from inside the app.
+- **The repository is private**, so the app reads its releases with a read-only GitHub token that you
+  paste once on that card (steps are on the card: *Settings → Developer settings → Fine-grained tokens*,
+  this repository only, *Contents: Read-only*). The token is kept on this computer, encrypted by Windows
+  (`update-token.bin` in the app's own folder). It is not in the repository, not in the app, and never
+  shown again; **Remove token** deletes it, and you can revoke it on GitHub at any time.
+- The check is a plain web request to github.com and sends nothing of yours.
+- The installers are unsigned, so Windows may warn on the very first install.
+
 ## Device API (desktop app only)
 
 A small Postman for Crestron devices (DM NVX and others that use the same REST API). A web page
@@ -94,18 +113,23 @@ SSH consoles to your units, in the page, like Crestron Toolbox's text console. E
 SSH session to one unit (port 22), drawn with xterm.js; the connection is made by the desktop app
 (`desktop/terminal.cjs`).
 
-- **Login** (top right): a username (remembered) and a password (memory only), used for the terminals you
-  open next. Below it are your **saved units** (the ones from the Device API page): click one and its
-  terminal opens and connects. **Add terminal** types an IP address by hand instead, optionally saving
+- **Login** (top right, a small card): a username (remembered) and a password (memory only), used for the
+  terminals you open next. Below it are your **saved units** (the ones from the Device API page) as
+  chips: click one and its terminal opens and connects. **Add terminal** types an IP address by hand instead, optionally saving
   it as a unit, or using a different login for that terminal only.
 - **Grid**: three terminals side by side, the rest wrap below (**Per row** 1, 2 or 3 if a wide table
   of commands needs more room). While a terminal is open the sidebar shrinks to icons for more width.
   Terminals keep running while you visit other pages. Closing a terminal's card ends its session.
-- **Unit card** above each terminal: host name, firmware and PUF, read automatically with `hostname`
-  and `ver -v` (held back from the screen, so the terminal starts clean at its prompt), and a **Web**
-  button that opens `https://<ip>/` in your browser.
-- **Keys**: select text and press Ctrl+C to copy it (Ctrl+C is the normal interrupt when nothing is
-  selected); Ctrl+V pastes.
+- **Unit card** above each terminal: host name, firmware and PUF, and a **Web** button that opens
+  `https://<ip>/` in your browser. They are read on a second, hidden shell on the same connection, which
+  runs `hostname`, `ver -v` and `help all` and closes, so a slow unit never delays what you type: your
+  terminal is live from the first moment and shows only the unit's own text.
+- **Keys**: **Up / Down** bring back past commands (kept per unit while the app runs, never saved, since a
+  command can hold a password) and **Tab** finishes a command name from the unit's own command list
+  (read with `help all`; several matches are listed under the terminal). They work while you type at the
+  end of the line; after editing with the arrow keys, Home or Ctrl+A, the keys go to the unit untouched
+  until the next Enter. Select text and press Ctrl+C to copy it (Ctrl+C is the normal interrupt when
+  nothing is selected); Ctrl+V pastes.
 - **Host keys**: the first time a unit is seen its SSH key is remembered (in the app's own folder, like
   OpenSSH's `accept-new`). A different key later is refused with a message, and **Trust the new key and
   connect** accepts it, for a unit that was reset or replaced.
@@ -134,13 +158,17 @@ npm run desktop        # build, then open the app on this computer
 npm run desktop:pack   # build the Windows files into release/ (run it on Windows)
 ```
 
-The **Desktop app** workflow (Actions tab → *Run workflow*, or push a tag like `desktop-v0.1.0`)
-builds on a Windows runner and attaches two files to the run, under *Artifacts*:
+The **Desktop app** workflow (Actions tab → *Run workflow*, then type the version, for example `0.1.0`;
+or push a tag like `desktop-v0.1.0`) builds on a Windows runner and publishes a **GitHub Release** `v0.1.0`
+with these files (also kept as a run artifact for 30 days):
 
 | File | What it is |
 |---|---|
-| `SupportHub-<version>-portable.exe` | Runs from anywhere with no install. Starts a few seconds slower. |
-| `SupportHub-<version>-setup.exe` | Per-user installer (no administrator rights). |
+| `SupportHub-<version>-setup.exe` | Per-user installer (no administrator rights). **This is the one that updates itself.** |
+| `SupportHub-<version>-portable.exe` | Runs from anywhere with no install, starts a few seconds slower. It cannot update itself. |
+| `latest.yml` | What the app's update check reads. |
+
+The version exists only in the build (it is not committed); it must be higher than the last release.
 
 Good to know:
 
