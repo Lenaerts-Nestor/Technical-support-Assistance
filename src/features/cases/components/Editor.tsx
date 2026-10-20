@@ -3,7 +3,9 @@ import { useRef } from "react";
 import { TrashIcon, CopyIcon } from "./icons";
 import { FlaggedBar } from "./FlaggedBar";
 import { FormatToolbar } from "./FormatToolbar";
+import { ImageBar } from "./ImageBar";
 import { PlaceholderBar } from "./PlaceholderBar";
+import type { CaseImage } from "../caseImages";
 import type { FlaggedMatch } from "../types";
 import {
   CARD,
@@ -20,6 +22,13 @@ type EditorProps = {
   justCopiedPlain: boolean;
   flagged: FlaggedMatch[];
   placeholders: FlaggedMatch[];
+  /** The pictures the draft uses, in order. */
+  images: (CaseImage | null)[];
+  imageProblem: string | null;
+  onJumpToImage: (id: number) => void;
+  onRemoveImage: (id: number) => void;
+  onCopyImage: (id: number) => Promise<boolean>;
+  onDismissImageProblem: () => void;
   onChange: (value: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
   onPaste: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
@@ -69,6 +78,12 @@ export function Editor({
   justCopiedPlain,
   flagged,
   placeholders,
+  images,
+  imageProblem,
+  onJumpToImage,
+  onRemoveImage,
+  onCopyImage,
+  onDismissImageProblem,
   onChange,
   onKeyDown,
   onPaste,
@@ -118,7 +133,7 @@ export function Editor({
             title={
               hasPlaceholders
                 ? copyBlocked
-                : "Copy as plain text only, without list formatting"
+                : "Copy as plain text only, without list formatting or pictures"
             }
             className={GHOST_BTN}
           >
@@ -131,7 +146,7 @@ export function Editor({
             title={
               hasPlaceholders
                 ? copyBlocked
-                : "Copy with real bullet lists for Salesforce, Notes and email — plain fields get tidy • lines"
+                : "Copy with real bullet lists and pictures for Salesforce, Notes and email — plain fields get tidy • lines"
             }
             className={`text-on-brand inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors disabled:pointer-events-none disabled:opacity-40 ${
               justCopied ? "bg-emerald-400" : "bg-brand hover:bg-brand-strong"
@@ -149,6 +164,14 @@ export function Editor({
         onRemove={onRemoveFlagged}
       />
       <PlaceholderBar matches={placeholders} onJump={onJumpToPlaceholder} />
+      <ImageBar
+        images={images}
+        problem={imageProblem}
+        onJump={onJumpToImage}
+        onRemove={onRemoveImage}
+        onCopyImage={onCopyImage}
+        onDismissProblem={onDismissImageProblem}
+      />
       <div className="relative min-h-0 flex-1">
         {/* Mirror of the draft sitting behind the transparent textarea: same
             metrics, so each [placeholder] gets a yellow highlight exactly under

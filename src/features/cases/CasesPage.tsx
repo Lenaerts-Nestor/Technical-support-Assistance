@@ -35,6 +35,12 @@ export function CasesPage() {
           justCopiedPlain={cases.justCopiedPlain}
           flagged={cases.flagged}
           placeholders={cases.placeholders}
+          images={cases.usedImageIds.map((id) => cases.images[id] ?? null)}
+          imageProblem={cases.imageProblem}
+          onJumpToImage={cases.jumpToImage}
+          onRemoveImage={cases.removeImage}
+          onCopyImage={cases.copyImage}
+          onDismissImageProblem={cases.dismissImageProblem}
           onChange={cases.updateDraft}
           onKeyDown={cases.handleEditorKeyDown}
           onPaste={cases.handlePaste}
