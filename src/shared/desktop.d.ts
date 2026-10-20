@@ -13,6 +13,18 @@ interface Window {
       ) => Promise<import('../features/nvx/types').DeviceReply>
       logout: (ip: string) => Promise<void>
     }
+    updater: {
+      getState: () => Promise<import('../features/sync/appUpdate').AppUpdateState>
+      /** Ask GitHub for the latest release; the answer arrives through `onState`. */
+      check: () => Promise<void>
+      download: () => Promise<void>
+      /** Close the app and run the downloaded installer. */
+      install: () => Promise<void>
+      /** Keep a GitHub token (encrypted on this computer) for reading the private releases. */
+      setToken: (token: string) => Promise<{ ok: true } | { ok: false; error: string }>
+      clearToken: () => Promise<{ ok: true }>
+      onState: (listener: (state: import('../features/sync/appUpdate').AppUpdateState) => void) => () => void
+    }
     terminal: {
       /** Opens an SSH console on a unit. It never throws: a failure comes back as `{ ok: false, error }`. */
       open: (request: {

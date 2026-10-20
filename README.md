@@ -44,6 +44,25 @@ grid. The calendar follows today's date by itself. Entries are plain JSON
 in `calendar.json` in your own linked folder. It has no Sync card of its own, so it is never
 part of a Links or Snippets export — only your full backup carries it.
 
+## Updates
+
+On the **Sync** page, **App updates** shows the version, checks for a newer one, and installs it: **Check
+for updates** → *Version X is available* with its release notes → **Download and install** (a progress
+bar) → **Restart and install**. Nothing installs without a click, and your drafts and data folder are
+kept. The Sync entry in the sidebar shows a pulsing dot while an update is waiting. A quiet check also
+runs a few seconds after the app starts.
+
+- **Installed version only.** The setup version replaces itself; the portable file can find out that a
+  newer version exists but cannot install it. Install `…-setup.exe` once by hand; every later version
+  arrives from inside the app.
+- **The repository is private**, so the app reads its releases with a read-only GitHub token that you
+  paste once on that card (steps are on the card: *Settings → Developer settings → Fine-grained tokens*,
+  this repository only, *Contents: Read-only*). The token is kept on this computer, encrypted by Windows
+  (`update-token.bin` in the app's own folder). It is not in the repository, not in the app, and never
+  shown again; **Remove token** deletes it, and you can revoke it on GitHub at any time.
+- The check is a plain web request to github.com and sends nothing of yours.
+- The installers are unsigned, so Windows may warn on the very first install.
+
 ## Device API (desktop app only)
 
 A small Postman for Crestron devices (DM NVX and others that use the same REST API). A web page
@@ -139,13 +158,17 @@ npm run desktop        # build, then open the app on this computer
 npm run desktop:pack   # build the Windows files into release/ (run it on Windows)
 ```
 
-The **Desktop app** workflow (Actions tab → *Run workflow*, or push a tag like `desktop-v0.1.0`)
-builds on a Windows runner and attaches two files to the run, under *Artifacts*:
+The **Desktop app** workflow (Actions tab → *Run workflow*, then type the version, for example `0.1.0`;
+or push a tag like `desktop-v0.1.0`) builds on a Windows runner and publishes a **GitHub Release** `v0.1.0`
+with these files (also kept as a run artifact for 30 days):
 
 | File | What it is |
 |---|---|
-| `SupportHub-<version>-portable.exe` | Runs from anywhere with no install. Starts a few seconds slower. |
-| `SupportHub-<version>-setup.exe` | Per-user installer (no administrator rights). |
+| `SupportHub-<version>-setup.exe` | Per-user installer (no administrator rights). **This is the one that updates itself.** |
+| `SupportHub-<version>-portable.exe` | Runs from anywhere with no install, starts a few seconds slower. It cannot update itself. |
+| `latest.yml` | What the app's update check reads. |
+
+The version exists only in the build (it is not committed); it must be higher than the last release.
 
 Good to know:
 

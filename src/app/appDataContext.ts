@@ -5,6 +5,7 @@ import type { LinksController } from '../features/links/useLinks'
 import type { SnippetsController } from '../features/cases/useSnippets'
 import type { CalendarController } from '../features/calendar/useCalendar'
 import type { NvxController } from '../features/nvx/useNvx'
+import type { AppUpdateController } from '../features/sync/useAppUpdate'
 
 /**
  * The data that more than one page needs: the linked folder, the guides, the
@@ -19,6 +20,7 @@ export const LinksContext = createContext<LinksController | null>(null)
 export const SnippetsContext = createContext<SnippetsController | null>(null)
 export const CalendarContext = createContext<CalendarController | null>(null)
 export const NvxContext = createContext<NvxController | null>(null)
+export const AppUpdateContext = createContext<AppUpdateController | null>(null)
 
 function required<T>(value: T | null, hook: string): T {
   if (value === null) throw new Error(`${hook} must be used inside <AppDataProvider>`)
@@ -31,6 +33,7 @@ export const useLinksData = () => required(useContext(LinksContext), 'useLinksDa
 export const useSnippetsData = () => required(useContext(SnippetsContext), 'useSnippetsData')
 export const useCalendarData = () => required(useContext(CalendarContext), 'useCalendarData')
 export const useNvxData = () => required(useContext(NvxContext), 'useNvxData')
+export const useAppUpdateData = () => required(useContext(AppUpdateContext), 'useAppUpdateData')
 
 /** Whether a guide is open in the editor — Sync actions that replace data wait for it. */
 export type EditingState = { editing: boolean; setEditing: (on: boolean) => void }
