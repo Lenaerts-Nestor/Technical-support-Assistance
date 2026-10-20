@@ -141,6 +141,19 @@ SSH session to one unit (port 22), drawn with xterm.js; the connection is made b
   closed when the app quits. A terminal can do anything the console can, so it is not covered by the
   Device API page's **Changes allowed** switch.
 
+## Pictures in the Cases editor
+
+Paste a screenshot (or a copied picture) into the Cases editor and it is added as a small thumbnail
+above the text, with a line `[image 1]` in the draft where it will go. Move or delete that line to move
+or drop the picture; click a thumbnail to find its line. Pictures are shrunk to 700 px wide (never
+enlarged), at most 8 per draft, and kept in the browser's own storage (IndexedDB) on this computer,
+so the draft and its pictures come back after a restart.
+
+- **Copy** puts the pictures into the email: each `[image N]` line becomes the picture, ready to paste
+  into the Salesforce email composer. **Plain text** leaves the pictures out.
+- Hover a thumbnail for **Copy this picture on its own**, in case a field takes a pasted image directly.
+- Text copied together with a picture (for example from a spreadsheet) is pasted as text.
+
 ## Sharing
 
 The **Sync** page (bottom of the sidebar) moves one part at a time:

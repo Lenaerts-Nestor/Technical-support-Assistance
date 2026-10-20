@@ -1,3 +1,6 @@
+import { imageIdOfLine } from './caseImages'
+import type { CaseImage } from './caseImages'
+
 /**
  * Bullet lists in the Cases draft.
  *
@@ -214,9 +217,9 @@ const escapeHtml = (s: string) =>
  * The draft as HTML: bullet lines become real, nested `<ul><li>` lists,
  * blank-line separated blocks become paragraphs, single line breaks stay line
  * breaks. Pasting this into a rich editor gives a genuine list, not a column of
- * "•" characters.
+ * "•" characters. With `images`, a line that is only `[image N]` becomes that picture.
  */
-export function textToHtml(text: string): string {
+export function textToHtml(text: string, images?: Readonly<Record<number, CaseImage>>): string {
   const lines = text.replace(/\r\n?/g, '\n').split('\n')
   let html = ''
   let paragraph: string[] = []
@@ -234,6 +237,14 @@ export function textToHtml(text: string): string {
   }
 
   for (const line of lines) {
+    const imageId = images ? imageIdOfLine(line) : null
+    if (imageId !== null) {
+      closeList()
+      closeParagraph()
+      const picture = images?.[imageId]
+      if (picture) html += `<p><img src="${escapeHtml(picture.dataUrl)}" width="${picture.width}" height="${picture.height}" alt="Image ${imageId}"></p>`
+      continue
+    }
     const b = parseBullet(line)
     if (b) {
       closeParagraph()

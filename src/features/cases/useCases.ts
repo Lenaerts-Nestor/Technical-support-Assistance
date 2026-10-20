@@ -13,6 +13,8 @@ import {
   textToHtml,
   toggleBulletLines,
 } from './bullets'
+import { findImageMarkers, imageMarker, referencedImageIds, removeImageMarker, withoutImageMarkers } from './caseImages'
+import { useCaseImages } from './useCaseImages'
 import { findPlaceholders } from './placeholders'
 import type { CaseLanguage, FlaggedMatch } from './types'
 
@@ -201,6 +203,12 @@ export function useCases() {
   )
   const { copied, copy: copyToClipboard } = useCopyToClipboard<'rich' | 'plain'>()
   const editorRef = useRef<HTMLTextAreaElement>(null)
+
+  // Pictures pasted into the draft stand in it as `[image N]` lines.
+  const usedImageIds = useMemo(() => referencedImageIds(draft), [draft])
+  const isImageUsed = useCallback((id: number) => usedImageIds.includes(id), [usedImageIds])
+  const caseImages = useCaseImages(isImageUsed)
+  const addImages = caseImages.add
 
   // --- selection after an edit ------------------------------------------
   // A controlled textarea loses its caret when React writes a new value into it,
@@ -482,30 +490,6 @@ export function useCases() {
     [shiftBullets, handleListKey, applyBullets, undo, redo, applyBold],
   )
 
-  /**
-   * Paste with lists intact. Browsers leave the bullet markers out of the
-   * plain-text flavour of a copy from a rich editor, so when the HTML flavour
-   * holds a list it is read instead; either way, foreign markers (`-`, `*`,
-   * tab-separated bullets…) are folded into the editor's own.
-   */
-  const handlePaste = useCallback(
-    (e: ClipboardEvent<HTMLTextAreaElement>) => {
-      const el = e.currentTarget
-      const start = el.selectionStart
-      const end = el.selectionEnd
-      const lineStart = draft.lastIndexOf('\n', start - 1) + 1
-      const startsLine = !draft.slice(lineStart, start).trim()
-      const html = e.clipboardData.getData('text/html')
-      const plain = e.clipboardData.getData('text/plain')
-      const fromHtml = html ? htmlToText(html) : null
-      const incoming = normalizePasted(fromHtml ?? plain, startsLine)
-      if (fromHtml === null && incoming === plain) return // nothing to fix: the browser's paste is fine
-      e.preventDefault()
-      edit(start, end, incoming, start + incoming.length)
-    },
-    [draft, edit],
-  )
-
   /** Splice raw text into the draft at the caret (or over the selection). */
   const insertText = useCallback(
     (insert: string) => {
@@ -521,6 +505,46 @@ export function useCases() {
       )
     },
     [withCheckpoint, setDraft, placeSelection],
+  )
+
+  /** Shrink pasted pictures, keep them, and put a `[image N]` line for each at the caret. */
+  const pasteImages = useCallback(
+    async (files: Blob[]) => {
+      const ids = await addImages(files, usedImageIds.length)
+      if (ids.length) insertText(ids.map(imageMarker).join('\n\n'))
+    },
+    [addImages, usedImageIds.length, insertText],
+  )
+
+  /**
+   * Paste with lists intact. Browsers leave the bullet markers out of the
+   * plain-text flavour of a copy from a rich editor, so when the HTML flavour
+   * holds a list it is read instead; either way, foreign markers (`-`, `*`,
+   * tab-separated bullets…) are folded into the editor's own.
+   */
+  const handlePaste = useCallback(
+    (e: ClipboardEvent<HTMLTextAreaElement>) => {
+      const el = e.currentTarget
+      const start = el.selectionStart
+      const end = el.selectionEnd
+      const lineStart = draft.lastIndexOf('\n', start - 1) + 1
+      const startsLine = !draft.slice(lineStart, start).trim()
+      const html = e.clipboardData.getData('text/html')
+      const plain = e.clipboardData.getData('text/plain')
+      // A screenshot or a copied picture (no text with it) becomes a picture in the draft.
+      const pictures = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
+      if (pictures.length > 0 && !plain.trim()) {
+        e.preventDefault()
+        void pasteImages(pictures)
+        return
+      }
+      const fromHtml = html ? htmlToText(html) : null
+      const incoming = normalizePasted(fromHtml ?? plain, startsLine)
+      if (fromHtml === null && incoming === plain) return // nothing to fix: the browser's paste is fine
+      e.preventDefault()
+      edit(start, end, incoming, start + incoming.length)
+    },
+    [draft, edit, pasteImages],
   )
 
   const insertTemplate = useCallback(
@@ -539,19 +563,43 @@ export function useCases() {
    */
   const copy = useCallback(() => {
     if (placeholders.length) return
-    const plain = normalizeBullets(draft)
-    return copyToClipboard(plain, 'rich', textToHtml(plain))
-  }, [copyToClipboard, draft, placeholders])
+    const text = normalizeBullets(draft)
+    return copyToClipboard(withoutImageMarkers(text), 'rich', textToHtml(text, caseImages.images))
+  }, [caseImages.images, copyToClipboard, draft, placeholders])
 
   /** Plain text only, for a destination that misbehaves with the rich flavour. */
   const copyPlain = useCallback(
-    () => (placeholders.length ? undefined : copyToClipboard(normalizeBullets(draft), 'plain')),
+    () => (placeholders.length ? undefined : copyToClipboard(withoutImageMarkers(normalizeBullets(draft)), 'plain')),
     [copyToClipboard, draft, placeholders],
+  )
+
+  /** Take a picture out of the draft (its line goes; the picture itself stays until the next start, for Undo). */
+  const removeImage = useCallback(
+    (id: number) => withCheckpoint(() => setDraft((text) => removeImageMarker(text, id))),
+    [withCheckpoint, setDraft],
+  )
+
+  const jumpToImage = useCallback(
+    (id: number) => {
+      const el = editorRef.current
+      const marker = findImageMarkers(draft).find((m) => m.id === id)
+      if (!el || !marker) return
+      el.focus()
+      el.setSelectionRange(marker.start, marker.end)
+    },
+    [draft],
   )
 
   return {
     draft,
     updateDraft,
+    usedImageIds,
+    images: caseImages.images,
+    imageProblem: caseImages.problem,
+    dismissImageProblem: caseImages.dismissProblem,
+    copyImage: caseImages.copyImage,
+    removeImage,
+    jumpToImage,
     language,
     setLanguage,
     editorRef,
