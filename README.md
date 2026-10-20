@@ -88,6 +88,31 @@ cannot lock an account; and a device that does not answer is given up on after 1
 units, folders and saved calls (including headers and bodies) are saved in `nvx.json` in the linked
 folder, and in your full backup; passwords never are, so do not put one in a header or body you save.
 
+## Terminal (desktop app only)
+
+SSH consoles to your units, in the page, like Crestron Toolbox's text console. Each terminal is one
+SSH session to one unit (port 22), drawn with xterm.js; the connection is made by the desktop app
+(`desktop/terminal.cjs`).
+
+- **Login** (top right): a username (remembered) and a password (memory only), used for the terminals you
+  open next. Below it are your **saved units** (the ones from the Device API page): click one and its
+  terminal opens and connects. **Add terminal** types an IP address by hand instead, optionally saving
+  it as a unit, or using a different login for that terminal only.
+- **Grid**: three terminals side by side, the rest wrap below (**Per row** 1, 2 or 3 if a wide table
+  of commands needs more room). While a terminal is open the sidebar shrinks to icons for more width.
+  Terminals keep running while you visit other pages. Closing a terminal's card ends its session.
+- **Unit card** above each terminal: host name, firmware and PUF, read automatically with `hostname`
+  and `ver -v` (held back from the screen, so the terminal starts clean at its prompt), and a **Web**
+  button that opens `https://<ip>/` in your browser.
+- **Keys**: select text and press Ctrl+C to copy it (Ctrl+C is the normal interrupt when nothing is
+  selected); Ctrl+V pastes.
+- **Host keys**: the first time a unit is seen its SSH key is remembered (in the app's own folder, like
+  OpenSSH's `accept-new`). A different key later is refused with a message, and **Trust the new key and
+  connect** accepts it, for a unit that was reset or replaced.
+- Only private network addresses are accepted, at most 12 terminals at once, and every session is
+  closed when the app quits. A terminal can do anything the console can, so it is not covered by the
+  Device API page's **Changes allowed** switch.
+
 ## Sharing
 
 The **Sync** page (bottom of the sidebar) moves one part at a time:

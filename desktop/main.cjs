@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { createNvxClient, registerNvxIpc } = require('./nvx.cjs')
+const { createTerminalManager, registerTerminalIpc } = require('./terminal.cjs')
 
 const SCHEME = 'app'
 const HOST = 'support-hub'
@@ -34,6 +35,8 @@ function serveApp(request) {
 }
 
 const nvx = createNvxClient()
+/** Created once the app is ready, because it keeps its remembered SSH host keys in the user-data folder. */
+let terminals = null
 
 /** Only the app's own page may use the device bridge. */
 const isTrustedSender = (event) => {
@@ -117,17 +120,20 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle(SCHEME, serveApp)
     restrictPermissions()
     registerNvxIpc(ipcMain, nvx, isTrustedSender)
+    terminals = createTerminalManager({ knownHostsFile: path.join(app.getPath('userData'), 'known-hosts.json') })
+    registerTerminalIpc(ipcMain, terminals, isTrustedSender)
     createWindow()
   })
 
   app.on('window-all-closed', () => app.quit())
 
-  // Leave devices tidily: end every login before quitting (but never wait more than 2 seconds).
+  // Leave devices tidily: close every terminal and end every login before quitting (but never wait more than 2 seconds).
   let closing = false
   app.on('before-quit', (event) => {
     if (closing) return
     closing = true
     event.preventDefault()
+    terminals?.closeAll()
     void Promise.race([nvx.logoutAll(), new Promise((resolve) => setTimeout(resolve, 2000))]).finally(() => app.quit())
   })
 }
