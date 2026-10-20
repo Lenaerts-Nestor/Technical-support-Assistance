@@ -8,7 +8,7 @@ import { ConfirmChangeDialog } from './components/ConfirmChangeDialog'
 import type { PendingRequest } from './components/ConfirmChangeDialog'
 import { CallDialog, FolderDialog, GroupDialog, UnitDialog } from './components/Dialogs'
 import { GroupBar } from './components/GroupBar'
-import { LoginCard } from './components/LoginCard'
+import { LoginFields } from './components/LoginFields'
 import { RequestBuilder } from './components/RequestBuilder'
 import type { Draft } from './components/RequestBuilder'
 import { ResultsCard } from './components/ResultsCard'
@@ -47,6 +47,8 @@ export function NvxPage() {
     (raw) => (typeof raw === 'boolean' ? raw : null),
   )
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
+  /** The saved call last loaded into the builder, highlighted in the list. */
+  const [loadedId, setLoadedId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   /** Off at every start: the page only reads until the user turns this on. */
   const [writesEnabled, setWritesEnabled] = useState(false)
@@ -109,8 +111,10 @@ export function NvxPage() {
     else if (targets[0]) review(targets[0], request)
   }
 
-  const loadCall = (call: NvxCall) =>
+  const loadCall = (call: NvxCall) => {
+    setLoadedId(call.id)
     setDraft({ method: call.method, path: call.path, headers: formatHeaderLines(call.headers), body: call.body ?? '' })
+  }
 
   const closeDialog = () => setDialog(null)
 
@@ -157,48 +161,58 @@ export function NvxPage() {
             onEditUnit={(u) => setDialog({ kind: 'unit', unit: u })}
             open={panelOpen}
             onToggle={() => setPanelOpen((open) => !open)}
+            login={
+              <LoginFields
+                username={group.username}
+                password={password}
+                onUsername={(name) => nvx.setUsername(group.id, name)}
+                onPassword={(value) => setPasswords((prev) => ({ ...prev, [group.id]: value }))}
+              />
+            }
           />
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <SavedCallsCard
-              calls={group.calls}
-              folders={group.folders}
-              readBlockedReason={readBlockedReason}
-              changeBlockedReason={changeBlockedReason}
-              running={runner.running}
-              unitCount={targets.length}
-              onLoad={loadCall}
-              onRun={runCall}
-              onRunMany={(calls) => runCalls(calls.map((c) => ({ title: c.title, ...cleanRequest(c) })))}
-              onEditCall={(call) => setDialog({ kind: 'call', call })}
-              onAddFolder={() => setDialog({ kind: 'folder' })}
-              onEditFolder={(folder) => setDialog({ kind: 'folder', folder })}
-            />
-            <LoginCard
-              username={group.username}
-              password={password}
-              onUsername={(name) => nvx.setUsername(group.id, name)}
-              onPassword={(value) => setPasswords((prev) => ({ ...prev, [group.id]: value }))}
-            />
+          <div className="grid items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
+            <div className="lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)] lg:flex-col">
+              <SavedCallsCard
+                calls={group.calls}
+                folders={group.folders}
+                readBlockedReason={readBlockedReason}
+                changeBlockedReason={changeBlockedReason}
+                running={runner.running}
+                unitCount={targets.length}
+                activeId={loadedId}
+                onLoad={loadCall}
+                onRun={runCall}
+                onRunMany={(calls) => runCalls(calls.map((c) => ({ title: c.title, ...cleanRequest(c) })))}
+                onEditCall={(call) => setDialog({ kind: 'call', call })}
+                onAddFolder={() => setDialog({ kind: 'folder' })}
+                onEditFolder={(folder) => setDialog({ kind: 'folder', folder })}
+              />
+            </div>
+            <div className="min-w-0 space-y-5">
+              <RequestBuilder
+                draft={draft}
+                onDraft={(next) => {
+                  setLoadedId(null)
+                  setDraft(next)
+                }}
+                readBlockedReason={readBlockedReason}
+                changeBlockedReason={changeBlockedReason}
+                running={runner.running}
+                onSend={(request) => runCalls([{ title: 'Request', ...request }])}
+                onReview={(request) => targets[0] && review(targets[0], request)}
+                onSave={(request) => setDialog({ kind: 'call', initial: request })}
+              />
+              <ResultsCard
+                results={runner.results}
+                units={runner.units}
+                running={runner.running}
+                onClear={runner.clear}
+                canChange={canChange}
+                onChange={changeValue}
+              />
+              {runner.changes.length > 0 && <ChangesCard entries={runner.changes} onClear={runner.clearChanges} />}
+            </div>
           </div>
-          <RequestBuilder
-            draft={draft}
-            onDraft={setDraft}
-            readBlockedReason={readBlockedReason}
-            changeBlockedReason={changeBlockedReason}
-            running={runner.running}
-            onSend={(request) => runCalls([{ title: 'Request', ...request }])}
-            onReview={(request) => targets[0] && review(targets[0], request)}
-            onSave={(request) => setDialog({ kind: 'call', initial: request })}
-          />
-          <ResultsCard
-            results={runner.results}
-            units={runner.units}
-            running={runner.running}
-            onClear={runner.clear}
-            canChange={canChange}
-            onChange={changeValue}
-          />
-          {runner.changes.length > 0 && <ChangesCard entries={runner.changes} onClear={runner.clearChanges} />}
         </>
       )}
 

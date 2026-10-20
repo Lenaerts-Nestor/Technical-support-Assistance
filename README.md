@@ -71,16 +71,17 @@ HttpOnly cookies — so the desktop app does it (`desktop/nvx.cjs`), following *
 DM NVX API manual. On the website the page only lets you prepare groups, units and calls.
 
 - **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls, folders and username.
-- **Units**: a name and the device's IPv4 address, in a panel that folds down to one line. Tick one
-  or several; requests run on every ticked unit.
-- **Login**: next to the saved calls. The username is remembered per group; the password is kept in
+- **Units**: a name and the device's IPv4 address, as pills in a card that folds down to one line. Tick
+  one or several; requests run on every ticked unit.
+- **Login**: in the same card's header, so it stays in reach when the units are folded. The username is remembered per group; the password is kept in
   memory only and is gone when the app closes. The app logs in by itself, again when a session
   expires, and logs out of every device when it quits.
 - **Request**: pick a method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`), type a path (a query string
   is fine), and add **headers** (one `Name: value` per line) and a raw **body** (**Format JSON** tidies
   it). **Send** runs a GET on the ticked units; anything else opens a review first.
-- **Saved calls**: save a request with a title, optionally into a **folder**. Click a name to load it
-  into the request builder; the play button runs it (a GET at once, anything else after a review).
+- **Saved calls**: a list down the left, beside the request and results (it filters once there are more
+  than a few). Save a request with a title, optionally into a **folder**. Click a name to load it
+  into the request builder; the play button (shown on hover) runs it (a GET at once, anything else after a review).
   **Run all** and a folder's play button run only the GET calls, so nothing that changes a device
   ever runs without a review. Deleting a folder keeps its calls.
 - **Results**: a section per unit with a card per call — status, time, size, a table (or JSON) of
