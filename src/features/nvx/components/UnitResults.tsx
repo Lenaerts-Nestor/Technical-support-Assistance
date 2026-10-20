@@ -119,7 +119,7 @@ export function UnitResults({ unit, results, running, format, canChange, onChang
         <span className="text-ink-muted font-mono text-sm">{unit.ip}</span>
         <span className="text-ink-muted text-sm">· {state}</span>
       </h3>
-      <div className="grid items-start gap-4 2xl:grid-cols-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(26rem,100%),1fr))] items-start gap-4">
         {results.map((result) => (
           <CallResult key={result.key} result={result} format={format} canChange={canChange} onChange={onChange} />
         ))}

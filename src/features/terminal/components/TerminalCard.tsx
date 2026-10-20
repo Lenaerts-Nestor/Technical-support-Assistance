@@ -3,7 +3,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { CARD, DANGER_BTN, GHOST_BTN, GHOST_BTN_MD, ICON_BTN } from '../../../shared/ui/styles'
-import { CommandLine, historyFor } from '../lineEditor'
+import { ConsoleScreen, LocalLine, historyFor } from '../consoleLine'
 import type { TerminalEntry } from '../types'
 
 /** Matches the app: a touch darker than the page, bright text, the amber accent for the cursor. */
@@ -36,6 +36,8 @@ function Detail({ label, value, wait }: { label: string; value: string | undefin
 
 type TerminalCardProps = {
   entry: TerminalEntry
+  /** Edit the command line here (history, Tab, cursor keys) rather than passing every key to the unit. */
+  editLines: boolean
   onClose: () => void
 }
 
@@ -44,8 +46,12 @@ type TerminalCardProps = {
  * unit with `hostname` and `ver -v`), and a Web button that opens the unit's web interface.
  * The connection lives as long as the card does; closing the card closes the session.
  */
-export function TerminalCard({ entry, onClose }: TerminalCardProps) {
+export function TerminalCard({ entry, editLines, onClose }: TerminalCardProps) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const editRef = useRef(editLines)
+  useEffect(() => {
+    editRef.current = editLines
+  }, [editLines])
   const [status, setStatus] = useState<Status>('connecting')
   const [info, setInfo] = useState<Info | null>(null)
   const [problem, setProblem] = useState<{ text: string; keyChanged: boolean } | null>(null)
@@ -63,7 +69,9 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
     let connected = false
     /** The unit's command names, for Tab. They arrive a moment after the terminal opens. */
     let commands: string[] = []
-    const line = new CommandLine(historyFor(entry.ip))
+    const screen = new ConsoleScreen()
+    const local = new LocalLine(historyFor(entry.ip), () => commands)
+    const decoder = new TextDecoder()
 
     const term = new Terminal({
       theme: THEME,
@@ -88,31 +96,19 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
         void navigator.clipboard.writeText(term.getSelection())
         return false
       }
-      if (!connected || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return true
-      // Up and Down bring back past commands; Tab finishes a command name. When the line is not known
-      // (it was edited with the arrow keys…) or there is nothing to do, the key goes to the unit as usual.
-      let handled: string | null = null
-      if (event.key === 'ArrowUp') handled = line.previous()
-      else if (event.key === 'ArrowDown') handled = line.next()
-      else if (event.key === 'Tab') {
-        const done = line.complete(commands)
-        if (done) {
-          handled = done.send
-          setHint(done.matches.length > 1 ? done.matches : null)
-        }
-      } else return true
-      if (handled === null) return true
-      event.preventDefault() // xterm leaves the key alone when we say false, so the browser must not act on it
-      if (handled) bridge.write(id, handled)
-      if (event.key !== 'Tab') setHint(null)
-      return false
+      return true
     })
     const observer = new ResizeObserver(refit)
     observer.observe(host)
 
     const stopListening = bridge.onEvent((message) => {
       if (message.id !== id) return
-      if (message.type === 'data') term.write(message.data)
+      if (message.type === 'data') {
+        // The unit's echo of a line drawn here is dropped; a line being typed is redrawn after any output.
+        term.write(screen.filter(decoder.decode(message.data, { stream: true })))
+        const prompt = screen.prompt()
+        if (local.hasText && prompt) term.write(local.draw(prompt))
+      }
       else if (message.type === 'info') setInfo({ hostname: message.hostname, firmware: message.firmware, puf: message.puf })
       else if (message.type === 'commands') commands = message.commands
       else {
@@ -121,9 +117,16 @@ export function TerminalCard({ entry, onClose }: TerminalCardProps) {
       }
     })
     const typing = term.onData((data) => {
-      line.track(data)
-      setHint(null)
-      bridge.write(id, data)
+      if (!connected || !editRef.current) {
+        setHint(null)
+        bridge.write(id, data)
+        return
+      }
+      const result = local.input(data, screen.prompt())
+      if (result.write) term.write(result.write)
+      if (result.echo !== undefined) screen.expectEcho(result.echo)
+      if (result.send) bridge.write(id, result.send)
+      setHint(result.hint)
     })
     const resizing = term.onResize(({ cols, rows }) => bridge.resize(id, cols, rows))
 

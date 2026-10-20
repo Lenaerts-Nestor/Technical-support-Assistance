@@ -11,5 +11,5 @@ const TONE: Record<HttpMethod, string> = {
 
 /** The method of a request, in the colour Postman users expect. */
 export function MethodBadge({ method }: { method: HttpMethod }) {
-  return <span className={`${TONE[method]} w-[3.25rem] shrink-0 font-mono text-[11px] font-bold tracking-wide`}>{method}</span>
+  return <span className={`${TONE[method]} w-11 shrink-0 font-mono text-[11px] font-bold tracking-wide`}>{method}</span>
 }

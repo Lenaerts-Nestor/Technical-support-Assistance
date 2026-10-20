@@ -71,16 +71,17 @@ HttpOnly cookies — so the desktop app does it (`desktop/nvx.cjs`), following *
 DM NVX API manual. On the website the page only lets you prepare groups, units and calls.
 
 - **Groups** (NVX API, NAX API, …) along the top. Each has its own units, saved calls, folders and username.
-- **Units**: a name and the device's IPv4 address, in a panel that folds down to one line. Tick one
-  or several; requests run on every ticked unit.
-- **Login**: next to the saved calls. The username is remembered per group; the password is kept in
+- **Units**: a name and the device's IPv4 address, as pills in a card that folds down to one line. Tick
+  one or several; requests run on every ticked unit.
+- **Login**: in the same card's header, so it stays in reach when the units are folded. The username is remembered per group; the password is kept in
   memory only and is gone when the app closes. The app logs in by itself, again when a session
   expires, and logs out of every device when it quits.
 - **Request**: pick a method (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`), type a path (a query string
   is fine), and add **headers** (one `Name: value` per line) and a raw **body** (**Format JSON** tidies
   it). **Send** runs a GET on the ticked units; anything else opens a review first.
-- **Saved calls**: save a request with a title, optionally into a **folder**. Click a name to load it
-  into the request builder; the play button runs it (a GET at once, anything else after a review).
+- **Saved calls**: a list down the left, beside the request and results (it filters once there are more
+  than a few). Save a request with a title, optionally into a **folder**. Click a name to load it
+  into the request builder; the play button (shown on hover) runs it (a GET at once, anything else after a review).
   **Run all** and a folder's play button run only the GET calls, so nothing that changes a device
   ever runs without a review. Deleting a folder keeps its calls.
 - **Results**: a section per unit with a card per call — status, time, size, a table (or JSON) of
@@ -124,12 +125,15 @@ SSH session to one unit (port 22), drawn with xterm.js; the connection is made b
   `https://<ip>/` in your browser. They are read on a second, hidden shell on the same connection, which
   runs `hostname`, `ver -v` and `help all` and closes, so a slow unit never delays what you type: your
   terminal is live from the first moment and shows only the unit's own text.
-- **Keys**: **Up / Down** bring back past commands (kept per unit while the app runs, never saved, since a
-  command can hold a password) and **Tab** finishes a command name from the unit's own command list
-  (read with `help all`; several matches are listed under the terminal). They work while you type at the
-  end of the line; after editing with the arrow keys, Home or Ctrl+A, the keys go to the unit untouched
-  until the next Enter. Select text and press Ctrl+C to copy it (Ctrl+C is the normal interrupt when
-  nothing is selected); Ctrl+V pastes.
+- **Keys**: while the unit waits at its prompt, the line you type is edited in the page, the way
+  Crestron Toolbox does, and the whole line goes to the unit when you press Enter. **Up / Down** bring back
+  past commands (kept per unit while the app runs, never saved, since a command can hold a password),
+  **Tab** finishes a command name from the unit's own command list (read with `help all`; several
+  matches are listed under the terminal), and the arrow keys, Home, End, Delete and Ctrl+A/E/K/U/W edit in
+  place. The page redraws the whole line each time, so nothing depends on how the unit echoes an erase
+  (some leave old letters behind). While a command is running, keys go straight to the unit. Untick
+  **Edit the line here** to pass every key to the unit untouched. Select text and press Ctrl+C to copy
+  it (Ctrl+C is the normal interrupt when nothing is selected); Ctrl+V pastes.
 - **Host keys**: the first time a unit is seen its SSH key is remembered (in the app's own folder, like
   OpenSSH's `accept-new`). A different key later is refused with a message, and **Trust the new key and
   connect** accepts it, for a unit that was reset or replaced.
