@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   changeLine,
+  describeForm,
   flatten,
   getAtPath,
   newId,
@@ -91,7 +92,9 @@ export function useNvxRunner() {
       const describeSent = (now: (path: string) => unknown = () => undefined) =>
         paths.length > 0
           ? paths.map((path) => changeLine(path, getAtPath(sent, path), shownBefore(path), now(path)))
-          : [`${request.method} ${request.path}${request.body ? ` · ${request.body.trim().replace(/\s+/g, ' ').slice(0, 200)}` : ''}`]
+          : request.form
+            ? [`${request.method} ${request.path}`, ...describeForm(request.form)]
+            : [`${request.method} ${request.path}${request.body ? ` · ${request.body.trim().replace(/\s+/g, ' ').slice(0, 200)}` : ''}`]
       if (!bridge) return finish({ lines: describeSent(), outcome: 'failed', detail: 'Changes are sent from the Support Hub desktop app.' })
 
       const reply = await bridge.request({ ip: unit.ip, ...login, ...request })

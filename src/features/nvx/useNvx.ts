@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
-import { NAME_MAX_LENGTH, defaultGroups, newGroup, newId, reviveGroups } from './nvxData'
+import { NAME_MAX_LENGTH, defaultGroups, newGroup, newId, reviveGroups, withoutFileData } from './nvxData'
 import { readNvxFile, writeNvxFile } from './nvxFile'
 import type { FolderLink } from '../sync/useFolderLifecycle'
 import type { NvxCall, NvxGroup, NvxUnit } from './types'
@@ -130,7 +130,7 @@ export function useNvx(folder: FolderLink): NvxController {
 
   const saveCall = useCallback(
     (groupId: string, draft: Draft<NvxCall>) => {
-      const call: NvxCall = { ...draft, id: draft.id ?? newId() }
+      const call: NvxCall = { ...draft, ...(draft.form ? { form: withoutFileData(draft.form) } : {}), id: draft.id ?? newId() }
       update(groupId, (g) => ({ ...g, calls: upsert(g.calls, call) }))
       return call.id
     },

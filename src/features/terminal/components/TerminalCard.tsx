@@ -36,8 +36,6 @@ function Detail({ label, value, wait }: { label: string; value: string | undefin
 
 type TerminalCardProps = {
   entry: TerminalEntry
-  /** Edit the command line here (history, Tab, cursor keys) rather than passing every key to the unit. */
-  editLines: boolean
   onClose: () => void
 }
 
@@ -46,12 +44,8 @@ type TerminalCardProps = {
  * unit with `hostname` and `ver -v`), and a Web button that opens the unit's web interface.
  * The connection lives as long as the card does; closing the card closes the session.
  */
-export function TerminalCard({ entry, editLines, onClose }: TerminalCardProps) {
+export function TerminalCard({ entry, onClose }: TerminalCardProps) {
   const hostRef = useRef<HTMLDivElement>(null)
-  const editRef = useRef(editLines)
-  useEffect(() => {
-    editRef.current = editLines
-  }, [editLines])
   const [status, setStatus] = useState<Status>('connecting')
   const [info, setInfo] = useState<Info | null>(null)
   const [problem, setProblem] = useState<{ text: string; keyChanged: boolean } | null>(null)
@@ -117,7 +111,7 @@ export function TerminalCard({ entry, editLines, onClose }: TerminalCardProps) {
       }
     })
     const typing = term.onData((data) => {
-      if (!connected || !editRef.current) {
+      if (!connected) {
         setHint(null)
         bridge.write(id, data)
         return

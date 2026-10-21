@@ -3,7 +3,7 @@ type AllowChangesProps = {
   onChange: (on: boolean) => void
 }
 
-/** The page reads only, until this is switched on. It goes off again when the app is closed. */
+/** On when the page starts; switch it off to make the page read only. Every change still asks for a review. */
 export function AllowChanges({ on, onChange }: AllowChangesProps) {
   return (
     <button
@@ -11,7 +11,7 @@ export function AllowChanges({ on, onChange }: AllowChangesProps) {
       role="switch"
       aria-checked={on}
       onClick={() => onChange(!on)}
-      title={on ? 'Changes are allowed. Each one still asks you to confirm.' : 'Switch on to edit values on a device. Off by default and every time the app starts.'}
+      title={on ? 'Changes are allowed. Each one still asks you to confirm.' : 'Read only. Switch on to edit values on a device.'}
       className={`ml-auto flex items-center gap-2.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
         on ? 'border-brand bg-brand-soft text-brand-strong' : 'border-line text-ink-muted hover:text-ink'
       }`}

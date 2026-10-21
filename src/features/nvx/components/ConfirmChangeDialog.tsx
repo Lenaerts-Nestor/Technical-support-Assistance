@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal } from '../../../shared/ui/Modal'
 import { CHIP, GHOST_BTN_MD, PRIMARY_BTN } from '../../../shared/ui/styles'
-import { OUTCOME_LABEL, formatHeaderLines } from '../nvxData'
+import { OUTCOME_LABEL, describeForm, formatHeaderLines } from '../nvxData'
 import type { ChangeLogEntry, DeviceRequest, NvxUnit } from '../types'
 
 export type PendingRequest = {
@@ -11,6 +11,8 @@ export type PendingRequest = {
   warnings: string[]
   /** For a change to properties: one line each, `path: old → new`. */
   lines: string[]
+  /** The request carries the edits collected in the results table, which are cleared once it has been applied. */
+  fromEdits?: boolean
 }
 
 type ConfirmChangeDialogProps = {
@@ -81,7 +83,7 @@ export function ConfirmChangeDialog({ pending, onSend, onClose }: ConfirmChangeD
             <pre className="bg-canvas border-line max-h-60 overflow-auto rounded-md border p-3 font-mono text-xs whitespace-pre-wrap">
               <span className="text-amber-300 font-bold">{request.method}</span> {request.path}
               {headers && `\n${headers}`}
-              {request.body && `\n\n${showBody(request.body)}`}
+              {request.form ? `\n\nform-data\n${describeForm(request.form).join('\n')}` : request.body && `\n\n${showBody(request.body)}`}
             </pre>
             {lines.length > 0 && (
               <ul className="space-y-1 font-mono text-xs break-all">

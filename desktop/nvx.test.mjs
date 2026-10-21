@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { generate } from 'selfsigned'
 
-const { createNvxClient, isPrivateIPv4, isValidPath, updateJar, checkHeaders } = createRequire(import.meta.url)('./nvx.cjs')
+const { createNvxClient, buildMultipart, isPrivateIPv4, isValidPath, updateJar, checkHeaders } = createRequire(import.meta.url)('./nvx.cjs')
 
 /** A throwaway self-signed certificate, like the one an NVX ships with. Made fresh for each run. */
 let tls
@@ -98,10 +98,14 @@ async function startMockDevice({ user = 'admin', password = 'secret', denyChange
     }
     if (req.url === '/echo') {
       let raw = ''
-      req.on('data', (c) => (raw += c))
+      const chunks = []
+      req.on('data', (c) => {
+        raw += c
+        chunks.push(c)
+      })
       req.on('end', () => {
         session.auth = token()
-        state.echoes.push({ method: req.method, headers: req.headers, body: raw })
+        state.echoes.push({ method: req.method, headers: req.headers, body: raw, buffer: Buffer.concat(chunks) })
         reply(200, JSON.stringify({ method: req.method, body: raw, contentType: req.headers['content-type'] ?? null }), {
           'Content-Type': 'application/json',
           'X-Mock': 'yes',
@@ -356,6 +360,65 @@ describe('requests like Postman', () => {
     expect([...Buffer.from(result.image.base64, 'base64')]).toEqual([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x80, 0x81, 0xfe, 0xff])
     expect(result.text).toBeUndefined()
     expect(result.data).toBeUndefined()
+  })
+})
+
+describe('form-data uploads', () => {
+  const send = (client, fields) => client.request({ ip: '127.0.0.1', path: '/echo', method: 'POST', ...creds, ...fields })
+  const program = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff, 0x80, 0x0d, 0x0a, 0x2d, 0x2d])
+  const form = [
+    { key: 'UploadedFilePath', type: 'text', value: '/data/web/tmp/programload/slot1' },
+    { key: 'RequestPayload', type: 'text', value: '{"Device":{"Programs":{}}}' },
+    { key: 'UploadedFile', type: 'file', fileName: 'Testing.lpz', data: program },
+  ]
+
+  it('sends text and file parts as multipart/form-data with the file bytes intact', async () => {
+    device = await startMockDevice()
+    const result = await send(clientFor(device), { form })
+    expect(result.ok).toBe(true)
+    const echoed = device.state.echoes[0]
+    const type = echoed.headers['content-type']
+    expect(type).toMatch(/^multipart\/form-data; boundary=/)
+    expect(echoed.headers.origin).toBe('https://127.0.0.1')
+    expect(echoed.buffer.includes(Buffer.from(program))).toBe(true)
+    expect(Number(echoed.headers['content-length'])).toBe(echoed.buffer.length)
+    expect(echoed.buffer.toString('latin1')).toContain('name="RequestPayload"\r\n\r\n{"Device":{"Programs":{}}}')
+  })
+
+  it('builds the parts the way a browser does', () => {
+    const { body, contentType } = buildMultipart([...form, { key: 'odd"name', type: 'text', value: 'x' }])
+    const boundary = contentType.split('boundary=')[1]
+    const text = body.toString('latin1')
+    expect(text.startsWith(`--${boundary}\r\n`)).toBe(true)
+    expect(text.endsWith(`--${boundary}--\r\n`)).toBe(true)
+    expect(text).toContain('Content-Disposition: form-data; name="UploadedFilePath"\r\n\r\n/data/web/tmp/programload/slot1\r\n')
+    expect(text).toContain('name="UploadedFile"; filename="Testing.lpz"\r\nContent-Type: application/octet-stream\r\n\r\n')
+    expect(text).toContain('name="odd%22name"')
+    expect(body.includes(Buffer.from(program))).toBe(true)
+  })
+
+  it('overrides a Content-Type header, because only the form knows its boundary', async () => {
+    device = await startMockDevice()
+    const result = await send(clientFor(device), { form, headers: { 'Content-Type': 'application/json' } })
+    expect(result.ok).toBe(true)
+    expect(device.state.echoes[0].headers['content-type']).toMatch(/^multipart\/form-data; boundary=/)
+  })
+
+  it('refuses a form it cannot send, without contacting the device', async () => {
+    device = await startMockDevice()
+    const client = clientFor(device)
+    for (const fields of [
+      { form: [] },
+      { form: [{ key: 'f', type: 'file', fileName: 'a.lpz' }] },
+      { form: [{ key: '', type: 'text', value: 'x' }] },
+      { form: [{ key: 'k', type: 'number', value: 1 }] },
+      { form: 'nope' },
+      { method: 'GET', form },
+      { form: [{ key: 'big', type: 'file', fileName: 'big.bin', data: new Uint8Array(51 * 1024 * 1024) }] },
+    ]) {
+      expect(await send(client, fields)).toMatchObject({ ok: false, kind: 'invalid' })
+    }
+    expect(device.state.loginPosts).toHaveLength(0)
   })
 })
 

@@ -1,5 +1,5 @@
 import { HTTP_METHODS } from './types'
-import type { ChangeLogEntry, ChangeOutcome, ChangeStatus, CompareRow, DeviceReply, DeviceRequest, HttpMethod, NvxCall, NvxFolder, NvxGroup, NvxUnit, RunResult, SettingValue } from './types'
+import type { ChangeLogEntry, ChangeOutcome, ChangeStatus, CompareRow, DeviceReply, DeviceRequest, FormField, HttpMethod, NvxCall, NvxFolder, NvxGroup, NvxUnit, RunResult, SettingValue } from './types'
 
 export const NAME_MAX_LENGTH = 40
 const PATH_MAX_LENGTH = 500
@@ -130,16 +130,88 @@ export function parseDeviceBody(request: DeviceRequest): Record<string, unknown>
   }
 }
 
-/** A saved or typed request, as the app sends it, with no empty headers or body. */
-export function cleanRequest(input: { method: HttpMethod; path: string; headers?: Record<string, string>; body?: string }): DeviceRequest {
+/** The most one request can upload, files included. The desktop app enforces the same limit. */
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+const MAX_FORM_FIELDS = 50
+const FIELD_KEY_MAX_LENGTH = 200
+const FILE_NAME_MAX_LENGTH = 255
+
+/** A saved or typed request, as the app sends it, with no empty headers or body. A form-data body replaces a raw one. */
+export function cleanRequest(input: { method: HttpMethod; path: string; headers?: Record<string, string>; body?: string; form?: FormField[] }): DeviceRequest {
   const hasHeaders = input.headers && Object.keys(input.headers).length > 0
+  const hasForm = input.method !== 'GET' && input.form !== undefined && input.form.length > 0
   return {
     method: input.method,
     path: input.path,
     ...(hasHeaders ? { headers: input.headers } : {}),
-    ...(input.body?.trim() && input.method !== 'GET' ? { body: input.body } : {}),
+    ...(hasForm ? { form: input.form } : input.body?.trim() && input.method !== 'GET' ? { body: input.body } : {}),
   }
 }
+
+/** One row of the form-data editor: a part of the form, with a tick to leave it out without deleting it. */
+export type FormRow = {
+  id: string
+  enabled: boolean
+  key: string
+  type: 'text' | 'file'
+  /** The text, for a text row. */
+  value: string
+  /** The chosen file, for a file row. Empty until one is chosen. */
+  fileName: string
+  contentType?: string
+  data?: Uint8Array
+}
+
+export const newFormRow = (patch: Partial<FormRow> = {}): FormRow => ({ id: newId(), enabled: true, key: '', type: 'text', value: '', fileName: '', ...patch })
+
+/** The parts to send: ticked rows that have a name. */
+export const rowsToForm = (rows: FormRow[]): FormField[] =>
+  rows
+    .filter((row) => row.enabled && row.key.trim() !== '')
+    .map((row): FormField =>
+      row.type === 'file'
+        ? { key: row.key.trim(), type: 'file', fileName: row.fileName, ...(row.contentType ? { contentType: row.contentType } : {}), ...(row.data ? { data: row.data } : {}) }
+        : { key: row.key.trim(), type: 'text', value: row.value },
+    )
+
+/** Rows for the editor from a saved or earlier form. */
+export const formToRows = (form: FormField[] | undefined): FormRow[] =>
+  (form ?? []).map((field) =>
+    field.type === 'file'
+      ? newFormRow({ key: field.key, type: 'file', fileName: field.fileName, ...(field.contentType ? { contentType: field.contentType } : {}), ...(field.data ? { data: field.data } : {}) })
+      : newFormRow({ key: field.key, value: field.value }),
+  )
+
+/** The names of the files in a form that still have to be chosen (a saved call remembers only a file's name). */
+export const missingFiles = (form: FormField[] | undefined): string[] =>
+  (form ?? []).flatMap((field) => (field.type === 'file' && !field.data ? [field.fileName || field.key] : []))
+
+/** How many bytes of files and text a form would upload. */
+export const formSize = (form: FormField[] | undefined): number =>
+  (form ?? []).reduce((sum, field) => sum + (field.type === 'file' ? (field.data?.length ?? 0) : new TextEncoder().encode(field.value).length), 0)
+
+/** A size for people: `812 B`, `3.4 KB`, `12.5 MB`. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** The form as saved: files keep their name and type but not their bytes. */
+export const withoutFileData = (form: FormField[] | undefined): FormField[] | undefined =>
+  form?.map((field) => {
+    if (field.type !== 'file') return field
+    const { key, fileName, contentType } = field
+    return { key, type: 'file', fileName, ...(contentType ? { contentType } : {}) }
+  })
+
+/** The form, one line per part, for the review dialog and the log. */
+export const describeForm = (form: FormField[]): string[] =>
+  form.map((field) =>
+    field.type === 'file'
+      ? `${field.key} = file ${field.fileName}${field.data ? ` (${formatBytes(field.data.length)})` : ''}`
+      : `${field.key} = ${field.value.length > 200 ? `${field.value.slice(0, 200)}…` : field.value}`,
+  )
 
 /* -- Showing an answer --------------------------------------------------- */
 
@@ -249,13 +321,33 @@ function reviveHeaders(raw: unknown): Record<string, string> | undefined {
 
 const BODY_MAX_LENGTH = 100_000
 
+/** The form-data parts of a saved call. Files come back without their bytes. */
+function reviveForm(raw: unknown): FormField[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const fields: FormField[] = []
+  for (const item of raw.slice(0, MAX_FORM_FIELDS)) {
+    const r = item as Record<string, unknown> | null
+    const key = asText(r?.key, FIELD_KEY_MAX_LENGTH)
+    if (!r || !key) continue
+    if (r.type === 'file') {
+      const fileName = asText(r.fileName, FILE_NAME_MAX_LENGTH)
+      const contentType = asText(r.contentType, 100)
+      if (fileName) fields.push({ key, type: 'file', fileName, ...(contentType ? { contentType } : {}) })
+    } else if (typeof r.value === 'string') {
+      fields.push({ key, type: 'text', value: r.value.slice(0, BODY_MAX_LENGTH) })
+    }
+  }
+  return fields.length > 0 ? fields : undefined
+}
+
 function reviveCall(raw: unknown, folderIds: ReadonlySet<string>): NvxCall | null {
   const r = raw as Partial<Record<keyof NvxCall, unknown>> | null
   const path = normalizePath(asText(r?.path, PATH_MAX_LENGTH))
   if (!r || !path) return null
   const method = typeof r.method === 'string' && (HTTP_METHODS as readonly string[]).includes(r.method.toUpperCase()) ? (r.method.toUpperCase() as HttpMethod) : 'GET'
   const headers = reviveHeaders(r.headers)
-  const body = typeof r.body === 'string' && r.body.trim() && method !== 'GET' ? r.body.slice(0, BODY_MAX_LENGTH) : undefined
+  const form = method !== 'GET' ? reviveForm(r.form) : undefined
+  const body = !form && typeof r.body === 'string' && r.body.trim() && method !== 'GET' ? r.body.slice(0, BODY_MAX_LENGTH) : undefined
   const folderId = typeof r.folderId === 'string' && folderIds.has(r.folderId) ? r.folderId : undefined
   return {
     id: asId(r.id),
@@ -264,6 +356,7 @@ function reviveCall(raw: unknown, folderIds: ReadonlySet<string>): NvxCall | nul
     path,
     ...(headers ? { headers } : {}),
     ...(body ? { body } : {}),
+    ...(form ? { form } : {}),
     ...(folderId ? { folderId } : {}),
   }
 }
@@ -311,12 +404,28 @@ export function propertyUrl(path: string): string | null {
   return path.startsWith('Device.') && !path.includes('[') ? `/${path.replaceAll('.', '/')}` : null
 }
 
-/** The partial object to send for one property: `Device.A.B` and `x` → `{"Device":{"A":{"B":"x"}}}`. `null` for a path that cannot be sent. */
-export function buildChangeBody(path: string, value: SettingValue): Record<string, unknown> | null {
-  if (!propertyUrl(path)) return null
-  const keys = path.split('.')
-  return keys.reduceRight<unknown>((inner, key) => ({ [key]: inner }), value) as Record<string, unknown>
+/**
+ * The partial object to send for several properties at once: `Device.A.B` → `x` and `Device.A.C` → `y`
+ * give `{"Device":{"A":{"B":"x","C":"y"}}}`. `null` when there is nothing to send or a path cannot be sent.
+ */
+export function buildChangesBody(changes: Readonly<Record<string, SettingValue>>): Record<string, unknown> | null {
+  const entries = Object.entries(changes)
+  if (entries.length === 0 || entries.some(([path]) => !propertyUrl(path))) return null
+  const body: Record<string, unknown> = {}
+  for (const [path, value] of entries) {
+    const keys = path.split('.')
+    let node = body
+    for (const key of keys.slice(0, -1)) {
+      const next = node[key]
+      node = (next !== null && typeof next === 'object' ? next : (node[key] = {})) as Record<string, unknown>
+    }
+    node[keys[keys.length - 1]] = value
+  }
+  return body
 }
+
+/** The partial object to send for one property: `Device.A.B` and `x` → `{"Device":{"A":{"B":"x"}}}`. `null` for a path that cannot be sent. */
+export const buildChangeBody = (path: string, value: SettingValue): Record<string, unknown> | null => buildChangesBody({ [path]: value })
 
 /** Whether a value in an answer can be edited in place: a plain value on a plain `Device.…` path. */
 export const isEditable = (path: string, value: unknown): value is SettingValue =>

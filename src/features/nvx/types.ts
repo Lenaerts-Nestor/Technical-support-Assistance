@@ -9,7 +9,15 @@ export type NvxUnit = {
   ip: string
 }
 
-/** What is sent to a device: a method and path, with optional headers and a raw body. */
+/**
+ * One part of a form-data body, like a row in Postman. A file carries its bytes only while the page
+ * is open: a saved call remembers the file's name, and the file has to be chosen again to send it.
+ */
+export type FormField =
+  | { key: string; type: 'text'; value: string }
+  | { key: string; type: 'file'; fileName: string; contentType?: string; data?: Uint8Array }
+
+/** What is sent to a device: a method and path, with optional headers and a raw or form-data body. */
 export type DeviceRequest = {
   method: HttpMethod
   /** A path on the device, such as `/Device/DeviceInfo`. It may carry a query string. */
@@ -17,6 +25,8 @@ export type DeviceRequest = {
   headers?: Record<string, string>
   /** The body exactly as typed (usually JSON). Not for GET. */
   body?: string
+  /** A form-data body (text and files). When there is one, `body` is not used. Not for GET. */
+  form?: FormField[]
 }
 
 /** A saved request: one click runs a GET on the ticked units; anything else is reviewed first. */
