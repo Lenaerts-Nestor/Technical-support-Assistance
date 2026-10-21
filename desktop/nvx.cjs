@@ -14,6 +14,7 @@
 // setting is a POST of a partial CresNext object to /Device.
 const https = require('node:https')
 const net = require('node:net')
+const { randomBytes } = require('node:crypto')
 
 const REQUEST_TIMEOUT_MS = 10_000
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024
@@ -45,6 +46,10 @@ function isValidPath(path) {
 
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const MAX_BODY_BYTES = 100 * 1024
+/** Form-data uploads (a program file, say) may be much larger than a typed body, and take longer to send. */
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+const MAX_FORM_FIELDS = 50
+const UPLOAD_TIMEOUT_MS = 120_000
 const MAX_HEADERS = 20
 /** Headers the app sets itself or that could smuggle a second request. */
 const BLOCKED_HEADERS = new Set(['cookie', 'host', 'content-length', 'transfer-encoding', 'connection', 'keep-alive', 'upgrade', 'expect', 'te', 'trailer'])
@@ -82,6 +87,45 @@ function updateJar(jar, setCookie) {
     if (expired || value === '') jar.delete(name)
     else jar.set(name, value)
   }
+}
+
+/** A name for a multipart header: no line breaks, and quotes escaped the way browsers do. */
+const quoteName = (text) => text.replace(/[\r\n]+/g, ' ').replace(/"/g, '%22')
+
+/**
+ * A multipart/form-data body, like Postman's "form-data". `form` is a list of
+ * `{ key, type: 'text', value }` and `{ key, type: 'file', fileName, contentType?, data }`.
+ * Returns `{ body, contentType }`, or `{ error }` for the person when it cannot be sent.
+ */
+function buildMultipart(form) {
+  if (!Array.isArray(form) || form.length === 0) return { error: 'The form has nothing in it.' }
+  if (form.length > MAX_FORM_FIELDS) return { error: `A form can have at most ${MAX_FORM_FIELDS} fields.` }
+  const boundary = `----SupportHubFormBoundary${randomBytes(12).toString('hex')}`
+  const parts = []
+  let total = 0
+  for (const field of form) {
+    if (field === null || typeof field !== 'object' || typeof field.key !== 'string' || field.key === '' || field.key.length > 200) {
+      return { error: 'Every form field needs a name.' }
+    }
+    const name = quoteName(field.key)
+    if (field.type === 'file') {
+      const bytes = field.data instanceof Uint8Array ? Buffer.from(field.data.buffer, field.data.byteOffset, field.data.byteLength) : null
+      if (!bytes) return { error: `Choose the file for “${field.key}” before sending.` }
+      if (typeof field.fileName !== 'string' || field.fileName === '' || field.fileName.length > 255) return { error: `The file for “${field.key}” has no usable name.` }
+      const type = typeof field.contentType === 'string' && /^[\w.+-]+\/[\w.+-]+$/.test(field.contentType) ? field.contentType : 'application/octet-stream'
+      total += bytes.length
+      parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"; filename="${quoteName(field.fileName)}"\r\nContent-Type: ${type}\r\n\r\n`), bytes, Buffer.from('\r\n'))
+    } else if (field.type === 'text' && typeof field.value === 'string') {
+      const bytes = Buffer.from(field.value)
+      total += bytes.length
+      parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n`), bytes, Buffer.from('\r\n'))
+    } else {
+      return { error: `The form field “${field.key}” must be text or a file.` }
+    }
+    if (total > MAX_UPLOAD_BYTES) return { error: 'The form is too large (the limit is 50 MB).' }
+  }
+  parts.push(Buffer.from(`--${boundary}--\r\n`))
+  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` }
 }
 
 const cookieHeader = (jar) => [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
@@ -135,7 +179,7 @@ function send({ ip, port, method, path, headers, body, jar, timeoutMs }) {
         headers: {
           accept: 'application/json, text/html, image/*, */*',
           ...(cookies ? { cookie: cookies } : {}),
-          ...(body === undefined ? {} : { 'content-length': Buffer.byteLength(body) }),
+          ...(body === undefined ? {} : { 'content-length': Buffer.byteLength(body) }), // a string or a Buffer
           ...headers,
         },
       },
@@ -221,13 +265,13 @@ function createNvxClient({ port = 443, allowLoopback = false, timeoutMs = REQUES
   const xsrfHeader = (jar) => (jar.has('CREST-XSRF-TOKEN') ? { 'x-crest-xsrf-token': jar.get('CREST-XSRF-TOKEN') } : {})
 
   /** One request through the device's session: logs in when needed, and again once if the device says 403. */
-  async function exchange(ip, { username, password }, { method, path, headers, body }) {
+  async function exchange(ip, { username, password }, { method, path, headers, body, timeoutMs: ownTimeoutMs }) {
     const session = sessionFor(ip)
     const run = async () => {
       const sameLogin = session.username === username && session.password === password
       if (!sameLogin || !session.jar.has('AuthByPasswd')) await login(ip, session, username, password)
       const attempt = () =>
-        send({ ip, port, method, path, headers: { referer: `https://${ip}/`, ...xsrfHeader(session.jar), ...headers }, body, jar: session.jar, timeoutMs })
+        send({ ip, port, method, path, headers: { referer: `https://${ip}/`, ...xsrfHeader(session.jar), ...headers }, body, jar: session.jar, timeoutMs: ownTimeoutMs ?? timeoutMs })
       let response = await attempt()
       if (response.status === 403) {
         // Expired session: log in again once and retry.
@@ -257,7 +301,7 @@ function createNvxClient({ port = 443, allowLoopback = false, timeoutMs = REQUES
   const logoutAll = () => Promise.all([...sessions.keys()].map(logout))
 
   /** The request as it will go on the wire, or `{ error }` for the person when it cannot be sent. */
-  function build({ ip, method = 'GET', path, headers, body }) {
+  function build({ ip, method = 'GET', path, headers, body, form }) {
     const verb = typeof method === 'string' ? method.toUpperCase() : ''
     if (!METHODS.has(verb)) return { error: `The method must be one of ${[...METHODS].join(', ')}.` }
     if (!isValidPath(path)) return { error: 'The path must start with / and contain no spaces (for example /Device/DeviceInfo).' }
@@ -267,14 +311,25 @@ function createNvxClient({ port = 443, allowLoopback = false, timeoutMs = REQUES
     const hasBody = typeof body === 'string' && body !== ''
     if (hasBody && verb === 'GET') return { error: 'A GET request has no body. Use POST (or PUT, PATCH, DELETE) to send one.' }
     if (hasBody && Buffer.byteLength(body) > MAX_BODY_BYTES) return { error: 'The body is too large.' }
+    const hasForm = form !== undefined && form !== null
+    if (hasForm && verb === 'GET') return { error: 'A GET request has no body. Use POST (or PUT, PATCH, DELETE) to send a form.' }
+    const multipart = hasForm ? buildMultipart(form) : null
+    if (multipart?.error) return { error: multipart.error }
     const own = Object.fromEntries(Object.entries(headers ?? {}).map(([name, value]) => [name.toLowerCase(), value]))
+    // A form sets its own content type: it carries the boundary that splits the parts.
+    if (multipart) delete own['content-type']
     return {
       request: {
         method: verb,
         path,
-        body: hasBody ? body : undefined,
+        body: multipart ? multipart.body : hasBody ? body : undefined,
+        ...(multipart ? { timeoutMs: Math.max(timeoutMs, UPLOAD_TIMEOUT_MS) } : {}),
         // Like a browser: a body is JSON unless said otherwise, and a change names its origin. Your own headers win.
-        headers: { ...(hasBody ? { 'content-type': 'application/json' } : {}), ...(verb === 'GET' ? {} : { origin: `https://${ip}` }), ...own },
+        headers: {
+          ...(multipart ? { 'content-type': multipart.contentType } : hasBody ? { 'content-type': 'application/json' } : {}),
+          ...(verb === 'GET' ? {} : { origin: `https://${ip}` }),
+          ...own,
+        },
       },
     }
   }
@@ -339,4 +394,4 @@ function registerNvxIpc(ipcMain, client, isTrusted) {
   })
 }
 
-module.exports = { createNvxClient, registerNvxIpc, isPrivateIPv4, isValidPath, updateJar, checkHeaders }
+module.exports = { createNvxClient, buildMultipart, registerNvxIpc, isPrivateIPv4, isValidPath, updateJar, checkHeaders }

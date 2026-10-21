@@ -14,7 +14,7 @@ import type { Draft } from './components/RequestBuilder'
 import { ResultsCard } from './components/ResultsCard'
 import { SavedCallsCard } from './components/SavedCallsCard'
 import { UnitsPanel } from './components/UnitsPanel'
-import { bodyWarnings, buildChangeBody, changeLine, cleanRequest, flatten, formatHeaderLines, getAtPath, parseDeviceBody } from './nvxData'
+import { bodyWarnings, buildChangeBody, changeLine, cleanRequest, flatten, formToRows, formatHeaderLines, getAtPath, missingFiles, parseDeviceBody } from './nvxData'
 import { useNvxRunner } from './useNvxRunner'
 import type { DeviceRequest, NvxCall, NvxFolder, NvxUnit, SettingValue } from './types'
 
@@ -25,7 +25,7 @@ type Dialog =
   | { kind: 'folder'; folder?: NvxFolder }
   | { kind: 'call'; call?: NvxCall; initial?: DeviceRequest }
 
-const EMPTY_DRAFT: Draft = { method: 'GET', path: '/Device/DeviceInfo', headers: '', body: '' }
+const EMPTY_DRAFT: Draft = { method: 'GET', path: '/Device/DeviceInfo', headers: '', bodyMode: 'raw', body: '', form: [] }
 
 /**
  * A small Postman for Crestron devices: pick a group (NVX, NAX…), tick one or more of its units,
@@ -108,12 +108,20 @@ export function NvxPage() {
   const runCall = (call: NvxCall) => {
     const request = cleanRequest(call)
     if (call.method === 'GET') runCalls([{ title: call.title, ...request }])
+    else if (missingFiles(request.form).length > 0) loadCall(call) // a saved call keeps a file's name, not the file: choose it again in the builder
     else if (targets[0]) review(targets[0], request)
   }
 
   const loadCall = (call: NvxCall) => {
     setLoadedId(call.id)
-    setDraft({ method: call.method, path: call.path, headers: formatHeaderLines(call.headers), body: call.body ?? '' })
+    setDraft({
+      method: call.method,
+      path: call.path,
+      headers: formatHeaderLines(call.headers),
+      bodyMode: call.form ? 'form' : 'raw',
+      body: call.body ?? '',
+      form: formToRows(call.form),
+    })
   }
 
   const closeDialog = () => setDialog(null)
@@ -218,7 +226,7 @@ export function NvxPage() {
 
       {pending && (
         <ConfirmChangeDialog
-          key={`${pending.request.method} ${pending.request.path} ${pending.request.body ?? ''}`}
+          key={`${pending.request.method} ${pending.request.path} ${pending.request.body ?? ''} ${pending.request.form?.length ?? 0}`}
           pending={pending}
           onSend={() => runner.apply(pending.unit, login, pending.request)}
           onClose={() => setPending(null)}

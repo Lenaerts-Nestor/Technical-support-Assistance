@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CARD, CARD_HEADER, GHOST_BTN, INPUT, PRIMARY_BTN, SECTION_LABEL, SELECT, TEXTAREA } from '../../../shared/ui/styles'
-import { cleanRequest, normalizePath, parseHeaderLines } from '../nvxData'
+import { MAX_UPLOAD_BYTES, cleanRequest, formSize, formatBytes, missingFiles, newFormRow, normalizePath, parseHeaderLines, rowsToForm } from '../nvxData'
+import type { FormRow } from '../nvxData'
 import { HTTP_METHODS } from '../types'
 import type { DeviceRequest, HttpMethod } from '../types'
 
@@ -10,7 +11,11 @@ export type Draft = {
   path: string
   /** Headers as lines of `Name: value`. */
   headers: string
+  /** `raw` is the text in `body`; `form` is the form-data rows below. */
+  bodyMode: 'raw' | 'form'
   body: string
+  /** The form-data rows, like Postman's: text or a file each. Files are kept in memory only. */
+  form: FormRow[]
 }
 
 type RequestBuilderProps = {
@@ -30,19 +35,26 @@ type RequestBuilderProps = {
 
 type Tab = 'body' | 'headers'
 
-/** Build any request: a method, a path, headers and a raw body; send it to the ticked units or save it. */
+/** Build any request: a method, a path, headers and a raw or form-data body (with files); send it to the ticked units or save it. */
 export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlockedReason, running, onSend, onReview, onSave }: RequestBuilderProps) {
   const [tab, setTab] = useState<Tab>('body')
   const isGet = draft.method === 'GET'
   const path = normalizePath(draft.path)
   const { headers, error: headerError } = parseHeaderLines(draft.headers)
   const headerCount = Object.keys(headers).length
-  const request = path && !headerError ? cleanRequest({ method: draft.method, path, headers, body: draft.body }) : null
-  const blocked = isGet ? readBlockedReason : changeBlockedReason
+  const isForm = draft.bodyMode === 'form'
+  const form = rowsToForm(draft.form)
+  const request =
+    path && !headerError ? cleanRequest({ method: draft.method, path, headers, ...(isForm ? { form } : { body: draft.body }) }) : null
+  const unchosen = isForm && !isGet ? missingFiles(form) : []
+  const tooBig = isForm && !isGet && formSize(form) > MAX_UPLOAD_BYTES
+  const formProblem =
+    unchosen.length > 0 ? `Choose the file for: ${unchosen.join(', ')}.` : tooBig ? `The form is larger than ${formatBytes(MAX_UPLOAD_BYTES)}.` : null
+  const blocked = (isGet ? readBlockedReason : changeBlockedReason) ?? formProblem
   const shownTab: Tab = isGet ? 'headers' : tab
 
   let jsonState: 'valid' | 'invalid' | 'none' = 'none'
-  if (draft.body.trim()) {
+  if (!isForm && draft.body.trim()) {
     try {
       JSON.parse(draft.body)
       jsonState = 'valid'
@@ -115,7 +127,7 @@ export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlocke
               {t === 'body' ? 'Body' : `Headers${headerCount ? ` (${headerCount})` : ''}`}
             </button>
           ))}
-          {shownTab === 'body' && jsonState !== 'none' && (
+          {shownTab === 'body' && !isForm && jsonState !== 'none' && (
             <span className={`ml-auto text-xs ${jsonState === 'valid' ? 'text-emerald-300' : 'text-amber-300'}`}>
               {jsonState === 'valid' ? 'Valid JSON' : 'Not JSON: sent as plain text'}
             </span>
@@ -124,23 +136,37 @@ export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlocke
 
         {shownTab === 'body' ? (
           <div className="space-y-2">
-            <textarea
-              className={`${TEXTAREA} font-mono text-[15px]`}
-              rows={6}
-              value={draft.body}
-              placeholder={'{"Device":{"Ethernet":{"HostName":"NVX-1"}}}'}
-              aria-label="Body"
-              spellCheck={false}
-              onChange={(e) => set({ body: e.target.value })}
-            />
-            <button
-              type="button"
-              className={GHOST_BTN}
-              disabled={jsonState !== 'valid'}
-              onClick={() => set({ body: JSON.stringify(JSON.parse(draft.body) as unknown, null, 2) })}
-            >
-              Format JSON
-            </button>
+            <div className="flex items-center gap-4 text-sm" role="radiogroup" aria-label="Body type">
+              {(['raw', 'form'] as const).map((mode) => (
+                <label key={mode} className="flex cursor-pointer items-center gap-1.5">
+                  <input type="radio" name="body-mode" checked={draft.bodyMode === mode} onChange={() => set({ bodyMode: mode })} />
+                  {mode === 'raw' ? 'raw' : 'form-data'}
+                </label>
+              ))}
+            </div>
+            {isForm ? (
+              <FormEditor rows={draft.form} onRows={(rows) => set({ form: rows })} />
+            ) : (
+              <>
+                <textarea
+                  className={`${TEXTAREA} font-mono text-[15px]`}
+                  rows={6}
+                  value={draft.body}
+                  placeholder={'{"Device":{"Ethernet":{"HostName":"NVX-1"}}}'}
+                  aria-label="Body"
+                  spellCheck={false}
+                  onChange={(e) => set({ body: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className={GHOST_BTN}
+                  disabled={jsonState !== 'valid'}
+                  onClick={() => set({ body: JSON.stringify(JSON.parse(draft.body) as unknown, null, 2) })}
+                >
+                  Format JSON
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <textarea
@@ -162,5 +188,118 @@ export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlocke
         </div>
       </form>
     </section>
+  )
+}
+
+/** The rows of a form-data body: a name, then text or a file, like Postman. */
+function FormEditor({ rows, onRows }: { rows: FormRow[]; onRows: (rows: FormRow[]) => void }) {
+  const [fileError, setFileError] = useState<string | null>(null)
+  const pickers = useRef(new Map<string, HTMLInputElement>())
+  const change = (id: string, patch: Partial<FormRow>) => onRows(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)))
+
+  const choose = async (id: string, file: File | undefined) => {
+    if (!file) return
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setFileError(`${file.name} is larger than ${formatBytes(MAX_UPLOAD_BYTES)}.`)
+      return
+    }
+    try {
+      const data = new Uint8Array(await file.arrayBuffer())
+      setFileError(null)
+      onRows(rows.map((row) => (row.id === id ? { ...row, fileName: file.name, data, contentType: file.type || undefined } : row)))
+    } catch {
+      setFileError(`${file.name} could not be read.`)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="border-line-soft overflow-hidden rounded-md border">
+        <table className="w-full text-sm">
+          <thead className="bg-canvas text-ink-muted text-left text-xs">
+            <tr>
+              <th className="w-8 px-2 py-1.5" aria-label="Send" />
+              <th className="w-1/4 px-2 py-1.5 font-medium">Key</th>
+              <th className="w-24 px-2 py-1.5 font-medium">Type</th>
+              <th className="px-2 py-1.5 font-medium">Value</th>
+              <th className="w-8 px-2 py-1.5" aria-label="Remove" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={row.id} className="border-line-soft border-t">
+                <td className="px-2 py-1 text-center">
+                  <input type="checkbox" checked={row.enabled} aria-label={`Send ${row.key || `field ${index + 1}`}`} onChange={(e) => change(row.id, { enabled: e.target.checked })} />
+                </td>
+                <td className="px-1 py-1">
+                  <input className={`${INPUT} w-full font-mono`} value={row.key} placeholder="Key" aria-label="Key" spellCheck={false} onChange={(e) => change(row.id, { key: e.target.value })} />
+                </td>
+                <td className="px-1 py-1">
+                  <select className={`${SELECT} w-full py-1.5 text-sm`} value={row.type} aria-label="Type" onChange={(e) => change(row.id, { type: e.target.value as FormRow['type'] })}>
+                    <option value="text">Text</option>
+                    <option value="file">File</option>
+                  </select>
+                </td>
+                <td className="px-1 py-1">
+                  {row.type === 'file' ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={(el) => {
+                          if (el) pickers.current.set(row.id, el)
+                          else pickers.current.delete(row.id)
+                        }}
+                        type="file"
+                        className="hidden"
+                        aria-label={`File for ${row.key || 'field'}`}
+                        onChange={(e) => {
+                          void choose(row.id, e.target.files?.[0])
+                          e.target.value = ''
+                        }}
+                      />
+                      <button type="button" className={GHOST_BTN} onClick={() => pickers.current.get(row.id)?.click()}>
+                        {row.fileName ? 'Change file' : 'Choose file'}
+                      </button>
+                      {row.fileName ? (
+                        <span className={`min-w-0 truncate font-mono text-xs ${row.data ? 'text-ink' : 'text-amber-300'}`} title={row.fileName}>
+                          {row.fileName}
+                          {row.data ? ` · ${formatBytes(row.data.length)}` : ' · choose it again'}
+                        </span>
+                      ) : (
+                        <span className="text-ink-muted text-xs">No file chosen</span>
+                      )}
+                    </div>
+                  ) : (
+                    <input className={`${INPUT} w-full font-mono`} value={row.value} placeholder="Value" aria-label="Value" spellCheck={false} onChange={(e) => change(row.id, { value: e.target.value })} />
+                  )}
+                </td>
+                <td className="px-1 py-1 text-center">
+                  <button
+                    type="button"
+                    className="text-ink-muted hover:text-rose-300 px-1.5 text-base"
+                    aria-label={`Remove ${row.key || `field ${index + 1}`}`}
+                    onClick={() => onRows(rows.filter((r) => r.id !== row.id))}
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="text-ink-muted px-3 py-3 text-xs">
+                  No fields yet. Add one for each part of the form, with text or a file.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center gap-3">
+        <button type="button" className={GHOST_BTN} onClick={() => onRows([...rows, newFormRow()])}>
+          Add field
+        </button>
+        {fileError && <span className="text-sm text-rose-300">{fileError}</span>}
+      </div>
+    </div>
   )
 }

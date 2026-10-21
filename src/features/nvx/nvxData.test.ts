@@ -28,6 +28,14 @@ import {
   normalizePath,
   prettyAnswer,
   reviveGroups,
+  describeForm,
+  formatBytes,
+  formSize,
+  formToRows,
+  missingFiles,
+  newFormRow,
+  rowsToForm,
+  withoutFileData,
 } from './nvxData'
 import type { ChangeLogEntry, ChangeStatus, RunResult } from './types'
 
@@ -424,5 +432,52 @@ describe('headers and bodies', () => {
     expect(formatResult(posted).startsWith('== Device info · Lab encoder (10.0.0.5) · POST /Device ==')).toBe(true)
     const picture: RunResult = { ...ok({}), reply: { ok: true, status: 200, ms: 5, bytes: 1234, image: { type: 'image/jpeg', base64: 'AAAA' } } }
     expect(formatResult(picture).endsWith('(image/jpeg, 1234 bytes)')).toBe(true)
+  })
+})
+
+describe('form-data', () => {
+  const file = { key: 'UploadedFile', type: 'file' as const, fileName: 'Testing.lpz', data: new Uint8Array([1, 2, 3]) }
+  const text = { key: 'UploadedFilePath', type: 'text' as const, value: '/data/web/tmp/programload/slot1' }
+
+  it('sends a form instead of a raw body, and never on a GET', () => {
+    expect(cleanRequest({ method: 'POST', path: '/Device', body: '{"a":1}', form: [text] })).toEqual({ method: 'POST', path: '/Device', form: [text] })
+    expect(cleanRequest({ method: 'POST', path: '/Device', body: '{"a":1}', form: [] })).toEqual({ method: 'POST', path: '/Device', body: '{"a":1}' })
+    expect(cleanRequest({ method: 'GET', path: '/Device', form: [text] })).toEqual({ method: 'GET', path: '/Device' })
+  })
+
+  it('turns ticked, named rows into parts and back', () => {
+    const rows = [
+      newFormRow({ key: ' UploadedFilePath ', value: text.value }),
+      newFormRow({ key: 'Skipped', value: 'x', enabled: false }),
+      newFormRow({ key: '', value: 'no name' }),
+      newFormRow({ key: 'UploadedFile', type: 'file', fileName: 'Testing.lpz', data: file.data }),
+    ]
+    expect(rowsToForm(rows)).toEqual([text, file])
+    expect(formToRows([text, file]).map(({ key, type, value, fileName }) => ({ key, type, value, fileName }))).toEqual([
+      { key: 'UploadedFilePath', type: 'text', value: text.value, fileName: '' },
+      { key: 'UploadedFile', type: 'file', value: '', fileName: 'Testing.lpz' },
+    ])
+  })
+
+  it('names the files that still have to be chosen, and measures the upload', () => {
+    expect(missingFiles([text, { key: 'UploadedFile', type: 'file', fileName: 'Testing.lpz' }])).toEqual(['Testing.lpz'])
+    expect(missingFiles([text, file])).toEqual([])
+    expect(formSize([text, file])).toBe(text.value.length + 3)
+    expect(formatBytes(3)).toBe('3 B')
+    expect(formatBytes(1536)).toBe('1.5 KB')
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB')
+  })
+
+  it('saves a file by name only, and reads it back as a file that must be chosen again', () => {
+    expect(withoutFileData([text, file])).toEqual([text, { key: 'UploadedFile', type: 'file', fileName: 'Testing.lpz' }])
+    const [group] = reviveGroups([
+      { id: 'g', name: 'G', units: [], calls: [{ id: 'c', title: 'Load', method: 'POST', path: '/Device', body: 'ignored', form: [text, { ...file, data: [1, 2, 3] }, { key: '', type: 'text', value: 'x' }] }] },
+    ])!
+    expect(group.calls[0].form).toEqual([text, { key: 'UploadedFile', type: 'file', fileName: 'Testing.lpz' }])
+    expect(group.calls[0].body).toBeUndefined()
+  })
+
+  it('describes each part on a line', () => {
+    expect(describeForm([text, file])).toEqual([`UploadedFilePath = ${text.value}`, 'UploadedFile = file Testing.lpz (3 B)'])
   })
 })

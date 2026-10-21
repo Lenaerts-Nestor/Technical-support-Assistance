@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal } from '../../../shared/ui/Modal'
 import { DANGER_BTN, GHOST_BTN_MD, INPUT_LG, PRIMARY_BTN, SELECT, TEXTAREA } from '../../../shared/ui/styles'
-import { NAME_MAX_LENGTH, cleanRequest, formatHeaderLines, normalizeIp, normalizePath, parseHeaderLines } from '../nvxData'
+import { NAME_MAX_LENGTH, cleanRequest, describeForm, formatHeaderLines, normalizeIp, normalizePath, parseHeaderLines } from '../nvxData'
 import { HTTP_METHODS } from '../types'
 import type { DeviceRequest, HttpMethod, NvxCall, NvxFolder, NvxGroup, NvxUnit } from '../types'
 
@@ -197,7 +197,7 @@ export function CallDialog({ call, initial, folders, onSave, onDelete, onClose }
       title={call ? 'Edit call' : 'Save call'}
       formId="nvx-call"
       canSave={canSave}
-      onSubmit={() => clean && onSave({ title: title.trim(), ...(folderId ? { folderId } : {}), ...cleanRequest({ method, path: clean, headers: parsed.headers, body }) })}
+      onSubmit={() => clean && onSave({ title: title.trim(), ...(folderId ? { folderId } : {}), ...cleanRequest({ method, path: clean, headers: parsed.headers, body, form: start?.form }) })}
       onClose={onClose}
       onDelete={onDelete && { what: 'this call', run: onDelete }}
     >
@@ -240,7 +240,18 @@ export function CallDialog({ call, initial, folders, onSave, onDelete, onClose }
         <textarea className={`${TEXTAREA} font-mono text-sm`} rows={2} value={headers} spellCheck={false} onChange={(e) => setHeaders(e.target.value)} />
         {parsed.error && <span className="mt-1 block text-xs text-rose-300">{parsed.error}</span>}
       </label>
-      {method !== 'GET' && (
+      {method !== 'GET' && start?.form && (
+        <div className="block">
+          <span className="text-ink-muted mb-1 block text-xs font-medium">Body (form-data)</span>
+          <ul className="bg-canvas border-line space-y-1 rounded-md border p-3 font-mono text-xs break-all">
+            {describeForm(start.form).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <span className="text-ink-muted mt-1 block text-xs">Files are not saved, only their names. Choose the file again before sending. Edit the fields in the request builder.</span>
+        </div>
+      )}
+      {method !== 'GET' && !start?.form && (
         <label className="block">
           <span className="text-ink-muted mb-1 block text-xs font-medium">Body</span>
           <textarea className={`${TEXTAREA} font-mono text-sm`} rows={5} value={body} spellCheck={false} onChange={(e) => setBody(e.target.value)} />
