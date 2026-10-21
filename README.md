@@ -175,9 +175,15 @@ npm run desktop        # build, then open the app on this computer
 npm run desktop:pack   # build the Windows files into release/ (run it on Windows)
 ```
 
-The **Desktop app** workflow (Actions tab → *Run workflow*, then type the version, for example `0.1.0`;
-or push a tag like `desktop-v0.1.0`) builds on a Windows runner and publishes a **GitHub Release** `v0.1.0`
-with these files (also kept as a run artifact for 30 days):
+The **Desktop app** workflow builds on a Windows runner and publishes a **GitHub Release** `v0.1.0`
+with these files (also kept as a run artifact for 30 days). It starts three ways:
+
+- **Merging to `main`** publishes the next patch version by itself (the latest release plus one), so the
+  installed app offers the update. A merge that only changes Markdown files is skipped, and so is a commit
+  with `[skip ci]` in its message. A merge that fails `npm run lint` or `npm test` is not published.
+- **Actions tab → *Run workflow*** with a version typed in (for example `0.2.0`) when you want a new
+  minor or major version; leave it empty for the next patch version.
+- **Pushing a tag** like `desktop-v0.1.0` publishes exactly that version.
 
 | File | What it is |
 |---|---|
@@ -185,7 +191,8 @@ with these files (also kept as a run artifact for 30 days):
 | `SupportHub-<version>-portable.exe` | Runs from anywhere with no install, starts a few seconds slower. It cannot update itself. |
 | `latest.yml` | What the app's update check reads. |
 
-The version exists only in the build (it is not committed); it must be higher than the last release.
+The version exists only in the build (it is not committed); it must be higher than the last release, which
+the automatic runs guarantee. The first automatic release is `0.1.0` if the repository has none yet.
 
 Good to know:
 

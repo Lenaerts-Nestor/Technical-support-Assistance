@@ -1,0 +1,79 @@
+/**
+ * Colour variants. The default theme ("Dark") is the @theme block in
+ * `src/index.css`; each block here overrides the same variables under
+ * `data-theme` on <html>, so nothing else in the app changes when a theme is
+ * switched.
+ *
+ * To add a palette: copy the block below, rename it, change the values, then add
+ * an entry to THEMES in `themes.ts` so the sidebar switch offers it. Set every
+ * variable (no partial overrides) so comparing two themes never leaves a stray
+ * colour behind from the one before it.
+ */
+
+/**
+ * Coffee — a light theme: warm cream page, white cards, light-wood sidebar and a
+ * coffee-brown accent. Dark text on light surfaces, the reverse of the default.
+ */
+:root[data-theme="coffee"] {
+  /* Native controls (selects, scrollbars, autofill) switch to their light look. */
+  color-scheme: light;
+
+  --color-canvas: #f4eee5;
+  --color-surface: #fffdf9;
+  --color-surface-hi: #ffffff;
+  --color-subtle: #efe5d6;
+  --color-field: #f7f1e7;
+
+  --color-sidebar-hi: #e8d7bf;
+  --color-sidebar-lo: #d9c4a6;
+  --color-sidebar-line: #c4a983;
+
+  --color-line-soft: #eadfcd;
+  --color-line: #dccdb5;
+  --color-line-strong: #c2ae90;
+
+  /* Espresso text. `ink-faint` stays above 4.5:1 on white so placeholders remain legible. */
+  --color-ink: #2a1f17;
+  --color-ink-soft: #4a392c;
+  --color-ink-muted: #6c5a49;
+  --color-ink-faint: #85715d;
+
+  --color-brand: #8f5b2a;
+  --color-brand-hi: #a8703a;
+  --color-brand-strong: #6f431c;
+  --color-brand-soft: rgb(143 91 42 / 0.12);
+  --color-brand-line: rgb(143 91 42 / 0.42);
+  --color-on-brand: #fff9f0;
+  --color-glow: rgb(143 91 42 / 0.07);
+  --color-hover: rgb(74 52 30 / 0.07);
+
+  /* On a light page depth comes from soft brown shadows, not from lit edges. */
+  --shadow-card:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.9), 0 1px 2px 0 rgb(74 52 30 / 0.12),
+    0 12px 24px -16px rgb(74 52 30 / 0.35);
+  --shadow-btn: inset 0 1px 0 0 rgb(255 255 255 / 0.25), 0 1px 2px 0 rgb(74 52 30 / 0.3);
+  --shadow-btn-soft: inset 0 1px 0 0 rgb(255 255 255 / 0.8), 0 1px 2px 0 rgb(74 52 30 / 0.12);
+  --shadow-glow: 0 0 18px -8px var(--color-brand);
+  --shadow-field: inset 0 1px 2px 0 rgb(74 52 30 / 0.12);
+
+  /*
+   * Tailwind's status colours (emerald, rose, amber…) are written all over the app
+   * for a dark page: "-300" text, "-400" dots and bars, "-100" for bright text. On a
+   * light page those pale shades vanish, so this theme swaps the light end of each
+   * palette for its dark end (50↔950, 100→900, 200→800, 300→700, 400→600). Every
+   * existing `text-emerald-300` stays readable with no component edited.
+   */
+  --color-amber-50: #451a03;   --color-amber-100: #78350f;   --color-amber-200: #92400e;   --color-amber-300: #b45309;   --color-amber-400: #d97706;   --color-amber-950: #fffbeb;
+  --color-rose-50: #4c0519;    --color-rose-100: #881337;    --color-rose-200: #9f1239;    --color-rose-300: #be123c;    --color-rose-400: #e11d48;    --color-rose-950: #fff1f2;
+  --color-emerald-50: #022c22; --color-emerald-100: #064e3b; --color-emerald-200: #065f46; --color-emerald-300: #047857; --color-emerald-400: #059669; --color-emerald-950: #ecfdf5;
+  --color-sky-50: #082f49;     --color-sky-100: #0c4a6e;     --color-sky-200: #075985;     --color-sky-300: #0369a1;     --color-sky-400: #0284c7;     --color-sky-950: #f0f9ff;
+  --color-violet-50: #2e1065;  --color-violet-100: #4c1d95;  --color-violet-200: #5b21b6;  --color-violet-300: #6d28d9;  --color-violet-400: #7c3aed;  --color-violet-950: #f5f3ff;
+  --color-fuchsia-50: #4a044e; --color-fuchsia-100: #701a75; --color-fuchsia-200: #86198f; --color-fuchsia-300: #a21caf; --color-fuchsia-400: #c026d3; --color-fuchsia-950: #fdf4ff;
+  --color-blue-50: #172554;    --color-blue-100: #1e3a8a;    --color-blue-200: #1e40af;    --color-blue-300: #1d4ed8;    --color-blue-400: #2563eb;    --color-blue-950: #eff6ff;
+  --color-indigo-50: #1e1b4b;  --color-indigo-100: #312e81;  --color-indigo-200: #3730a3;  --color-indigo-300: #4338ca;  --color-indigo-400: #4f46e5;  --color-indigo-950: #eef2ff;
+  --color-teal-50: #042f2e;    --color-teal-100: #134e4a;    --color-teal-200: #115e59;    --color-teal-300: #0f766e;    --color-teal-400: #0d9488;    --color-teal-950: #f0fdfa;
+  --color-lime-50: #1a2e05;    --color-lime-100: #365314;    --color-lime-200: #3f6212;    --color-lime-300: #4d7c0f;    --color-lime-400: #65a30d;    --color-lime-950: #f7fee7;
+  --color-cyan-50: #083344;    --color-cyan-100: #164e63;    --color-cyan-200: #155e75;    --color-cyan-300: #0e7490;    --color-cyan-400: #0891b2;    --color-cyan-950: #ecfeff;
+  --color-yellow-50: #422006;  --color-yellow-100: #713f12;  --color-yellow-200: #854d0e;  --color-yellow-300: #a16207;  --color-yellow-400: #ca8a04;  --color-yellow-950: #fefce8;
+  --color-orange-50: #431407;  --color-orange-100: #7c2d12;  --color-orange-200: #9a3412;  --color-orange-300: #c2410c;  --color-orange-400: #ea580c;  --color-orange-950: #fff7ed;
+}

@@ -82,7 +82,8 @@ export function LinksPage() {
             : 'No sections yet. Use Edit, then Add section to create one.'}
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(360px,1fr))] items-start gap-4">
+        // Every card is the same height (see SectionCard), so one long section never leaves its neighbours looking short.
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
           {shown.map((section) => (
             <SectionCard
               key={section.id}

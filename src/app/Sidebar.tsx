@@ -6,8 +6,8 @@ import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
 import type { FolderStatus } from '../features/sync/useFolderLifecycle'
 import { ICON_BTN } from '../shared/ui/styles'
 import { ICON_BASE } from '../shared/ui/iconBase'
+import { ThemeSwitcher } from '../shared/theme/ThemeSwitcher'
 import { SidebarClock } from './SidebarClock'
-import { SidebarMascots } from './SidebarMascots'
 
 const ICONS: Record<PageId, React.ReactElement> = {
   voiceCall: (
@@ -36,9 +36,6 @@ const ICONS: Record<PageId, React.ReactElement> = {
   ),
   sync: (
     <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8Zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3Z" />
-  ),
-  kevinGuide: (
-    <path d="M12 2 4 6v5c0 4.7 3.2 8.9 8 10 4.8-1.1 8-5.3 8-10V6l-8-4Zm-1.2 13.4L7.4 12l1.4-1.4 2 2 4.4-4.4 1.4 1.4-5.8 5.8Z" />
   ),
 }
 
@@ -83,19 +80,17 @@ function NavButton({ id, label, active, compact, onNavigate, status }: NavButton
       title={title}
       aria-label={compact ? title : undefined}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
+      className={`relative flex items-center rounded-lg py-2 text-sm font-semibold transition-colors ${
         compact ? 'justify-center px-0' : 'gap-3 pr-3 pl-4'
       } ${
         active
-          ? `bg-brand-soft text-brand-strong before:bg-brand before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-[""] ${
-              compact ? 'ring-brand-line ring-1' : ''
-            }`
-          : 'text-ink-muted hover:bg-subtle hover:text-ink'
+          ? `bg-brand-soft text-brand-strong ring-brand/30 ring-1 before:bg-brand before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:content-[""]`
+          : 'text-ink-soft hover:text-ink hover:bg-hover'
       }`}
     >
       <svg
         viewBox="0 0 24 24"
-        className={`fill-current ${compact ? 'h-5 w-5' : 'h-4 w-4'} ${active ? '' : 'text-ink-faint'}`}
+        className={`fill-current ${compact ? 'h-5 w-5' : 'h-4 w-4'} ${active ? '' : 'text-ink-muted'}`}
         aria-hidden="true"
       >
         {ICONS[id]}
@@ -137,7 +132,7 @@ export function Sidebar({
 
   return (
     <aside
-      className={`border-line-strong bg-surface flex shrink-0 flex-col border-r py-5 transition-[width] duration-200 ${
+      className={`border-sidebar-line from-sidebar-hi to-sidebar-lo flex shrink-0 flex-col border-r bg-linear-to-b py-5 transition-[width] duration-200 ${
         compact ? 'w-16 px-2' : 'w-60 px-3'
       }`}
     >
@@ -168,7 +163,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <nav className="border-line-soft flex flex-col gap-0.5 border-t pt-4">
+      <nav className="border-sidebar-line flex flex-col gap-0.5 border-t pt-4">
         {main.map((item) => (
           <NavButton
             key={item.id}
@@ -181,27 +176,24 @@ export function Sidebar({
         ))}
       </nav>
 
-      {/* Too narrow for pictures once the sidebar is icons-only. */}
-      {!compact && <SidebarMascots />}
-
-      {bottom.length > 0 && (
-        <nav
-          aria-label="Sync"
-          className="border-line-soft mt-auto flex flex-col gap-0.5 border-t pt-4"
-        >
-          {bottom.map((item) => (
-            <NavButton
-              key={item.id}
-              id={item.id}
-              label={item.label}
-              active={item.id === current}
-              compact={compact}
-              onNavigate={onNavigate}
-              status={item.id === 'sync' ? syncStatus : undefined}
-            />
-          ))}
-        </nav>
-      )}
+      <div className="mt-auto flex flex-col gap-4">
+        <ThemeSwitcher compact={compact} />
+        {bottom.length > 0 && (
+          <nav aria-label="Sync" className="border-sidebar-line flex flex-col gap-0.5 border-t pt-4">
+            {bottom.map((item) => (
+              <NavButton
+                key={item.id}
+                id={item.id}
+                label={item.label}
+                active={item.id === current}
+                compact={compact}
+                onNavigate={onNavigate}
+                status={item.id === 'sync' ? syncStatus : undefined}
+              />
+            ))}
+          </nav>
+        )}
+      </div>
     </aside>
   )
 }

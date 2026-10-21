@@ -3,6 +3,7 @@ import { CARD, CARD_HEADER, GHOST_BTN, INPUT, PRIMARY_BTN, SECTION_LABEL, SELECT
 import { MAX_UPLOAD_BYTES, cleanRequest, formSize, formatBytes, missingFiles, newFormRow, normalizePath, parseHeaderLines, rowsToForm } from '../nvxData'
 import type { FormRow } from '../nvxData'
 import { HTTP_METHODS } from '../types'
+import { BlockedNotice } from './BlockedNotice'
 import type { DeviceRequest, HttpMethod } from '../types'
 
 /** What is typed in the builder. Kept by the page so a saved call can be loaded into it. */
@@ -25,6 +26,10 @@ type RequestBuilderProps = {
   readBlockedReason: string | null
   /** Why a change cannot be sent now, or `null`. */
   changeBlockedReason: string | null
+  /** Takes the user to what is missing. Absent when the reason is not fixable on this page. */
+  onFixBlocked?: () => void
+  /** Drop the card frame and title: the page shows the builder inside another card (a tab of step 2). */
+  embedded?: boolean
   running: boolean
   /** A GET: run it on the ticked units. */
   onSend: (request: DeviceRequest) => void
@@ -36,7 +41,7 @@ type RequestBuilderProps = {
 type Tab = 'body' | 'headers'
 
 /** Build any request: a method, a path, headers and a raw or form-data body (with files); send it to the ticked units or save it. */
-export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlockedReason, running, onSend, onReview, onSave }: RequestBuilderProps) {
+export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlockedReason, onFixBlocked, embedded = false, running, onSend, onReview, onSave }: RequestBuilderProps) {
   const [tab, setTab] = useState<Tab>('body')
   const isGet = draft.method === 'GET'
   const path = normalizePath(draft.path)
@@ -71,10 +76,12 @@ export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlocke
   }
 
   return (
-    <section className={CARD} aria-label="Request">
-      <header className={CARD_HEADER}>
-        <h3 className={SECTION_LABEL}>Request</h3>
-      </header>
+    <section className={embedded ? undefined : CARD} aria-label="Request">
+      {!embedded && (
+        <header className={CARD_HEADER}>
+          <h3 className={SECTION_LABEL}>Request</h3>
+        </header>
+      )}
       <form
         className="space-y-3 p-4"
         onSubmit={(e) => {
@@ -94,7 +101,7 @@ export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlocke
             ))}
           </select>
           <input
-            className={`${INPUT} min-w-[16rem] flex-1 py-2 font-mono text-[15px]`}
+            className={`${INPUT} min-w-[10rem] flex-1 py-2 font-mono text-[15px]`}
             value={draft.path}
             placeholder="/Device/DeviceInfo"
             aria-label="Path on the device"
@@ -109,6 +116,9 @@ export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlocke
             Save as call
           </button>
         </div>
+
+        {/* Right under Send, where the eye already is — not a faint line at the bottom of the form. */}
+        {blocked && <BlockedNotice reason={blocked} onFix={readBlockedReason !== null && blocked === readBlockedReason ? onFixBlocked : undefined} />}
 
         <div className="border-line-soft flex items-center gap-1 border-b" role="tablist">
           {(['body', 'headers'] as const).map((t) => (
@@ -183,7 +193,6 @@ export function RequestBuilder({ draft, onDraft, readBlockedReason, changeBlocke
         <div className="space-y-1 text-sm">
           {draft.path.trim() && !path && <p className="text-rose-300">That is not a path the app can send. It must start with / and have no spaces.</p>}
           {headerError && <p className="text-rose-300">{headerError}</p>}
-          {blocked && <p className="text-ink-muted">{blocked}</p>}
           {!isGet && !blocked && <p className="text-ink-muted">Nothing is sent until you have reviewed it.</p>}
         </div>
       </form>

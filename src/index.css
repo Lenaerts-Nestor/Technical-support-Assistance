@@ -1,36 +1,63 @@
 @import "tailwindcss";
+/* The light theme ("Coffee"). The default (dark) palette is the @theme block below. */
+@import "./shared/theme/themes.css";
 
 /**
- * App-wide colour tokens. Tailwind v4 turns each `--color-*` entry into a
+ * App-wide design tokens. Tailwind v4 turns each `--color-*` entry into a
  * utility family, so `--color-line` gives `border-line`, `text-ink` gives the
  * primary text colour, and so on.
  *
- * The palette is a dark neutral grey — deliberately free of any brown/warm cast
- * in the surfaces, with all the warmth carried by the amber accent instead.
+ * THIS BLOCK IS THE DEFAULT THEME ("Dark": a neutral slate with one warm amber
+ * accent — the only colour in it, so nothing on the page is tinted). `static`
+ * makes Tailwind emit every variable here even if no utility uses it yet, so a
+ * theme always has something to override. The other theme ("Coffee", a light one)
+ * lives in `src/shared/theme/themes.css` and only overrides these same variables
+ * under `[data-theme="…"]`, so a component never needs to know which theme is
+ * active. To try a new palette, copy that block, change the values and add it to
+ * THEMES in `themes.ts`; the sidebar's theme switch toggles between them live.
+ *
+ * Depth is built from four steps, darkest to lightest (a light theme reverses it):
+ *   field (input wells) → canvas (page) → surface (cards) → surface-hi / subtle (raised, headers)
  */
-@theme {
-  /* Surfaces, darkest to lightest: page → card → recessed block. */
-  --color-canvas: #1a1a1c;
-  --color-surface: #232326;
-  --color-subtle: #2b2b2f;
+@theme static {
+  /* Surfaces. */
+  --color-canvas: #131418;
+  --color-surface: #1a1c22;
+  /* The lit top edge of a card — cards fade from this down to `surface`. */
+  --color-surface-hi: #23262e;
+  /* Card header strips and recessed blocks. */
+  --color-subtle: #292c35;
+  /* Input wells: darker than the card they sit on, so a field reads as a hole to type in. */
+  --color-field: #0f1014;
 
-  /* Borders — `line` is the default 1px edge, `line-strong` outlines cards. */
-  --color-line-soft: #333338;
-  --color-line: #3f3f45;
-  --color-line-strong: #55555d;
+  /* Sidebar: its own gradient so it reads as chrome, not as one more card. */
+  --color-sidebar-hi: #20232b;
+  --color-sidebar-lo: #131419;
+  --color-sidebar-line: #2c2f39;
 
-  /* Text, brightest to dimmest. */
-  --color-ink: #f2f2f4;
-  --color-ink-muted: #a9a9b2;
-  --color-ink-faint: #76767f;
+  /* Borders — `line-soft` between rows, `line` is the default edge, `line-strong` outlines cards and buttons. */
+  --color-line-soft: #2c2f38;
+  --color-line: #383c47;
+  --color-line-strong: #4d525f;
 
-  /* Brand accent: primary actions, active nav, focus rings. */
-  --color-brand: #e0952f;
-  --color-brand-strong: #f0a542;
-  --color-brand-soft: #3a2f1e;
-  --color-brand-line: #6b5327;
-  /* Text that sits on a filled brand background — amber needs dark, not white. */
-  --color-on-brand: #1a1a1c;
+  /* Text, brightest to dimmest. `ink-soft` is for button labels and small headings that must stay readable. */
+  --color-ink: #f4f5f8;
+  --color-ink-soft: #d6d9e1;
+  --color-ink-muted: #a7acb9;
+  --color-ink-faint: #838896;
+
+  /* Brand accent: primary actions, active nav, focus rings. `brand-hi` is the lit top of a filled button. */
+  --color-brand: #e9a23b;
+  --color-brand-hi: #f7b955;
+  --color-brand-strong: #f7b955;
+  --color-brand-soft: rgb(233 162 59 / 0.14);
+  --color-brand-line: rgb(233 162 59 / 0.45);
+  /* Text that sits on a filled brand background — pick whichever of light/dark contrasts with the accent. */
+  --color-on-brand: #1b1305;
+  /* A faint wash of the accent in the top corner of the page. */
+  --color-glow: rgb(233 162 59 / 0.05);
+  /* Hover tint for rows and nav items: a touch of light on a dark theme, a touch of shade on a light one. */
+  --color-hover: rgb(255 255 255 / 0.06);
 
   /* Calendar days away. PTO is a deliberately loud light green so a day off
      is the first thing the eye lands on; "other" is a violet that stays apart from it. */
@@ -39,8 +66,16 @@
   --color-leave-other: #c58bff;
   --color-leave-other-ink: #1f0a38;
 
-  /* Just enough lift to separate a card from the canvas — borders do the work. */
-  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  /* A lit top edge plus a soft drop: lifts a card off the canvas without a harsh outline. */
+  --shadow-card:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.45),
+    0 14px 28px -18px rgb(0 0 0 / 0.8);
+  /* Buttons: a thin highlight on top, so they read as something pressable. */
+  --shadow-btn: inset 0 1px 0 0 rgb(255 255 255 / 0.22), 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-btn-soft: inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-glow: 0 0 22px -8px var(--color-brand);
+  /* Input wells look pressed in. */
+  --shadow-field: inset 0 1px 2px 0 rgb(0 0 0 / 0.35);
 }
 
 html,
@@ -57,6 +92,9 @@ body,
 body {
   margin: 0;
   background-color: var(--color-canvas);
+  /* A soft accent wash in the top-right keeps the page from being one flat slab. */
+  background-image: radial-gradient(900px 420px at 90% -120px, var(--color-glow), transparent 70%);
+  background-repeat: no-repeat;
   color: var(--color-ink);
 }
 
@@ -69,11 +107,11 @@ body {
     cursor: pointer;
   }
 
-  /* Thin, low-contrast scrollbars — less visual noise in a tool that is scrolled
-     all day. Chromium/desktop only, which is the only target here. */
+  /* Thin scrollbars — less visual noise in a tool that is scrolled all day.
+     Chromium/desktop only, which is the only target here. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: #4a4a52 transparent;
+    scrollbar-color: var(--color-line-strong) transparent;
   }
 
   ::selection {

@@ -9,6 +9,22 @@ export function PlayIcon({ className }: IconProps) {
   )
 }
 
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} strokeWidth={3} className={className}>
+      <path d="m5 12.5 4.5 4.5L19 7.5" />
+    </svg>
+  )
+}
+
+export function AlertIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} className={className}>
+      <path d="M12 4 2.5 20h19L12 4ZM12 10v4M12 17.2v.01" />
+    </svg>
+  )
+}
+
 export function PencilIcon({ className }: IconProps) {
   return (
     <svg {...ICON_BASE} className={className}>

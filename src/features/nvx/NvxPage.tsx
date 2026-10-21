@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNvxData } from '../../app/appDataContext'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { PAGE_SUBTITLE, PAGE_TITLE, PANEL } from '../../shared/ui/styles'
 import { AllowChanges } from './components/AllowChanges'
+import { CallPicker } from './components/CallPicker'
+import type { PickerTab } from './components/CallPicker'
 import { ChangesCard } from './components/ChangesCard'
 import { ConfirmChangeDialog } from './components/ConfirmChangeDialog'
 import type { PendingRequest } from './components/ConfirmChangeDialog'
@@ -14,6 +16,7 @@ import type { Draft } from './components/RequestBuilder'
 import { ResultsCard } from './components/ResultsCard'
 import { SavedCallsCard } from './components/SavedCallsCard'
 import { UnitsPanel } from './components/UnitsPanel'
+import type { Requirement } from './components/UnitsPanel'
 import { bodyWarnings, buildChangesBody, changeLine, cleanRequest, flatten, formToRows, formatHeaderLines, getAtPath, missingFiles, parseDeviceBody } from './nvxData'
 import { useNvxRunner } from './useNvxRunner'
 import type { DeviceRequest, NvxCall, NvxFolder, NvxUnit, SettingValue } from './types'
@@ -35,6 +38,10 @@ const EMPTY_DRAFT: Draft = { method: 'GET', path: '/Device/DeviceInfo', headers:
  * then send a request (any method, path, headers and body) or run a saved call, and read the
  * answers. The login and the requests are done by the desktop app, so on the website this page
  * only prepares groups, units and calls.
+ *
+ * The page is laid out as three numbered steps, so it is always clear what to do next and where
+ * the answer will land: 1 Connect and 2 Choose what to send stack on the left, and 3 Results stays
+ * pinned beside them, so a Send is answered right next to the pointer.
  */
 export function NvxPage() {
   const nvx = useNvxData()
@@ -50,6 +57,8 @@ export function NvxPage() {
     (raw) => (typeof raw === 'boolean' ? raw : null),
   )
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT)
+  /** Step 2 opens on the saved calls when there are any, otherwise on the builder. */
+  const [pickerTab, setPickerTab] = useState<PickerTab>(() => ((nvx.groups[0]?.calls.length ?? 0) > 0 ? 'saved' : 'request'))
   /** The saved call last loaded into the builder, highlighted in the list. */
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog | null>(null)
@@ -84,6 +93,39 @@ export function NvxPage() {
     ? 'Switch on “Changes allowed” (top right) to send anything but a GET.'
     : (readBlockedReason ?? (targets.length !== 1 ? 'Tick exactly one unit to send a change.' : null))
   const canChange = writesEnabled && runner.available && login.username !== '' && password !== '' && !runner.running
+
+  /** What a request needs, in the order to do it: shown as the "before you send" checklist and used to jump to what is missing. */
+  const requirements: Requirement[] = group
+    ? [
+        group.units.length === 0
+          ? { id: 'unit', label: 'Unit', met: false, detail: 'Add a unit' }
+          : targets.length === 0
+            ? { id: 'unit', label: 'Unit', met: false, detail: 'Tick a unit' }
+            : { id: 'unit', label: 'Unit', met: true, detail: targets.length <= 2 ? targets.map((u) => u.label || u.ip).join(', ') : `${targets.length} ticked` },
+        { id: 'username', label: 'Username', met: login.username !== '', detail: login.username !== '' ? login.username : 'Enter the username' },
+        { id: 'password', label: 'Password', met: password !== '', detail: password !== '' ? '' : 'Enter the password' },
+      ]
+    : []
+  const ready = requirements.every((r) => r.met)
+
+  /** Move the cursor to a field a request still needs, opening the folded units first if that is where it is. */
+  const focusRequirement = (id: Requirement['id']) => {
+    if (id === 'unit' && !panelOpen) setPanelOpen(true)
+    // After the units have had a render to appear.
+    window.requestAnimationFrame(() => {
+      const el = id === 'unit' ? document.querySelector<HTMLElement>('[data-nvx-focus="unit"]') : document.getElementById(`nvx-${id}`)
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      el?.focus()
+    })
+  }
+  // Only offered when what is blocking is a missing field, not the missing desktop app.
+  const fixBlocked = runner.available && !ready ? () => focusRequirement((requirements.find((r) => !r.met) ?? requirements[0]).id) : undefined
+
+  // Stacked layout (narrow window): bring the answer into view when a run starts. Side by side it is already pinned in view.
+  const resultsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (runner.running) resultsRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [runner.running])
 
   const runCalls = (calls: (Pick<NvxCall, 'title'> & DeviceRequest)[]) => {
     if (targets.length === 0) return
@@ -130,6 +172,7 @@ export function NvxPage() {
 
   const loadCall = (call: NvxCall) => {
     setLoadedId(call.id)
+    setPickerTab('request')
     setDraft({
       method: call.method,
       path: call.path,
@@ -176,61 +219,78 @@ export function NvxPage() {
               your groups, units and calls here.
             </p>
           )}
-          {/* Two cards side by side: the units to run on, and the saved calls. */}
-          <div className="grid items-start gap-5 lg:grid-cols-2">
-            <UnitsPanel
-              units={group.units}
-              selectedIds={selectedIds}
-              onToggleUnit={(unitId) => setSelected(selectedIds.has(unitId) ? [...selectedIds].filter((id) => id !== unitId) : [...selectedIds, unitId])}
-              onSelectAll={(on) => setSelected(on ? group.units.map((u) => u.id) : [])}
-              onAddUnit={() => setDialog({ kind: 'unit' })}
-              onEditUnit={(u) => setDialog({ kind: 'unit', unit: u })}
-              open={panelOpen}
-              onToggle={() => setPanelOpen((open) => !open)}
-              login={
-                <LoginFields
-                  username={group.username}
-                  password={password}
-                  onUsername={(name) => nvx.setUsername(group.id, name)}
-                  onPassword={(value) => setPasswords((prev) => ({ ...prev, [group.id]: value }))}
-                />
-              }
-            />
-            <SavedCallsCard
-              calls={group.calls}
-              folders={group.folders}
-              readBlockedReason={readBlockedReason}
-              changeBlockedReason={changeBlockedReason}
-              running={runner.running}
-              unitCount={targets.length}
-              activeId={loadedId}
-              onLoad={loadCall}
-              onRun={runCall}
-              onRunMany={(calls) => runCalls(calls.map((c) => ({ title: c.title, ...cleanRequest(c) })))}
-              onEditCall={(call) => setDialog({ kind: 'call', call })}
-              onAddFolder={() => setDialog({ kind: 'folder' })}
-              onEditFolder={(folder) => setDialog({ kind: 'folder', folder })}
-            />
-          </div>
-          {/* The request and its results side by side. Answers from several units need the whole width, so the results drop below the request then. */}
-          <div className={`grid items-start gap-5 ${runner.units.length > 1 ? '' : 'lg:grid-cols-2'}`}>
+          {/*
+            Work on the left (steps 1 and 2), the answer pinned on the right (step 3). Sending is answered
+            right beside the pointer, and the results never scroll out of sight while a long request is built.
+            With three or more units the answers get more of the width.
+          */}
+          <div className={`grid items-start gap-5 ${runner.units.length > 2 ? 'xl:grid-cols-[minmax(0,4fr)_minmax(0,8fr)]' : 'xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]'}`}>
             <div className="min-w-0 space-y-5">
-              <RequestBuilder
-                draft={draft}
-                onDraft={(next) => {
-                  setLoadedId(null)
-                  setDraft(next)
-                }}
-                readBlockedReason={readBlockedReason}
-                changeBlockedReason={changeBlockedReason}
-                running={runner.running}
-                onSend={(request) => runCalls([{ title: 'Request', ...request }])}
-                onReview={(request) => targets[0] && review(targets[0], request)}
-                onSave={(request) => setDialog({ kind: 'call', initial: request })}
+              <UnitsPanel
+                units={group.units}
+                selectedIds={selectedIds}
+                onToggleUnit={(unitId) => setSelected(selectedIds.has(unitId) ? [...selectedIds].filter((id) => id !== unitId) : [...selectedIds, unitId])}
+                onSelectAll={(on) => setSelected(on ? group.units.map((u) => u.id) : [])}
+                onAddUnit={() => setDialog({ kind: 'unit' })}
+                onEditUnit={(u) => setDialog({ kind: 'unit', unit: u })}
+                open={panelOpen}
+                onToggle={() => setPanelOpen((open) => !open)}
+                requirements={requirements}
+                onFix={focusRequirement}
+                login={
+                  <LoginFields
+                    username={group.username}
+                    password={password}
+                    onUsername={(name) => nvx.setUsername(group.id, name)}
+                    onPassword={(value) => setPasswords((prev) => ({ ...prev, [group.id]: value }))}
+                  />
+                }
+              />
+              <CallPicker
+                tab={pickerTab}
+                onTab={setPickerTab}
+                savedCount={group.calls.length}
+                state={ready ? 'next' : 'idle'}
+                saved={
+                  <SavedCallsCard
+                    embedded
+                    calls={group.calls}
+                    folders={group.folders}
+                    readBlockedReason={readBlockedReason}
+                    changeBlockedReason={changeBlockedReason}
+                    onFixBlocked={fixBlocked}
+                    running={runner.running}
+                    unitCount={targets.length}
+                    activeId={loadedId}
+                    onLoad={loadCall}
+                    onRun={runCall}
+                    onRunMany={(calls) => runCalls(calls.map((c) => ({ title: c.title, ...cleanRequest(c) })))}
+                    onEditCall={(call) => setDialog({ kind: 'call', call })}
+                    onAddFolder={() => setDialog({ kind: 'folder' })}
+                    onEditFolder={(folder) => setDialog({ kind: 'folder', folder })}
+                  />
+                }
+                request={
+                  <RequestBuilder
+                    embedded
+                    draft={draft}
+                    onDraft={(next) => {
+                      setLoadedId(null)
+                      setDraft(next)
+                    }}
+                    readBlockedReason={readBlockedReason}
+                    changeBlockedReason={changeBlockedReason}
+                    onFixBlocked={fixBlocked}
+                    running={runner.running}
+                    onSend={(request) => runCalls([{ title: 'Request', ...request }])}
+                    onReview={(request) => targets[0] && review(targets[0], request)}
+                    onSave={(request) => setDialog({ kind: 'call', initial: request })}
+                  />
+                }
               />
               {runner.changes.length > 0 && <ChangesCard entries={runner.changes} onClear={runner.clearChanges} />}
             </div>
-            <div className="min-w-0">
+            <div ref={resultsRef} className="min-w-0 xl:sticky xl:top-5">
               <ResultsCard
                 results={runner.results}
                 units={runner.units}

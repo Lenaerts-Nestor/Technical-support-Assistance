@@ -15,7 +15,6 @@ import { CalendarPage } from '../features/calendar/CalendarPage'
 import { NvxPage } from '../features/nvx/NvxPage'
 import { TerminalPage } from '../features/terminal/TerminalPage'
 import { SyncPage } from '../features/sync/SyncPage'
-import { KevinGuidePage } from '../features/kevinGuide/KevinGuidePage'
 
 const PAGES: Record<PageId, () => React.ReactElement> = {
   voiceCall: VoiceCallPage,
@@ -27,7 +26,6 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
   terminal: TerminalPage,
   calendar: CalendarPage,
   sync: SyncPage,
-  kevinGuide: KevinGuidePage,
 }
 
 export default function App() {

@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 
-export type PageId = 'voiceCall' | 'rma' | 'cases' | 'guides' | 'links' | 'nvx' | 'terminal' | 'calendar' | 'sync' | 'kevinGuide'
+export type PageId = 'voiceCall' | 'rma' | 'cases' | 'guides' | 'links' | 'nvx' | 'terminal' | 'calendar' | 'sync'
 
 /**
  * `hidden` pages stay mounted and reachable in code but get no sidebar entry.
@@ -17,7 +17,6 @@ export const NAV_ITEMS: { id: PageId; label: string; hidden?: boolean; placement
   { id: 'terminal', label: 'Terminal' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'sync', label: 'Sync', placement: 'bottom' },
-  { id: 'kevinGuide', label: 'Guide for Kevin', hidden: true },
 ]
 
 /** Lets a page send the user to another page (a banner's "Open Sync"). Inert by default. */
