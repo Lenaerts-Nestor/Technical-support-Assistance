@@ -11,6 +11,8 @@ export type PendingRequest = {
   warnings: string[]
   /** For a change to properties: one line each, `path: old → new`. */
   lines: string[]
+  /** The request carries the edits collected in the results table, which are cleared once it has been applied. */
+  fromEdits?: boolean
 }
 
 type ConfirmChangeDialogProps = {

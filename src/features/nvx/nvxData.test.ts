@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bodyWarnings,
   buildChangeBody,
+  buildChangesBody,
   cleanRequest,
   formatHeaderLines,
   parseDeviceBody,
@@ -479,5 +480,19 @@ describe('form-data', () => {
 
   it('describes each part on a line', () => {
     expect(describeForm([text, file])).toEqual([`UploadedFilePath = ${text.value}`, 'UploadedFile = file Testing.lpz (3 B)'])
+  })
+})
+
+describe('several changes at once', () => {
+  it('merges the properties of one unit into a single partial object', () => {
+    expect(buildChangesBody({ 'Device.DeviceInfo.Category': 'test', 'Device.DeviceInfo.BuildDate': 'x', 'Device.Ethernet.HostName': 'NVX-1' })).toEqual({
+      Device: { DeviceInfo: { Category: 'test', BuildDate: 'x' }, Ethernet: { HostName: 'NVX-1' } },
+    })
+  })
+
+  it('sends nothing when there are no edits or one path cannot be sent', () => {
+    expect(buildChangesBody({})).toBeNull()
+    expect(buildChangesBody({ 'Device.A': 1, 'Other.B': 2 })).toBeNull()
+    expect(buildChangesBody({ 'Device.A': false })).toEqual({ Device: { A: false } })
   })
 })

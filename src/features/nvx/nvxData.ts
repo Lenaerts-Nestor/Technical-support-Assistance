@@ -404,12 +404,28 @@ export function propertyUrl(path: string): string | null {
   return path.startsWith('Device.') && !path.includes('[') ? `/${path.replaceAll('.', '/')}` : null
 }
 
-/** The partial object to send for one property: `Device.A.B` and `x` → `{"Device":{"A":{"B":"x"}}}`. `null` for a path that cannot be sent. */
-export function buildChangeBody(path: string, value: SettingValue): Record<string, unknown> | null {
-  if (!propertyUrl(path)) return null
-  const keys = path.split('.')
-  return keys.reduceRight<unknown>((inner, key) => ({ [key]: inner }), value) as Record<string, unknown>
+/**
+ * The partial object to send for several properties at once: `Device.A.B` → `x` and `Device.A.C` → `y`
+ * give `{"Device":{"A":{"B":"x","C":"y"}}}`. `null` when there is nothing to send or a path cannot be sent.
+ */
+export function buildChangesBody(changes: Readonly<Record<string, SettingValue>>): Record<string, unknown> | null {
+  const entries = Object.entries(changes)
+  if (entries.length === 0 || entries.some(([path]) => !propertyUrl(path))) return null
+  const body: Record<string, unknown> = {}
+  for (const [path, value] of entries) {
+    const keys = path.split('.')
+    let node = body
+    for (const key of keys.slice(0, -1)) {
+      const next = node[key]
+      node = (next !== null && typeof next === 'object' ? next : (node[key] = {})) as Record<string, unknown>
+    }
+    node[keys[keys.length - 1]] = value
+  }
+  return body
 }
+
+/** The partial object to send for one property: `Device.A.B` and `x` → `{"Device":{"A":{"B":"x"}}}`. `null` for a path that cannot be sent. */
+export const buildChangeBody = (path: string, value: SettingValue): Record<string, unknown> | null => buildChangesBody({ [path]: value })
 
 /** Whether a value in an answer can be edited in place: a plain value on a plain `Device.…` path. */
 export const isEditable = (path: string, value: unknown): value is SettingValue =>

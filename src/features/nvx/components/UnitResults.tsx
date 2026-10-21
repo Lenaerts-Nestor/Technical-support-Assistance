@@ -1,6 +1,6 @@
 import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
 import { CopyIcon } from '../../../shared/ui/icons'
-import { CHIP, GHOST_BTN, INSET } from '../../../shared/ui/styles'
+import { CHIP, GHOST_BTN, INSET, PRIMARY_BTN } from '../../../shared/ui/styles'
 import { flatten, getAtPath, prettyAnswer, splitPath } from '../nvxData'
 import { EditableValue } from './EditableValue'
 import type { NvxUnit, RunResult, SettingValue } from '../types'
@@ -10,10 +10,16 @@ export type AnswerFormat = 'table' | 'json'
 type EditProps = {
   /** Changes are allowed and a login is ready, so values can be edited. */
   canChange: boolean
-  onChange: (unit: NvxUnit, path: string, value: SettingValue) => void
+  /** The edits waiting to be sent, per unit id and then per property path. */
+  edits: Readonly<Record<string, Readonly<Record<string, SettingValue>>>>
+  /** Set one edit, or take it back with `undefined`. */
+  onEdit: (unit: NvxUnit, path: string, value: SettingValue | undefined) => void
+  /** Review and send every edit of the unit in one request. */
+  onSendEdits: (unit: NvxUnit) => void
+  onDiscardEdits: (unit: NvxUnit) => void
 }
 
-function Answer({ result, format, canChange, onChange }: { result: RunResult; format: AnswerFormat } & EditProps) {
+function Answer({ result, format, canChange, edits, onEdit }: { result: RunResult; format: AnswerFormat } & Pick<EditProps, 'canChange' | 'edits' | 'onEdit'>) {
   const { reply } = result
   if (!reply.ok) {
     return (
@@ -45,7 +51,8 @@ function Answer({ result, format, canChange, onChange }: { result: RunResult; fo
                   raw={getAtPath(reply.data, path)}
                   text={value}
                   enabled={canChange}
-                  onSubmit={(next) => onChange(result.unit, path, next)}
+                  pending={edits[result.unit.id]?.[path]}
+                  onEdit={(next) => onEdit(result.unit, path, next)}
                 />
               </dd>
             </div>
@@ -59,7 +66,7 @@ function Answer({ result, format, canChange, onChange }: { result: RunResult; fo
 
 const formatBytes = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`)
 
-function CallResult({ result, format, canChange, onChange }: { result: RunResult; format: AnswerFormat } & EditProps) {
+function CallResult({ result, format, canChange, edits, onEdit }: { result: RunResult; format: AnswerFormat } & Pick<EditProps, 'canChange' | 'edits' | 'onEdit'>) {
   const { copied, copy } = useCopyToClipboard<string>()
   const { reply } = result
   return (
@@ -79,7 +86,7 @@ function CallResult({ result, format, canChange, onChange }: { result: RunResult
           </button>
         )}
       </div>
-      <Answer result={result} format={format} canChange={canChange} onChange={onChange} />
+      <Answer result={result} format={format} canChange={canChange} edits={edits} onEdit={onEdit} />
       {reply.headers && Object.keys(reply.headers).length > 0 && (
         <details className="text-ink-muted mt-3">
           <summary className="cursor-pointer text-xs">Response headers ({Object.keys(reply.headers).length})</summary>
@@ -105,10 +112,11 @@ type UnitResultsProps = EditProps & {
 }
 
 /** Everything one unit answered in the last run: a header with its state and a card per call. */
-export function UnitResults({ unit, results, running, format, canChange, onChange }: UnitResultsProps) {
+export function UnitResults({ unit, results, running, format, canChange, edits, onEdit, onSendEdits, onDiscardEdits }: UnitResultsProps) {
   const failed = results.filter((r) => !r.reply.ok).length
   const waiting = running && results.length === 0
   const tone = failed > 0 ? 'bg-rose-400' : waiting ? 'bg-sky-400 animate-pulse' : 'bg-emerald-400'
+  const editCount = Object.keys(edits[unit.id] ?? {}).length
   const state = failed > 0 ? `${failed} failed` : waiting ? 'waiting…' : `${results.length} answered`
 
   return (
@@ -119,9 +127,24 @@ export function UnitResults({ unit, results, running, format, canChange, onChang
         <span className="text-ink-muted font-mono text-sm">{unit.ip}</span>
         <span className="text-ink-muted text-sm">· {state}</span>
       </h3>
+      {canChange && editCount > 0 && (
+        <div role="status" className="border-brand-line bg-brand-soft sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+          <span className="text-ink text-sm font-semibold">
+            {editCount} {editCount === 1 ? 'change' : 'changes'} ready to send
+          </span>
+          <span className="ml-auto flex gap-2">
+            <button type="button" className={GHOST_BTN} onClick={() => onDiscardEdits(unit)}>
+              Discard
+            </button>
+            <button type="button" className={PRIMARY_BTN} onClick={() => onSendEdits(unit)}>
+              Review &amp; send…
+            </button>
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(26rem,100%),1fr))] items-start gap-4">
         {results.map((result) => (
-          <CallResult key={result.key} result={result} format={format} canChange={canChange} onChange={onChange} />
+          <CallResult key={result.key} result={result} format={format} canChange={canChange} edits={edits} onEdit={onEdit} />
         ))}
       </div>
     </section>

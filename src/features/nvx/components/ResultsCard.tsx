@@ -38,11 +38,14 @@ type ResultsCardProps = {
   running: boolean
   onClear: () => void
   canChange: boolean
-  onChange: (unit: NvxUnit, path: string, value: SettingValue) => void
+  edits: Readonly<Record<string, Readonly<Record<string, SettingValue>>>>
+  onEdit: (unit: NvxUnit, path: string, value: SettingValue | undefined) => void
+  onSendEdits: (unit: NvxUnit) => void
+  onDiscardEdits: (unit: NvxUnit) => void
 }
 
 /** The answers of the last run: a section per unit, or — with several units — one table comparing them. */
-export function ResultsCard({ results, units, running, onClear, canChange, onChange }: ResultsCardProps) {
+export function ResultsCard({ results, units, running, onClear, canChange, edits, onEdit, onSendEdits, onDiscardEdits }: ResultsCardProps) {
   const [view, setView] = useState<View>('units')
   const [format, setFormat] = useState<AnswerFormat>('table')
   const [onlyDifferences, setOnlyDifferences] = useState(false)
@@ -105,7 +108,10 @@ export function ResultsCard({ results, units, running, onClear, canChange, onCha
               running={running}
               format={format}
               canChange={canChange}
-              onChange={onChange}
+              edits={edits}
+              onEdit={onEdit}
+              onSendEdits={onSendEdits}
+              onDiscardEdits={onDiscardEdits}
             />
           ))}
       </div>
