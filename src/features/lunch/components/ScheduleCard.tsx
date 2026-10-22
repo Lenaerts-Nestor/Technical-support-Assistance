@@ -3,7 +3,7 @@ import type { DragEvent } from 'react'
 import { SHIFT_LABELS } from '../config'
 import { applyMove, coverageLost } from '../coverage'
 import { boardNames } from '../board'
-import { teamsText } from '../teamsText'
+import { teamsHtml, teamsText } from '../teamsText'
 import type { LunchPlanner } from '../useLunchPlanner'
 import type { Agent, LanguageWarning, ShiftNo } from '../types'
 import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
@@ -130,7 +130,9 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   }
 
   const copyText = async () => {
-    const ok = await copy(teamsText(boardNames(board)))
+    const names = boardNames(board)
+    // Both flavours at once: Teams takes the bold headings, a plain-text field gets the text.
+    const ok = await copy(teamsText(names), 'default', teamsHtml(names))
     setCopyFailed(!ok)
   }
 

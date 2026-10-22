@@ -6,7 +6,8 @@ import type { AvailabilityFilter, SortDirection } from '../roster'
 import type { Agent } from '../types'
 import { COLUMNS } from './rosterColumns'
 import { ConfirmDialog } from './ConfirmDialog'
-import { RefreshIcon, SearchIcon, SortIcon } from './icons'
+import { ChevronIcon, RefreshIcon, SearchIcon, SortIcon } from './icons'
+import { storageKey, usePersistentState } from '../../../shared/storage/usePersistentState'
 import { PlusIcon, TrashIcon } from '../../../shared/ui/icons'
 import {
   CARD,
@@ -37,6 +38,12 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
   const [newName, setNewName] = useState('')
   const [addError, setAddError] = useState('')
   const [deleting, setDeleting] = useState<Agent | null>(null)
+  // Remembered per browser, like the sidebar: a long roster is mostly out of the way once it is set up.
+  const [open, setOpen] = usePersistentState<boolean>(
+    storageKey('lunch', 'rosterOpen'),
+    () => true,
+    (raw) => (typeof raw === 'boolean' ? raw : null),
+  )
 
   const rows = useMemo(() => {
     const column = COLUMNS.find((c) => c.id === sort.column) ?? COLUMNS[0]
@@ -67,25 +74,35 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
   return (
     <section className={CARD} aria-labelledby="lunch-roster-title">
       <div className={CARD_HEADER}>
-        <div className="flex items-center gap-2.5">
-          <h3 id="lunch-roster-title" className="text-ink text-sm font-bold tracking-tight">
+        <h3 id="lunch-roster-title" className="text-ink text-sm font-bold tracking-tight">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-controls="lunch-roster-body"
+            className="flex items-center gap-2.5 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand"
+          >
+            <ChevronIcon className={`text-ink-muted h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
             Agents
-          </h3>
-          <span className={COUNT_BADGE}>
-            {agents.length} · {availableCount} in today
-          </span>
-        </div>
-        <button
-          type="button"
-          className={GHOST_BTN}
-          onClick={onRefillYesterday}
-          title="Fill in Yesterday's shift again from the last saved working day (Monday reads Friday)"
-        >
-          <RefreshIcon className="h-3.5 w-3.5" />
-          Fill yesterday from history
-        </button>
+            <span className={COUNT_BADGE}>
+              {agents.length} · {availableCount} in today
+            </span>
+          </button>
+        </h3>
+        {open && (
+          <button
+            type="button"
+            className={GHOST_BTN}
+            onClick={onRefillYesterday}
+            title="Fill in Yesterday's shift again from the last saved working day (Monday reads Friday)"
+          >
+            <RefreshIcon className="h-3.5 w-3.5" />
+            Fill yesterday from history
+          </button>
+        )}
       </div>
 
+      <div id="lunch-roster-body" hidden={!open}>
       <div className="flex flex-wrap items-end gap-3 px-4 pt-4">
         <label className="block min-w-48 flex-1">
           <span className={SECTION_LABEL}>Search</span>
@@ -204,6 +221,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
         {agents.length > 0 && rows.length === 0 && (
           <p className="text-ink-muted px-2 py-6 text-center text-sm">No agent matches this search.</p>
         )}
+      </div>
       </div>
 
       {deleting && (

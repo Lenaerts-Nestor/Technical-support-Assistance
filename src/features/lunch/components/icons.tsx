@@ -67,3 +67,11 @@ export function CheckIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function ChevronIcon({ className }: IconProps) {
+  return (
+    <svg {...ICON_BASE} className={className} aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
