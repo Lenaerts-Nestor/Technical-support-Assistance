@@ -1,7 +1,7 @@
 # Support Hub
 
 A dashboard for support work: voice-call notes, RMA, cases, step-by-step guides and
-quick links, and a personal calendar of days off. Guides, links, case snippets and the calendar are saved into one folder on your
+quick links, a personal calendar of days off, and a lunch-shift planner. Guides, links, case snippets and the calendar are saved into one folder on your
 computer that you pick once on the **Sync** page (Chrome or Edge on desktop).
 
 ## The linked folder
@@ -43,6 +43,23 @@ grid. The calendar follows today's date by itself. Entries are plain JSON
 (`{ "entries": [{ "date": "2026-10-15", "kind": "pto" | "other", "note": "" }] }`), kept
 in `calendar.json` in your own linked folder. It has no Sync card of its own, so it is never
 part of a Links or Snippets export — only your full backup carries it.
+
+## Lunch Planner
+
+Keep the agent table (name, languages, chat agent, early shift, available today, yesterday's
+shift), press **Generate** for a fair two-shift lunch schedule, then adjust it by hand —
+drag an agent onto a card in the other shift to swap, onto the column to move, or use the
+**Swap** button from the keyboard. A swap that leaves a language uncovered in a shift asks
+for confirmation; warnings update after every change. **Save today's schedule** stores the
+day, and the next working day's "Yesterday's shift" is filled in from it (Monday reads
+Friday). **Copy for Teams** copies the plain-text schedule. The roster imports from
+CSV (Excel, `,` or `;` separated) or JSON and exports to both; the JSON export also carries
+the history. Everything is stored in this browser only — not in the linked folder.
+
+Where to change things (all under `src/features/lunch/`): `config.ts` holds the language
+list and history length; `scheduler.ts` holds the scheduling rules and their weights at the
+top; `lunchStorage.ts` is the only file that touches `localStorage` (swap it for a backend
+there); `components/rosterColumns.tsx` lists the table's columns.
 
 ## Updates
 
