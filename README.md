@@ -52,7 +52,7 @@ drag an agent onto a card in the other shift to swap, onto the column to move, o
 **Swap** button from the keyboard. A swap that leaves a language uncovered in a shift asks
 for confirmation; warnings update after every change. **Save today's schedule** stores the
 day, and the next working day's "Yesterday's shift" is filled in from it (Monday reads
-Friday). **Copy for Teams** copies the plain-text schedule. The roster imports from
+Friday). **Copy for Teams** copies the schedule (bold headings when pasted into Teams, plain text elsewhere). The roster imports from
 CSV (Excel, `,` or `;` separated) or JSON and exports to both; the JSON export also carries
 the history. Everything is stored in this browser only — not in the linked folder.
 

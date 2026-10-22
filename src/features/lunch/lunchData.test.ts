@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { lastWorkingEntry, mergeHistory, recentHistory, saveEntry, shiftOnEntry } from './history'
 import { exportJson, parseImport, parseRosterCsv, rosterToCsv } from './lunchFile'
 import { applyYesterday, filterAgents, reviveLunchData, rollOver, sortAgents } from './roster'
-import { teamsText } from './teamsText'
+import { teamsHtml, teamsText } from './teamsText'
 import { agent } from './testHelpers'
 import type { HistoryEntry, LunchData } from './types'
 
@@ -177,15 +177,35 @@ describe('import', () => {
 describe('teamsText', () => {
   const day = { shift1: ['Anna', 'Bram'], shift2: ['Cleo'], chat: ['Anna', 'Cleo'], out: ['Dirk'], notes: [] as string[] }
 
-  it('writes the agreed plain-text layout', () => {
+  it('writes the agreed plain-text layout, with a blank line between the sections', () => {
     expect(teamsText(day)).toBe(
-      ["TODAY'S SCHEDULE", 'LUNCH SHIFT:', '1st: Anna, Bram', '2nd: Cleo', 'CHAT', 'Anna, Cleo', 'PTO/OOO', 'Dirk'].join('\n'),
+      [
+        "TODAY'S SCHEDULE",
+        '',
+        'LUNCH SHIFT:',
+        '1st: Anna, Bram',
+        '2nd: Cleo',
+        '',
+        'CHAT',
+        'Anna, Cleo',
+        '',
+        'PTO/OOO',
+        'Dirk',
+      ].join('\n'),
     )
   })
 
   it('adds NOTES only when there are warnings', () => {
     const text = teamsText({ ...day, notes: ['No Dutch speaker in Shift 2'], out: [] })
-    expect(text.endsWith('PTO/OOO\n-\nNOTES\nNo Dutch speaker in Shift 2')).toBe(true)
+    expect(text.endsWith('PTO/OOO\n-\n\nNOTES\nNo Dutch speaker in Shift 2')).toBe(true)
     expect(teamsText(day)).not.toContain('NOTES')
+  })
+
+  it('bolds the headings in the rich copy and escapes names', () => {
+    const html = teamsHtml({ ...day, shift1: ['A<b>'] })
+    for (const heading of ["TODAY'S SCHEDULE", 'LUNCH SHIFT:', 'CHAT', 'PTO/OOO']) expect(html).toContain(`<b>${heading}</b>`)
+    expect(html).toContain('1st: A&lt;b&gt;')
+    expect(html).not.toContain('<b>1st')
+    expect(html).not.toContain('NOTES')
   })
 })
