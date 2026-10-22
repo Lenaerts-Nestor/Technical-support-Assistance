@@ -69,13 +69,16 @@ export default function App() {
               away from a half-filled form mid-call and coming back keeps it. Each
               page owns its scrollport (rather than one shared one on <main>), which
               also keeps each page's scroll position and lets a sticky header pin
-              flush to the top of its own page.
+              flush to the top of its own page. `relative` makes the scrollport the
+              containing block for absolutely positioned children (`sr-only` text):
+              without it they escape the scrollport and stretch the whole window's
+              scroll height, so the app itself scrolls past the sidebar.
             */}
             <main className="flex-1 overflow-hidden">
               {NAV_ITEMS.map(({ id }) => {
                 const Page = PAGES[id]
                 return (
-                  <div key={id} hidden={id !== page} className="h-full overflow-y-auto">
+                  <div key={id} hidden={id !== page} className="relative h-full overflow-y-auto">
                     <ErrorBoundary>
                       <FocusModeContext.Provider value={setFocus}>
                         <Page />
