@@ -45,8 +45,8 @@ export function SectionCard({ section, index, count, links, editing, searching, 
 
   return (
     <section
-      // A fixed height, not "as tall as its links": the list scrolls inside, so the board stays an even grid however many links a section holds.
-      className={`${CARD} flex h-[clamp(16rem,38vh,26rem)] flex-col border-l-4 ${tone.bar} p-3 ${dropTarget ? 'ring-brand ring-2' : ''}`}
+      // Fills its grid row (the page sizes rows so eight cards fit the window); the list scrolls inside, so the board stays even however many links a section holds.
+      className={`${CARD} flex h-full min-h-0 snap-start flex-col border-l-4 ${tone.bar} p-3 ${dropTarget ? 'ring-brand ring-2' : ''}`}
       onDragOver={(e) => {
         if (!canReorder || !e.dataTransfer.types.includes(DRAG_TYPE)) return
         e.preventDefault()
