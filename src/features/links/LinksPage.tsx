@@ -29,8 +29,8 @@ export function LinksPage() {
     : undefined
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6 px-8 py-7">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <div className="mx-auto flex h-full min-h-[34rem] max-w-[1600px] flex-col gap-6 px-8 py-7">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className={PAGE_TITLE}>Links</h2>
           <p className={PAGE_SUBTITLE}>
@@ -82,8 +82,9 @@ export function LinksPage() {
             : 'No sections yet. Use Edit, then Add section to create one.'}
         </div>
       ) : (
-        // Every card is the same height (see SectionCard), so one long section never leaves its neighbours looking short.
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
+        // The grid is its own scrollport and sized to the window: two rows of cards (four columns on wide screens)
+        // fill it exactly, so eight cards are always in view. More sections scroll in one row at a time (snap).
+        <div className="-m-1 grid min-h-0 flex-1 scroll-p-1 snap-y snap-mandatory auto-rows-[calc((100%_-_(var(--rows)_-_1)_*_1rem)_/_var(--rows))] grid-cols-2 gap-4 overflow-y-auto overscroll-contain p-1 [--rows:4] xl:grid-cols-4 xl:[--rows:2]">
           {shown.map((section) => (
             <SectionCard
               key={section.id}
@@ -101,7 +102,7 @@ export function LinksPage() {
       )}
 
       {editing && addingSection && (
-        <div className="max-w-sm">
+        <div className="max-w-sm shrink-0">
           <LinkForm
             withUrl={false}
             labelPlaceholder="Section name"
