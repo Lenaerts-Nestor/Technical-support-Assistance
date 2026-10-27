@@ -11,31 +11,27 @@ import type { Agent } from './types'
  *   a) a language with 2+ speakers missing from a shift   UNCOVERED_LANGUAGE
  *   c) a language spread unevenly over the shifts         LANGUAGE_BALANCE   (per head of imbalance)
  *   d) the shifts differing in size / in chat agents      SIZE_BALANCE, CHAT_BALANCE
- *   e) staying on yesterday's shift                       SAME_AS_YESTERDAY  (soft, applied at random)
- *   f) an early-shift agent landing in Shift 2            EARLY_SHIFT_IN_2   (soft)
+ *   e) an early-shift agent landing in Shift 2            EARLY_SHIFT_IN_2   (soft)
+ *   f) staying on yesterday's shift                       SAME_AS_YESTERDAY  (soft, every agent, every run)
  *
  * Rule b) (a lone speaker goes anywhere) needs no weight: a language with one
  * speaker cannot be covered or unbalanced, so it never costs anything. Imbalance is
  * counted beyond what the numbers force — 3 speakers can only split 2/1, and that
  * is not penalised.
  *
- * Keep the gaps between tiers wide: the preferences (e, f) summed over a whole team
- * must stay below one unit of balance, or a preference could beat a hard rule.
+ * Keep the gaps between tiers wide: a single soft preference must stay below one unit
+ * of balance, or one agent's wish could beat a rule. Together the preferences may add
+ * up over a big team, which is the point — everybody swapping sides is a valid way to
+ * keep balance and language cover, so it wins whenever the hard rules allow it.
  */
 export const WEIGHTS = {
   UNCOVERED_LANGUAGE: 10_000,
   LANGUAGE_BALANCE: 100,
   SIZE_BALANCE: 80,
   CHAT_BALANCE: 80,
-  EARLY_SHIFT_IN_2: 5,
-  SAME_AS_YESTERDAY: 4,
+  EARLY_SHIFT_IN_2: 60,
+  SAME_AS_YESTERDAY: 40,
 }
-
-/**
- * Chance that "move away from yesterday's shift" applies to a given agent in one run.
- * Below 1 on purpose: it is what stops every agent from flipping every day.
- */
-export const YESTERDAY_FLIP_CHANCE = 0.75
 
 /** Random per-agent noise added to the soft preferences, so equal splits come out differently each time. */
 export const TIE_BREAK_NOISE = 1
@@ -66,11 +62,10 @@ export function generateSchedule(agents: Agent[], { rng = Math.random }: Options
 
   // Soft preferences: penalty[i][s] is what agent i costs when placed in shift s (0 = Shift 1).
   const penalty = pool.map((a) => {
-    const flip = rng() < YESTERDAY_FLIP_CHANCE
     return [0, 1].map(
       (s) =>
         (a.earlyShift && s === 1 ? WEIGHTS.EARLY_SHIFT_IN_2 : 0) +
-        (flip && a.yesterdayShift === s + 1 ? WEIGHTS.SAME_AS_YESTERDAY : 0) +
+        (a.yesterdayShift === s + 1 ? WEIGHTS.SAME_AS_YESTERDAY : 0) +
         rng() * TIE_BREAK_NOISE,
     )
   })
@@ -155,16 +150,39 @@ export function generateSchedule(agents: Agent[], { rng = Math.random }: Options
   let bestCost = Infinity
   for (let r = 0; r < RESTARTS; r++) {
     // Start from a random split with equal sizes; the search refines it from there.
+    // The first start is yesterday turned around (everybody on the other shift), which
+    // is usually already balanced and covered, so the search only has to fix the edges.
     const order = shuffled()
     const half = Math.floor(n / 2) + (n % 2 && rng() < 0.5 ? 1 : 0)
     size.fill(0)
     chat.fill(0)
     count.forEach((c) => c.fill(0))
     preference = 0
-    order.forEach((i, k) => {
-      shift[i] = k < half ? 0 : 1
-      place(i, shift[i], 1)
-    })
+    if (r === 0) {
+      const start = new Array<number>(n).fill(-1)
+      const filled = [0, 0]
+      for (const i of order) {
+        const y = pool[i].yesterdayShift
+        if (y) {
+          start[i] = y === 1 ? 1 : 0
+          filled[start[i]]++
+        }
+      }
+      for (const i of order) {
+        if (start[i] >= 0) continue
+        start[i] = filled[0] <= filled[1] ? 0 : 1
+        filled[start[i]]++
+      }
+      start.forEach((s, i) => {
+        shift[i] = s
+        place(i, s, 1)
+      })
+    } else {
+      order.forEach((i, k) => {
+        shift[i] = k < half ? 0 : 1
+        place(i, shift[i], 1)
+      })
+    }
     const finished = descend()
     if (finished < bestCost) {
       bestCost = finished

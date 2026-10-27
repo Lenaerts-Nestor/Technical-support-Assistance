@@ -10,8 +10,14 @@ export const LANGUAGES: { name: string; code: string }[] = [
   { name: 'German', code: 'DE' },
   { name: 'Italian', code: 'IT' },
   { name: 'Spanish', code: 'ES' },
-  { name: 'English', code: 'EN' },
 ]
+
+/**
+ * Spoken by everyone on the team, so it is never tracked or scheduled for. Old saved
+ * data and imports that still carry it have it removed on the way in.
+ */
+const ASSUMED_LANGUAGES = ['english', 'en']
+export const isAssumedLanguage = (name: string) => ASSUMED_LANGUAGES.includes(name.trim().toLowerCase())
 
 /** How many days the history view shows (and keeps when saving). */
 export const HISTORY_DAYS = 30

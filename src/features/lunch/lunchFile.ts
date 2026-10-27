@@ -1,4 +1,4 @@
-import { LANGUAGES } from './config'
+import { LANGUAGES, isAssumedLanguage } from './config'
 import { nameKey, newAgent, reviveAgents } from './roster'
 import { reviveHistory } from './history'
 import type { Agent, HistoryEntry, ShiftNo } from './types'
@@ -134,7 +134,7 @@ export function parseRosterCsv(text: string): RosterImport {
     const languages: string[] = []
     for (const token of (cell('languages') ?? '').split(/[,;/|]+/)) {
       const trimmed = token.trim()
-      if (!trimmed) continue
+      if (!trimmed || isAssumedLanguage(trimmed)) continue
       const language = canonicalLanguage(trimmed)
       if (!language) unknown.add(trimmed)
       const kept = language ?? trimmed

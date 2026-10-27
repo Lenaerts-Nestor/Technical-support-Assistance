@@ -63,12 +63,31 @@ describe('a new day', () => {
     ...over,
   })
 
-  it('fills yesterday from history, resets availability and drops the old schedule', () => {
+  it('fills yesterday from history, remembers who is away and drops the old schedule', () => {
     const next = rollOver(data(), '2026-10-19') // Monday
     expect(next.agents.map((a) => a.yesterdayShift)).toEqual([1, 2, null])
-    expect(next.agents.every((a) => a.available)).toBe(true)
+    expect(next.agents.map((a) => a.available)).toEqual([false, true, true])
     expect(next.schedule).toBeNull()
     expect(next.syncedDate).toBe('2026-10-19')
+  })
+
+  it('files an unsaved schedule in the history so tomorrow can read it', () => {
+    const next = rollOver(
+      data({
+        agents: [agent('Anna'), agent('Bram'), agent('Cleo', { available: false })],
+        history: [],
+        schedule: { date: '2026-10-16', shift1: ['bram'], shift2: ['anna', 'cleo'] },
+      }),
+      '2026-10-19',
+    )
+    expect(next.history).toHaveLength(1)
+    expect(next.history[0]).toMatchObject({ date: '2026-10-16', shift1: ['Bram'], shift2: ['Anna'], out: ['Cleo'] })
+    expect(next.agents.map((a) => a.yesterdayShift)).toEqual([2, 1, null])
+  })
+
+  it('keeps a day that was saved on purpose', () => {
+    const saved = data()
+    expect(rollOver(saved, '2026-10-19').history).toEqual(saved.history)
   })
 
   it('runs once per day and keeps manual edits made afterwards', () => {
@@ -89,7 +108,7 @@ describe('a new day', () => {
 
 describe('roster table', () => {
   const agents = [
-    agent('Bram', { languages: ['Dutch', 'English'], available: false, yesterdayShift: 2 }),
+    agent('Bram', { languages: ['Dutch'], available: false, yesterdayShift: 2 }),
     agent('anna', { languages: ['French'], chat: true, yesterdayShift: 1 }),
     agent('Cleo', { languages: ['German'] }),
   ]
@@ -121,17 +140,27 @@ describe('stored data', () => {
   })
 })
 
+describe('English', () => {
+  it('is dropped from stored agents and imports, since everybody speaks it', () => {
+    const data = reviveLunchData({ agents: [{ name: 'Anna', languages: ['Dutch', 'English', 'en'] }] })
+    expect(data?.agents[0].languages).toEqual(['Dutch'])
+    const { agents, unknownLanguages } = parseRosterCsv('Name,Languages\nAnna,"Dutch, English, EN"')
+    expect(agents[0].languages).toEqual(['Dutch'])
+    expect(unknownLanguages).toEqual([])
+  })
+})
+
 describe('roster CSV', () => {
   it('reads the columns of the table, whatever their order, case or delimiter', () => {
     const text = [
       "Available today;Agent name;Languages;Yesterday's shift;Chat agent;Early shift",
-      'Yes;Anna;Dutch; English;1;Yes;No'.replace('; English', ', English'),
+      'Yes;Anna;Dutch, Italian;1;Yes;No',
       'No;"Bram, B.";"fr;DE";2;no;ja',
       ';Cleo;;;;',
     ].join('\n')
     const { agents } = parseRosterCsv(text)
     expect(agents.map((a) => a.name)).toEqual(['Anna', 'Bram, B.', 'Cleo'])
-    expect(agents[0]).toMatchObject({ languages: ['Dutch', 'English'], available: true, yesterdayShift: 1, chat: true, earlyShift: false })
+    expect(agents[0]).toMatchObject({ languages: ['Dutch', 'Italian'], available: true, yesterdayShift: 1, chat: true, earlyShift: false })
     expect(agents[1]).toMatchObject({ languages: ['French', 'German'], available: false, yesterdayShift: 2, chat: false, earlyShift: true })
     expect(agents[2]).toMatchObject({ available: true, languages: [], yesterdayShift: null })
   })

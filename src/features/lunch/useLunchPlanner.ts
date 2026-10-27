@@ -29,6 +29,8 @@ export type LunchPlanner = {
   removeAgent: (id: string) => void
   /** Fill "yesterday's shift" again from the last saved working day. */
   refillYesterday: () => void
+  /** Mark every agent as in today. Absences carry over from day to day until this (or an edit) clears them. */
+  markAllAvailable: () => void
   generate: () => void
   /** Replace the shifts, e.g. after a swap. */
   setAssignment: (next: Assignment) => void
@@ -117,6 +119,11 @@ export function useLunchPlanner(): LunchPlanner | null {
     [update, today],
   )
 
+  const markAllAvailable = useCallback(
+    () => update((d) => ({ ...d, agents: d.agents.map((a) => (a.available ? a : { ...a, available: true })) })),
+    [update],
+  )
+
   const generate = useCallback(
     () => update((d) => ({ ...d, schedule: { date: today, ...generateSchedule(d.agents) } })),
     [update, today],
@@ -163,6 +170,7 @@ export function useLunchPlanner(): LunchPlanner | null {
     updateAgent,
     removeAgent,
     refillYesterday,
+    markAllAvailable,
     generate,
     setAssignment,
     saveToday,
