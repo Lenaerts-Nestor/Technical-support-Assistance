@@ -7,6 +7,8 @@ import { teamsHtml, teamsText } from '../teamsText'
 import type { LunchPlanner } from '../useLunchPlanner'
 import type { Agent, LanguageWarning, ShiftNo } from '../types'
 import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
+import { PUBLISHERS } from '../../shift/config'
+import { useSharedShift } from '../../shift/sharedShiftContext'
 import {
   CARD,
   CARD_HEADER,
@@ -45,6 +47,9 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   const [announcement, setAnnouncement] = useState('')
   const { copied, copy } = useCopyToClipboard()
   const [copyFailed, setCopyFailed] = useState(false)
+  const shared = useSharedShift()
+  /** Whether the last Copy for Teams also reached the team, and for which schedule (a later change makes it stale). */
+  const [shareResult, setShareResult] = useState<{ ok: boolean; forText: string } | null>(null)
   /** The card being dragged. A ref, not state: a drop can land before React has re-rendered. */
   const dragging = useRef<string | null>(null)
   /** True while a card is being dragged, as opposed to picked with the Swap button. */
@@ -132,9 +137,23 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   const copyText = async () => {
     const names = boardNames(board)
     // Both flavours at once: Teams takes the bold headings, a plain-text field gets the text.
-    const ok = await copy(teamsText(names), 'default', teamsHtml(names))
+    const text = teamsText(names)
+    const ok = await copy(text, 'default', teamsHtml(names))
     setCopyFailed(!ok)
+    // Kevin C / Nestor: the same press also shows each agent their own shift in their sidebar.
+    if (ok && shared.canPublish) {
+      const sent = await shared.publish({
+        day: planner.today,
+        shift1: names.shift1,
+        shift2: names.shift2,
+        team: agents.map((a) => a.name),
+      })
+      setShareResult({ ok: sent, forText: text })
+    } else {
+      setShareResult(null)
+    }
   }
+  const currentText = teamsText(boardNames(board))
 
   const columnFor = (shift: ShiftNo, list: Agent[]) => (
     <ShiftColumn
@@ -187,6 +206,22 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         {copyFailed && (
           <p role="alert" className="text-sm font-semibold text-rose-300">
             Could not copy to the clipboard. Allow clipboard access for this site and try again.
+          </p>
+        )}
+        {shareResult?.forText === currentText &&
+          (shareResult.ok ? (
+            <p role="status" className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+              <CheckIcon className="h-4 w-4" />
+              Shared with the team: everyone who picked their name sees their shift in the sidebar.
+            </p>
+          ) : (
+            <p role="alert" className="text-sm font-semibold text-rose-300">
+              Copied, but the shifts could not be shared with the team. Check the connection and press Copy for Teams again.
+            </p>
+          ))}
+        {shared.enabled && !shared.canPublish && (
+          <p className="text-ink-muted text-xs">
+            Only {PUBLISHERS.join(' and ')} share the shifts when copying for Teams. Choose who you are under “I am” in the sidebar.
           </p>
         )}
 

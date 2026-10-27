@@ -19,6 +19,9 @@ export type LunchStorage = {
 
 const KEY = storageKey('lunch', 'data')
 
+/** Fired on `window` after every save, so the sidebar's "I am" list follows roster edits. */
+export const LUNCH_SAVED_EVENT = 'support-hub:lunch-saved'
+
 const localStorageBackend: LunchStorage = {
   async load() {
     try {
@@ -31,6 +34,7 @@ const localStorageBackend: LunchStorage = {
   },
   async save(data) {
     window.localStorage.setItem(KEY, JSON.stringify(data))
+    window.dispatchEvent(new Event(LUNCH_SAVED_EVENT))
   },
 }
 
