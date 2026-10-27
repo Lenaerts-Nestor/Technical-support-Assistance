@@ -10,7 +10,7 @@ export const SHARED_SHIFT = {
    * It is meant to be public: what it may do is decided by the policies in lunch_shift.sql.
    * Never put the secret / service_role key here.
    */
-  key: '',
+  key: 'sb_publishable_JR5Gj04HlXToejD9hiOzLg_wYQ2wwpA',
 }
 
 /** Who may share the shifts when pressing Copy for Teams. Keep in step with publish_lunch_shift() in supabase/lunch_shift.sql. */
