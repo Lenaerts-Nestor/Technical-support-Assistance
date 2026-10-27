@@ -43,6 +43,12 @@ export function shiftOnEntry(entry: HistoryEntry, name: string): ShiftNo | null 
   return null
 }
 
+/** Whether the entry lists this agent as out (PTO / OOO) that day. */
+export function wasOutOnEntry(entry: HistoryEntry, name: string): boolean {
+  const key = nameKey(name)
+  return entry.out.some((n) => nameKey(n) === key)
+}
+
 const asStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
 

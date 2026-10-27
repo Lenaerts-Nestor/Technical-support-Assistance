@@ -32,6 +32,9 @@ type RosterCardProps = {
   onMarkAllAvailable: () => void
 }
 
+/** Columns the "hide" toggle folds away: set once per agent, so mostly noise afterwards. */
+const HIDEABLE = new Set(['chat', 'languages'])
+
 /** The agent table: search, filter, sort by any column, edit in place, add and delete. */
 export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterday, onMarkAllAvailable }: RosterCardProps) {
   const [query, setQuery] = useState('')
@@ -46,18 +49,18 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
     () => true,
     (raw) => (typeof raw === 'boolean' ? raw : null),
   )
-  // The same people usually handle chat, so that column is mostly noise once it is set up.
+  // The same people usually handle chat and speak the same languages, so those columns are mostly noise once set up.
   const [chatHidden, setChatHidden] = usePersistentState<boolean>(
     storageKey('lunch', 'chatColumnHidden'),
     () => false,
     (raw) => (typeof raw === 'boolean' ? raw : null),
   )
-  const columns = useMemo(() => COLUMNS.filter((c) => !(chatHidden && c.id === 'chat')), [chatHidden])
+  const columns = useMemo(() => COLUMNS.filter((c) => !(chatHidden && HIDEABLE.has(c.id))), [chatHidden])
 
   const rows = useMemo(() => {
-    const column = COLUMNS.find((c) => c.id === sort.column) ?? COLUMNS[0]
+    const column = columns.find((c) => c.id === sort.column) ?? columns[0]
     return sortAgents(filterAgents(agents, query, availability), column.sortValue, sort.direction)
-  }, [agents, query, availability, sort])
+  }, [agents, query, availability, sort, columns])
 
   const availableCount = agents.filter((a) => a.available).length
   const awayCount = agents.length - availableCount
@@ -129,7 +132,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
 
       <div id="lunch-roster-body" hidden={!open}>
       <div className="flex flex-wrap items-end gap-3 px-4 pt-4">
-        <label className="block min-w-48 flex-1">
+        <label className="block w-56">
           <span className={SECTION_LABEL}>Search</span>
           <span className="relative mt-1 block">
             <SearchIcon className="text-ink-faint pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
@@ -178,10 +181,10 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
           type="button"
           onClick={() => setChatHidden((v) => !v)}
           aria-pressed={chatHidden}
-          title="Hide or show the Chat agent column"
+          title="Hide or show the Chat agent and Languages columns"
           className={`${GHOST_BTN_MD} ml-auto`}
         >
-          {chatHidden ? 'Show chat column' : 'Hide chat column'}
+          {chatHidden ? 'Show chat & language columns' : 'Hide chat & language columns'}
         </button>
       </div>
       {addError && (
