@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { LANGUAGES } from '../config'
 import { knownLanguages } from '../coverage'
 import type { Agent, ShiftNo } from '../types'
-import { INPUT, SELECT } from '../../../shared/ui/styles'
+import { INPUT } from '../../../shared/ui/styles'
 
 /** The editable cells of the roster table. One small component per kind of value. */
 
@@ -100,17 +100,33 @@ export function YesNoCell({ label, on, onChange }: YesNoCellProps) {
 
 type ShiftCellProps = { label: string; value: ShiftNo | null; onChange: (value: ShiftNo | null) => void }
 
+const SHIFT_BUTTON: Record<ShiftNo, string> = {
+  1: 'border-sky-300 bg-sky-400 text-sky-950 shadow-[0_0_0_1px_rgb(125_211_252/0.5)]',
+  2: 'border-green-300 bg-green-400 text-green-950 shadow-[0_0_0_1px_rgb(134_239_172/0.5)]',
+}
+
+/** Shift 1 / Shift 2 as two buttons side by side. Pressing the lit one again clears the value. */
 export function ShiftCell({ label, value, onChange }: ShiftCellProps) {
   return (
-    <select
-      aria-label={label}
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value === '' ? null : (Number(e.target.value) as ShiftNo))}
-      className={SELECT}
-    >
-      <option value="">–</option>
-      <option value="1">1</option>
-      <option value="2">2</option>
-    </select>
+    <div role="group" aria-label={label} className="inline-flex gap-1">
+      {([1, 2] as const).map((shift) => {
+        const on = value === shift
+        return (
+          <button
+            key={shift}
+            type="button"
+            aria-pressed={on}
+            aria-label={`Shift ${shift}`}
+            title={on ? `Shift ${shift} (click to clear)` : `Shift ${shift}`}
+            onClick={() => onChange(on ? null : shift)}
+            className={`${FOCUS} w-9 rounded-md border px-2 py-1 text-xs font-extrabold transition-colors ${
+              on ? SHIFT_BUTTON[shift] : 'border-line-strong bg-field/60 text-ink-muted hover:text-ink'
+            }`}
+          >
+            {shift}
+          </button>
+        )
+      })}
+    </div>
   )
 }
