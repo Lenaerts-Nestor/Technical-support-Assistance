@@ -63,10 +63,10 @@ describe('a new day', () => {
     ...over,
   })
 
-  it('fills yesterday from history, remembers who is away and drops the old schedule', () => {
+  it('fills yesterday from history, takes availability from the last saved day and drops the old schedule', () => {
     const next = rollOver(data(), '2026-10-19') // Monday
     expect(next.agents.map((a) => a.yesterdayShift)).toEqual([1, 2, null])
-    expect(next.agents.map((a) => a.available)).toEqual([false, true, true])
+    expect(next.agents.map((a) => a.available)).toEqual([true, true, true])
     expect(next.schedule).toBeNull()
     expect(next.syncedDate).toBe('2026-10-19')
   })
@@ -83,6 +83,17 @@ describe('a new day', () => {
     expect(next.history).toHaveLength(1)
     expect(next.history[0]).toMatchObject({ date: '2026-10-16', shift1: ['Bram'], shift2: ['Anna'], out: ['Cleo'] })
     expect(next.agents.map((a) => a.yesterdayShift)).toEqual([2, 1, null])
+  })
+
+  it('marks whoever was out in the last saved day as not available', () => {
+    const entryWithOut = { ...entry('2026-10-16', ['Anna'], ['Bram']), out: ['cleo'] }
+    const next = applyYesterday(
+      [agent('Anna', { available: false }), agent('Bram'), agent('Cleo'), agent('Dora', { available: false })],
+      { history: [entryWithOut] },
+      '2026-10-19',
+    )
+    expect(next.map((a) => a.available)).toEqual([true, true, false, false]) // Dora is not in the entry: unchanged
+    expect(next.map((a) => a.yesterdayShift)).toEqual([1, 2, null, null])
   })
 
   it('keeps a day that was saved on purpose', () => {

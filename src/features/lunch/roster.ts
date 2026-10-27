@@ -1,6 +1,6 @@
 import { boardNames, deriveBoard } from './board'
 import { LANGUAGES, isAssumedLanguage } from './config'
-import { lastWorkingEntry, reviveHistory, saveEntry, shiftOnEntry } from './history'
+import { lastWorkingEntry, reviveHistory, saveEntry, shiftOnEntry, wasOutOnEntry } from './history'
 import type { Agent, LunchData, Schedule, ShiftNo } from './types'
 
 export const newId = () => crypto.randomUUID()
@@ -76,14 +76,20 @@ export function reviveLunchData(raw: unknown): LunchData | null {
 /* -- A new day -------------------------------------------------------------- */
 
 /**
- * Yesterday's shift for each agent, read from the last saved working day. Agents
- * the entry does not mention (they were out, or new) get `null`. Without any saved
+ * Carries the last saved working day over to the roster: each agent's yesterday
+ * shift (`null` for anyone the entry does not place), and availability — whoever
+ * was out that day is marked not available, whoever worked is marked available.
+ * An agent the entry does not mention (new) keeps what they had. Without any saved
  * day the roster is left as typed.
  */
 export function applyYesterday(agents: Agent[], data: Pick<LunchData, 'history'>, today: string): Agent[] {
   const entry = lastWorkingEntry(data.history, today)
   if (!entry) return agents
-  return agents.map((a) => ({ ...a, yesterdayShift: shiftOnEntry(entry, a.name) }))
+  return agents.map((a) => {
+    const yesterdayShift = shiftOnEntry(entry, a.name)
+    const available = wasOutOnEntry(entry, a.name) ? false : yesterdayShift !== null ? true : a.available
+    return { ...a, yesterdayShift, available }
+  })
 }
 
 /**
@@ -102,8 +108,9 @@ function archiveSchedule(data: LunchData, today: string): LunchData['history'] {
 /**
  * Brings stored data up to date for `today`: the first time a new day is seen, the
  * previous schedule is filed in the history if it was not saved, yesterday's shifts
- * are filled in from it and a schedule from an earlier day is dropped. Availability
- * is kept as it was: someone away stays away until marked available again. Idempotent
+ * are filled in from it (and so is who was out) and a schedule from an earlier day is dropped. Anyone
+ * not in that day's entry keeps their availability: someone away stays away until
+ * marked available again. Idempotent
  * — returns the same object when nothing is due.
  */
 export function rollOver(data: LunchData, today: string): LunchData {
