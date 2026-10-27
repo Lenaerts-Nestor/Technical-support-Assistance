@@ -42,6 +42,7 @@ export function LunchPlannerPage() {
             onUpdate={planner.updateAgent}
             onRemove={planner.removeAgent}
             onRefillYesterday={planner.refillYesterday}
+            onMarkAllAvailable={planner.markAllAvailable}
           />
           <ScheduleCard planner={planner} />
           <HistoryCard history={planner.history} today={planner.today} onDelete={planner.deleteHistory} />

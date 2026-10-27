@@ -1,5 +1,6 @@
-import { LANGUAGES } from './config'
-import { lastWorkingEntry, reviveHistory, shiftOnEntry } from './history'
+import { boardNames, deriveBoard } from './board'
+import { LANGUAGES, isAssumedLanguage } from './config'
+import { lastWorkingEntry, reviveHistory, saveEntry, shiftOnEntry } from './history'
 import type { Agent, LunchData, Schedule, ShiftNo } from './types'
 
 export const newId = () => crypto.randomUUID()
@@ -44,7 +45,7 @@ export function reviveAgents(raw: unknown): Agent[] {
     agents.push({
       id: typeof o.id === 'string' && o.id ? o.id : newId(),
       name,
-      languages: [...new Set(asStrings(o.languages))],
+      languages: [...new Set(asStrings(o.languages).filter((l) => !isAssumedLanguage(l)))],
       chat: asBool(o.chat, false),
       earlyShift: asBool(o.earlyShift, false),
       available: asBool(o.available, true),
@@ -86,16 +87,32 @@ export function applyYesterday(agents: Agent[], data: Pick<LunchData, 'history'>
 }
 
 /**
- * Brings stored data up to date for `today`: the first time a new day is seen,
- * yesterday's shifts are filled in from history, everybody is marked available
- * again (an absence belongs to one day) and a schedule from an earlier day is
- * dropped. Idempotent — returns the same object when nothing is due.
+ * Files away the schedule of an earlier day that was never saved, so "yesterday's
+ * shift" has something to read even when nobody pressed Save. A day that already has
+ * a saved entry is left alone.
+ */
+function archiveSchedule(data: LunchData, today: string): LunchData['history'] {
+  const { schedule } = data
+  if (!schedule || schedule.date >= today || data.history.some((e) => e.date === schedule.date)) return data.history
+  const board = deriveBoard(data.agents, schedule)
+  if (!board || board.shift1.length + board.shift2.length === 0) return data.history
+  return saveEntry(data.history, { date: schedule.date, ...boardNames(board) }, today)
+}
+
+/**
+ * Brings stored data up to date for `today`: the first time a new day is seen, the
+ * previous schedule is filed in the history if it was not saved, yesterday's shifts
+ * are filled in from it and a schedule from an earlier day is dropped. Availability
+ * is kept as it was: someone away stays away until marked available again. Idempotent
+ * — returns the same object when nothing is due.
  */
 export function rollOver(data: LunchData, today: string): LunchData {
   if (data.syncedDate === today) return data
+  const history = archiveSchedule(data, today)
   return {
     ...data,
-    agents: applyYesterday(data.agents, data, today).map((a) => ({ ...a, available: true })),
+    history,
+    agents: applyYesterday(data.agents, { history }, today),
     schedule: data.schedule?.date === today ? data.schedule : null,
     syncedDate: today,
   }

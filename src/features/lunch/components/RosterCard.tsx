@@ -6,7 +6,7 @@ import type { AvailabilityFilter, SortDirection } from '../roster'
 import type { Agent } from '../types'
 import { COLUMNS } from './rosterColumns'
 import { ConfirmDialog } from './ConfirmDialog'
-import { ChevronIcon, RefreshIcon, SearchIcon, SortIcon } from './icons'
+import { CheckIcon, ChevronIcon, RefreshIcon, SearchIcon, SortIcon } from './icons'
 import { storageKey, usePersistentState } from '../../../shared/storage/usePersistentState'
 import { PlusIcon, TrashIcon } from '../../../shared/ui/icons'
 import {
@@ -16,6 +16,7 @@ import {
   DELETE_BTN,
   EMPTY,
   GHOST_BTN,
+  GHOST_BTN_MD,
   INPUT,
   PRIMARY_BTN,
   SECTION_LABEL,
@@ -28,10 +29,11 @@ type RosterCardProps = {
   onUpdate: (id: string, patch: Partial<Omit<Agent, 'id'>>) => void
   onRemove: (id: string) => void
   onRefillYesterday: () => void
+  onMarkAllAvailable: () => void
 }
 
 /** The agent table: search, filter, sort by any column, edit in place, add and delete. */
-export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterday }: RosterCardProps) {
+export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterday, onMarkAllAvailable }: RosterCardProps) {
   const [query, setQuery] = useState('')
   const [availability, setAvailability] = useState<AvailabilityFilter>('all')
   const [sort, setSort] = useState<{ column: string; direction: SortDirection }>({ column: 'name', direction: 'asc' })
@@ -44,6 +46,13 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
     () => true,
     (raw) => (typeof raw === 'boolean' ? raw : null),
   )
+  // The same people usually handle chat, so that column is mostly noise once it is set up.
+  const [chatHidden, setChatHidden] = usePersistentState<boolean>(
+    storageKey('lunch', 'chatColumnHidden'),
+    () => false,
+    (raw) => (typeof raw === 'boolean' ? raw : null),
+  )
+  const columns = useMemo(() => COLUMNS.filter((c) => !(chatHidden && c.id === 'chat')), [chatHidden])
 
   const rows = useMemo(() => {
     const column = COLUMNS.find((c) => c.id === sort.column) ?? COLUMNS[0]
@@ -51,6 +60,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
   }, [agents, query, availability, sort])
 
   const availableCount = agents.filter((a) => a.available).length
+  const awayCount = agents.length - availableCount
   const isTaken = (name: string, exceptId: string) =>
     agents.some((a) => a.id !== exceptId && nameKey(a.name) === nameKey(name))
 
@@ -73,33 +83,48 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
 
   return (
     <section className={CARD} aria-labelledby="lunch-roster-title">
-      <div className={CARD_HEADER}>
-        <h3 id="lunch-roster-title" className="text-ink text-sm font-bold tracking-tight">
+      <div className={`${CARD_HEADER} flex-wrap`}>
+        <h3 id="lunch-roster-title" className="text-ink flex items-center gap-2.5 text-sm font-bold tracking-tight">
+          Agents
+          <span className={COUNT_BADGE}>
+            {agents.length} · {availableCount} in today
+          </span>
+        </h3>
+        <div className="flex flex-wrap items-center gap-2">
+          {open && awayCount > 0 && (
+            <button
+              type="button"
+              className={GHOST_BTN}
+              onClick={onMarkAllAvailable}
+              title="Absences are remembered from day to day. Mark everybody as in today again."
+            >
+              <CheckIcon className="h-3.5 w-3.5" />
+              Everyone available ({awayCount} away)
+            </button>
+          )}
+          {open && (
+            <button
+              type="button"
+              className={GHOST_BTN}
+              onClick={onRefillYesterday}
+              title="Fill in Yesterday's shift again from the last saved working day (Monday reads Friday)"
+            >
+              <RefreshIcon className="h-3.5 w-3.5" />
+              Fill yesterday from history
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls="lunch-roster-body"
-            className="flex items-center gap-2.5 rounded-md text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand"
+            title={open ? 'Hide the agent table to make room for the schedule' : 'Show the agent table'}
+            className={`${GHOST_BTN_MD} min-w-32`}
           >
-            <ChevronIcon className={`text-ink-muted h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
-            Agents
-            <span className={COUNT_BADGE}>
-              {agents.length} · {availableCount} in today
-            </span>
+            <ChevronIcon className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+            {open ? 'Hide table' : 'Show table'}
           </button>
-        </h3>
-        {open && (
-          <button
-            type="button"
-            className={GHOST_BTN}
-            onClick={onRefillYesterday}
-            title="Fill in Yesterday's shift again from the last saved working day (Monday reads Friday)"
-          >
-            <RefreshIcon className="h-3.5 w-3.5" />
-            Fill yesterday from history
-          </button>
-        )}
+        </div>
       </div>
 
       <div id="lunch-roster-body" hidden={!open}>
@@ -149,6 +174,15 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
             Add agent
           </button>
         </form>
+        <button
+          type="button"
+          onClick={() => setChatHidden((v) => !v)}
+          aria-pressed={chatHidden}
+          title="Hide or show the Chat agent column"
+          className={`${GHOST_BTN_MD} ml-auto`}
+        >
+          {chatHidden ? 'Show chat column' : 'Hide chat column'}
+        </button>
       </div>
       {addError && (
         <p id="lunch-add-error" role="alert" className="px-4 pt-2 text-sm font-semibold text-rose-300">
@@ -164,7 +198,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
             <caption className="sr-only">Agents, with their languages and today's status. Headings sort the table.</caption>
             <thead>
               <tr>
-                {COLUMNS.map((column) => {
+                {columns.map((column) => {
                   const active = sort.column === column.id
                   return (
                     <th
@@ -192,7 +226,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
             <tbody>
               {rows.map((agent) => (
                 <tr key={agent.id} className={`hover:bg-hover ${agent.available ? '' : 'opacity-70'}`}>
-                  {COLUMNS.map((column) => (
+                  {columns.map((column) => (
                     <td key={column.id} className="border-line-soft border-b px-2 py-1.5 align-middle">
                       {column.cell({
                         agent,

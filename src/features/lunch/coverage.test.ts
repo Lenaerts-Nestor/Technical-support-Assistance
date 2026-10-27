@@ -19,7 +19,7 @@ describe('analyzeSchedule', () => {
     const find = (kind: string, language: string) => warnings.find((w) => w.kind === kind && w.language === language)
     expect(find('single', 'Italian')?.message).toContain('Finn')
     expect(find('none', 'Spanish')).toBeDefined()
-    expect(find('none', 'English')).toBeDefined()
+    expect(find('none', 'English')).toBeUndefined() // spoken by everyone, never tracked
   })
 
   it('warns about a language with several speakers missing from a shift', () => {

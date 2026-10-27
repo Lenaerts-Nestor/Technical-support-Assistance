@@ -50,9 +50,17 @@ Keep the agent table (name, languages, chat agent, early shift, available today,
 shift), press **Generate** for a fair two-shift lunch schedule, then adjust it by hand —
 drag an agent onto a card in the other shift to swap, onto the column to move, or use the
 **Swap** button from the keyboard. A swap that leaves a language uncovered in a shift asks
-for confirmation; warnings update after every change. **Save today's schedule** stores the
-day, and the next working day's "Yesterday's shift" is filled in from it (Monday reads
-Friday). **Copy for Teams** copies the schedule (bold headings when pasted into Teams, plain text elsewhere). The roster imports from
+for confirmation; warnings update after every change. Everyone is assumed to speak English,
+so it is not tracked.
+
+**Generate** always turns the previous working day around: whoever was in Shift 1 goes to
+Shift 2 and the other way round, as far as language cover, balance and the early-shift
+preference allow. The previous day is read from the history; a schedule you generated but did
+not save is filed there automatically on the next day, and Monday reads Friday. **Save today's
+schedule** stores the day on purpose. Who is **not available** is remembered from day to day
+(use **Everyone available** to clear it). In the Agents card, **Hide table** folds the table away
+and **Hide chat column** drops the chat column — both are remembered in this browser.
+**Copy for Teams** copies the schedule (bold headings when pasted into Teams, plain text elsewhere). The roster imports from
 CSV (Excel, `,` or `;` separated) or JSON and exports to both; the JSON export also carries
 the history. Everything is stored in this browser only — not in the linked folder.
 
