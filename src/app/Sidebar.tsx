@@ -8,6 +8,8 @@ import { ICON_BTN } from '../shared/ui/styles'
 import { ICON_BASE } from '../shared/ui/iconBase'
 import { ThemeSwitcher } from '../shared/theme/ThemeSwitcher'
 import { SidebarClock } from './SidebarClock'
+import { SidebarShift } from './SidebarShift'
+import { SidebarIdentity } from './SidebarIdentity'
 
 const ICONS: Record<PageId, React.ReactElement> = {
   voiceCall: (
@@ -165,6 +167,7 @@ export function Sidebar({
           </svg>
         </button>
       </div>
+      <SidebarShift compact={compact} />
 
       <nav className="border-sidebar-line flex flex-col gap-0.5 border-t pt-4">
         {main.map((item) => (
@@ -180,6 +183,7 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto flex flex-col gap-4">
+        <SidebarIdentity compact={compact} />
         <ThemeSwitcher compact={compact} />
         {bottom.length > 0 && (
           <nav aria-label="Sync" className="border-sidebar-line flex flex-col gap-0.5 border-t pt-4">

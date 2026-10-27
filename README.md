@@ -62,7 +62,28 @@ schedule** stores the day on purpose. Who is **not available** is remembered fro
 and **Hide chat column** drops the chat column — both are remembered in this browser.
 **Copy for Teams** copies the schedule (bold headings when pasted into Teams, plain text elsewhere). The roster imports from
 CSV (Excel, `,` or `;` separated) or JSON and exports to both; the JSON export also carries
-the history. Everything is stored in this browser only — not in the linked folder.
+the history. The roster and history are stored in this browser only — not in the linked folder. The only
+thing that leaves the computer is the shared lunch shift below.
+
+### Shared lunch shift (optional)
+
+When **Kevin C** or **Nestor** presses **Copy for Teams**, today's two shifts are also shared with the
+team, and every agent sees **YOU ARE ON SHIFT 1** (or 2) in the sidebar under the clock. There are no
+accounts and no passwords: the sidebar has an optional **I am** list (the roster's names, plus the team
+list that comes with each published schedule), the choice stays in that browser, and nobody has to pick.
+Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterday's schedule is ignored.
+
+- **What is shared:** first names in Shift 1 / Shift 2, the roster's names (for the "I am" list), the
+  day, and who published. Nothing else. It is kept 14 days on a Supabase project.
+- **Setup, once:** run `supabase/lunch_shift.sql` in the Supabase SQL editor, then paste the project's
+  *publishable* key into `key` in `src/features/shift/config.ts`. While `key` is empty the whole feature is
+  off and the app makes no requests. Never use the `secret` / `service_role` key.
+- **Policies:** the table has row level security; the public key may only **read** the last 14 days. It
+  cannot insert, update or delete: writing goes through one function that accepts only the publishers
+  listed in `supabase/lunch_shift.sql` and `config.ts` (keep the two lists the same), only for today, with
+  short names. Without passwords this is an honor system: someone who picks "Kevin C" can publish, and the
+  worst they can do is change today's displayed shifts.
+- The sidebar looks for a new schedule every 30 seconds and when the window is brought back.
 
 Where to change things (all under `src/features/lunch/`): `config.ts` holds the language
 list and history length; `scheduler.ts` holds the scheduling rules and their weights at the
@@ -193,7 +214,8 @@ The **Sync** page (bottom of the sidebar) moves one part at a time:
 ## Desktop app (Windows)
 
 The same pages also run as a desktop app (Electron). It is a window around the built site, so
-every page works as on the web, and nothing is sent anywhere: data stays on the computer.
+every page works as on the web. Data stays on the computer, apart from the optional shared lunch shift
+(see Lunch Planner) and the update check.
 
 ```
 npm run desktop        # build, then open the app on this computer

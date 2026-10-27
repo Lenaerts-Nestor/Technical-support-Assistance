@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from './ErrorBoundary'
 import { AppDataProvider } from './AppDataProvider'
+import { SharedShiftProvider } from '../features/shift/SharedShiftProvider'
 import { FocusModeContext } from './focusMode'
 import { NAV_ITEMS, NavigationContext } from './navigation'
 import { storageKey, usePersistentState } from '../shared/storage/usePersistentState'
@@ -55,41 +56,43 @@ export default function App() {
     <ErrorBoundary>
       {/* Folder, guides, links and snippets live above every page so the Sync page can reach them. */}
       <AppDataProvider>
-        <NavigationContext.Provider value={setPage}>
-          <div className="bg-canvas text-ink flex h-full">
-            <Sidebar
-              current={page}
-              onNavigate={setPage}
-              compact={collapsed || forced}
-              lockedCompact={forced}
-              onToggle={() => setCollapsed((c) => !c)}
-            />
-            {/*
-              Every page stays mounted and the inactive ones are hidden, so stepping
-              away from a half-filled form mid-call and coming back keeps it. Each
-              page owns its scrollport (rather than one shared one on <main>), which
-              also keeps each page's scroll position and lets a sticky header pin
-              flush to the top of its own page. `relative` makes the scrollport the
-              containing block for absolutely positioned children (`sr-only` text):
-              without it they escape the scrollport and stretch the whole window's
-              scroll height, so the app itself scrolls past the sidebar.
-            */}
-            <main className="flex-1 overflow-hidden">
-              {NAV_ITEMS.map(({ id }) => {
-                const Page = PAGES[id]
-                return (
-                  <div key={id} hidden={id !== page} className="relative h-full overflow-y-auto">
-                    <ErrorBoundary>
-                      <FocusModeContext.Provider value={setFocus}>
-                        <Page />
-                      </FocusModeContext.Provider>
-                    </ErrorBoundary>
-                  </div>
-                )
-              })}
-            </main>
-          </div>
-        </NavigationContext.Provider>
+        <SharedShiftProvider>
+          <NavigationContext.Provider value={setPage}>
+            <div className="bg-canvas text-ink flex h-full">
+              <Sidebar
+                current={page}
+                onNavigate={setPage}
+                compact={collapsed || forced}
+                lockedCompact={forced}
+                onToggle={() => setCollapsed((c) => !c)}
+              />
+              {/*
+                Every page stays mounted and the inactive ones are hidden, so stepping
+                away from a half-filled form mid-call and coming back keeps it. Each
+                page owns its scrollport (rather than one shared one on <main>), which
+                also keeps each page's scroll position and lets a sticky header pin
+                flush to the top of its own page. `relative` makes the scrollport the
+                containing block for absolutely positioned children (`sr-only` text):
+                without it they escape the scrollport and stretch the whole window's
+                scroll height, so the app itself scrolls past the sidebar.
+              */}
+              <main className="flex-1 overflow-hidden">
+                {NAV_ITEMS.map(({ id }) => {
+                  const Page = PAGES[id]
+                  return (
+                    <div key={id} hidden={id !== page} className="relative h-full overflow-y-auto">
+                      <ErrorBoundary>
+                        <FocusModeContext.Provider value={setFocus}>
+                          <Page />
+                        </FocusModeContext.Provider>
+                      </ErrorBoundary>
+                    </div>
+                  )
+                })}
+              </main>
+            </div>
+          </NavigationContext.Provider>
+        </SharedShiftProvider>
       </AppDataProvider>
     </ErrorBoundary>
   )
