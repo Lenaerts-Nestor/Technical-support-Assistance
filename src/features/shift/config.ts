@@ -18,3 +18,6 @@ export const PUBLISHERS = ['Kevin C', 'Nestor']
 
 /** How often the sidebar looks for a new schedule. */
 export const POLL_MS = 30_000
+
+/** Shown to the publishers; the reminder times themselves live in supabase/lunch_shift.sql (send_shift_reminders). */
+export const REMINDER_NOTE = 'Shift 1 at 11:45 and Shift 2 at 12:30, Monday to Friday'

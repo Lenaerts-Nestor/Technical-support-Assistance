@@ -10,6 +10,9 @@
 --   * WRITE  nobody can insert, update or delete in the table directly. The only way in is
 --            publish_lunch_shift(), which accepts a publisher from the list below, a day within
 --            one day of today, and short name lists, and which also deletes rows older than 14 days.
+--   * REMINDERS  a timer inside Supabase (pg_cron) posts "Reminder: Shift 1 / Shift 2" with that shift's agents to
+--            the same Teams chat, Monday to Friday at 11:45 and 12:30 Brussels time, using the schedule
+--            published that day. Each reminder goes out once a day. See send_shift_reminders() below.
 --   * TEAMS  the first publish of a day also posts the schedule to a Teams chat/channel through a
 --            Workflows webhook. The webhook address is kept in private.settings, a table the public
 --            key cannot see (see the end of this file for how to store it). Later publishes the same
@@ -33,6 +36,10 @@ create table if not exists public.lunch_shift (
 -- One Teams post per day: set by the first publish that posts, so a second press cannot post again.
 alter table public.lunch_shift add column if not exists teams_posted_at timestamptz;
 
+-- Set when a shift's reminder was posted, so it goes out only once a day.
+alter table public.lunch_shift add column if not exists shift1_reminded_at timestamptz;
+alter table public.lunch_shift add column if not exists shift2_reminded_at timestamptz;
+
 -- The rest of the published schedule, so the next day's Generate can build on it (who was out, on chat) and
 -- anyone can load it: names and short warnings only.
 alter table public.lunch_shift add column if not exists chat  text[] not null default '{}';
@@ -55,6 +62,32 @@ create table if not exists private.settings (
 );
 alter table private.settings enable row level security;
 revoke all on private.settings from public, anon, authenticated;
+
+-- Posts a list of Adaptive Card blocks to the Teams webhook (a queued web request that runs after commit).
+create or replace function private.post_card(p_url text, p_body jsonb)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  perform net.http_post(
+    url     := p_url,
+    body    := jsonb_build_object(
+                 'type', 'message',
+                 'attachments', jsonb_build_array(jsonb_build_object(
+                   'contentType', 'application/vnd.microsoft.card.adaptive',
+                   'contentUrl', null,
+                   'content', jsonb_build_object(
+                     '$schema', 'http://adaptivecards.io/schemas/adaptive-card.json',
+                     'type', 'AdaptiveCard',
+                     'version', '1.4',
+                     'msteams', jsonb_build_object('width', 'Full'),
+                     'body', p_body))) ),
+    headers := '{"Content-Type": "application/json"}'::jsonb
+  );
+end;
+$$;
+revoke all on function private.post_card(text, jsonb) from public, anon, authenticated;
 
 -- Locked first, opened second: row level security on, then every default privilege removed.
 alter table public.lunch_shift enable row level security;
@@ -171,21 +204,7 @@ begin
       || (select jsonb_agg(jsonb_build_object('type', 'TextBlock', 'text', n, 'wrap', true, 'spacing', 'Small')) from unnest(v_notes) as n);
   end if;
 
-  perform net.http_post(
-    url     := v_url,
-    body    := jsonb_build_object(
-                 'type', 'message',
-                 'attachments', jsonb_build_array(jsonb_build_object(
-                   'contentType', 'application/vnd.microsoft.card.adaptive',
-                   'contentUrl', null,
-                   'content', jsonb_build_object(
-                     '$schema', 'http://adaptivecards.io/schemas/adaptive-card.json',
-                     'type', 'AdaptiveCard',
-                     'version', '1.4',
-                     'msteams', jsonb_build_object('width', 'Full'),
-                     'body', v_body))) ),
-    headers := '{"Content-Type": "application/json"}'::jsonb
-  );
+  perform private.post_card(v_url, v_body);
   return 'posted';
 end;
 $$;
@@ -193,6 +212,96 @@ $$;
 -- Functions are executable by everyone by default; allow only the app's public role.
 revoke all on function public.publish_lunch_shift(date, text[], text[], text[], text, text[], text[], text[]) from public, anon, authenticated;
 grant execute on function public.publish_lunch_shift(date, text[], text[], text[], text, text[], text[], text[]) to anon;
+
+-- ---------------------------------------------------------------------------------------------------
+-- SHIFT REMINDERS. Called by the timer below every 5 minutes on weekdays; it decides by itself whether a reminder
+-- is due, so summer / winter time needs nothing. For each shift, once a day, when the Brussels clock has reached the
+-- shift's reminder time (and is less than 30 minutes past it, so a late wake-up does not send stale reminders) it
+-- posts "Reminder: Shift N" with that shift's agents from the schedule published today. Nothing is published, nothing
+-- is sent. Not callable from the app: only the timer (and you, in this editor).
+--
+-- Settings (optional rows in private.settings; the values below are the defaults):
+--   shift1_reminder_time = 11:45     shift2_reminder_time = 12:30     reminder_timezone = Europe/Brussels
+create or replace function public.send_shift_reminders(p_now timestamptz default now())
+returns integer   -- how many reminders were posted
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_url     text;
+  v_tz      text;
+  v_local   timestamp;
+  v_time    time;
+  v_due     time;
+  v_row     public.lunch_shift%rowtype;
+  v_shift   integer;
+  v_names   text[];
+  v_claimed boolean;
+  v_sent    integer := 0;
+begin
+  select s.value into v_url from private.settings s where s.name = 'teams_webhook_url';
+  if v_url is null or v_url = '' then
+    return 0;
+  end if;
+
+  select coalesce((select s.value from private.settings s where s.name = 'reminder_timezone'), 'Europe/Brussels') into v_tz;
+  v_local := p_now at time zone v_tz;
+  v_time  := v_local::time;
+  if extract(isodow from v_local) > 5 then
+    return 0;   -- weekend
+  end if;
+
+  select * into v_row from public.lunch_shift where day = v_local::date;
+  if not found then
+    return 0;   -- nothing was published today
+  end if;
+
+  for v_shift in 1..2 loop
+    select coalesce((select s.value from private.settings s where s.name = 'shift' || v_shift || '_reminder_time'),
+                    case v_shift when 1 then '11:45' else '12:30' end)::time into v_due;
+    v_names := case v_shift when 1 then v_row.shift1 else v_row.shift2 end;
+
+    if cardinality(v_names) = 0 or v_time < v_due or v_time >= v_due + interval '30 minutes' then
+      continue;
+    end if;
+
+    -- One UPDATE claims the reminder, so two overlapping runs still send it once.
+    v_claimed := false;
+    if v_shift = 1 then
+      update public.lunch_shift set shift1_reminded_at = now()
+       where day = v_row.day and shift1_reminded_at is null returning true into v_claimed;
+    else
+      update public.lunch_shift set shift2_reminded_at = now()
+       where day = v_row.day and shift2_reminded_at is null returning true into v_claimed;
+    end if;
+    if not coalesce(v_claimed, false) then
+      continue;
+    end if;
+
+    perform private.post_card(v_url, jsonb_build_array(
+      jsonb_build_object('type', 'TextBlock', 'text', 'Reminder: Shift ' || v_shift || ' lunch', 'weight', 'Bolder', 'wrap', true),
+      jsonb_build_object('type', 'TextBlock', 'text', 'Remember to take your lunch. Agents: ' || array_to_string(v_names, ', '),
+                         'wrap', true, 'spacing', 'Small')
+    ));
+    v_sent := v_sent + 1;
+  end loop;
+
+  return v_sent;
+end;
+$$;
+revoke all on function public.send_shift_reminders(timestamptz) from public, anon, authenticated;
+
+-- The timer that calls it is a separate file, supabase/lunch_reminders_schedule.sql: run it once, after this file and
+-- after switching on pg_cron (Supabase dashboard -> Integrations -> Cron).
+--
+-- Change a reminder time:        insert into private.settings values ('shift1_reminder_time', '11:40')
+--                                  on conflict (name) do update set value = excluded.value;
+-- Stop the reminders:            select cron.unschedule('lunch-shift-reminders');   (after the schedule file was run)
+-- Send one again today (retest): update public.lunch_shift set shift1_reminded_at = null where day = current_date;
+-- Did the timer run?             select jobname, status, return_message, start_time from cron.job_run_details
+--                                  order by start_time desc limit 5;
+-- ---------------------------------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------------------------------
 -- TEAMS WEBHOOK ADDRESS. Run this on its own, ONCE, in the SQL editor, with the real address from the
@@ -209,7 +318,8 @@ grant execute on function public.publish_lunch_shift(date, text[], text[], text[
 -- ---------------------------------------------------------------------------------------------------
 
 -- Quick checks, run them one by one after the script (each should behave as the comment says).
--- NOTE: once the Teams address is stored, a successful publish below POSTS TO THE REAL CHAT (once per day).
+-- NOTE: once the Teams address is stored, a successful publish below POSTS TO THE REAL CHAT (once per day), and
+-- the timer sends reminders from today's published schedule.
 --   select * from public.lunch_shift;                                   -- works, empty at first
 --   select public.publish_lunch_shift(current_date, '{Ann}', '{Bo}', '{Ann,Bo}', 'Nestor');   -- works: 'off' (no webhook) or 'posted'
 --   select public.publish_lunch_shift(current_date, '{Ann}', '{Bo}', '{Ann,Bo}', 'Someone');  -- error: may not publish
