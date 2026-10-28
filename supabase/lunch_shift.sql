@@ -11,7 +11,7 @@
 --            publish_lunch_shift(), which accepts a publisher from the list below, a day within
 --            one day of today, and short name lists, and which also deletes rows older than 14 days.
 --   * REMINDERS  a timer inside Supabase (pg_cron) posts "Reminder: Shift 1 / Shift 2" with that shift's agents to
---            the same Teams chat, Monday to Friday at 11:45 and 12:30 Brussels time, using the schedule
+--            the same Teams chat, Monday to Friday at 11:45 and 12:45 Brussels time, using the schedule
 --            published that day. Each reminder goes out once a day. See send_shift_reminders() below.
 --   * TEAMS  the first publish of a day also posts the schedule to a Teams chat/channel through a
 --            Workflows webhook. The webhook address is kept in private.settings, a table the public
@@ -221,7 +221,7 @@ grant execute on function public.publish_lunch_shift(date, text[], text[], text[
 -- is sent. Not callable from the app: only the timer (and you, in this editor).
 --
 -- Settings (optional rows in private.settings; the values below are the defaults):
---   shift1_reminder_time = 11:45     shift2_reminder_time = 12:30     reminder_timezone = Europe/Brussels
+--   shift1_reminder_time = 11:45     shift2_reminder_time = 12:45     reminder_timezone = Europe/Brussels
 create or replace function public.send_shift_reminders(p_now timestamptz default now())
 returns integer   -- how many reminders were posted
 language plpgsql
@@ -259,7 +259,7 @@ begin
 
   for v_shift in 1..2 loop
     select coalesce((select s.value from private.settings s where s.name = 'shift' || v_shift || '_reminder_time'),
-                    case v_shift when 1 then '11:45' else '12:30' end)::time into v_due;
+                    case v_shift when 1 then '11:45' else '12:45' end)::time into v_due;
     v_names := case v_shift when 1 then v_row.shift1 else v_row.shift2 end;
 
     if cardinality(v_names) = 0 or v_time < v_due or v_time >= v_due + interval '30 minutes' then
@@ -298,7 +298,7 @@ revoke all on function public.send_shift_reminders(timestamptz) from public, ano
 -- Change a reminder time:        insert into private.settings values ('shift1_reminder_time', '11:40')
 --                                  on conflict (name) do update set value = excluded.value;
 --                                (and change the matching wake-up times in lunch_reminders_schedule.sql, then run it again)
--- Stop the reminders:            select cron.unschedule('lunch-shift-reminder-1'); select cron.unschedule('lunch-shift-reminder-2');
+-- Stop the reminders:            select cron.unschedule('lunch-shift-reminders');
 -- Send one again today (retest): update public.lunch_shift set shift1_reminded_at = null where day = current_date;
 -- Did the timer run?             select jobname, status, return_message, start_time from cron.job_run_details
 --                                  order by start_time desc limit 5;

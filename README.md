@@ -84,7 +84,7 @@ Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterda
   short names. Without passwords this is an honor system: someone who picks "Kevin C" can publish, and the
   worst they can do is change today's displayed shifts.
 - The sidebar looks for a new schedule every 30 seconds and when the window is brought back.
-- **Shift reminders:** on weekdays at **11:45** (Shift 1) and **12:30** (Shift 2), Brussels time, the same Teams
+- **Shift reminders:** on weekdays at **11:45** (Shift 1) and **12:45** (Shift 2), Brussels time, the same Teams
   chat gets "Reminder: Shift N lunch — Remember to take your lunch. Agents: …", using the schedule shared that day
   (so Copy for Teams must be pressed before then; a swap shared before the time is included, and nothing is sent
   if nothing was shared). Each reminder goes out once a day, and one that is more than 30 minutes late is skipped.
