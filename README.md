@@ -90,8 +90,9 @@ Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterda
   Monday around, and whoever Nestor listed as out is marked away. A published day replaces the same day saved
   on that computer. The roster is brought up to date once per new published day; availability you change
   afterwards is left alone. (2) *Load it.* When the other one has shared today's schedule, the schedule card
-  offers **Load it** (or **Use the shared schedule** if yours differs). Names the roster does not have are
-  listed and left out.
+  offers **Load it** (or **Use the shared schedule** if yours differs). The Agents table follows it: whoever
+  is in a shift becomes available and everyone else on your roster becomes not available. Names the roster
+  does not have are listed and left out.
 - **Teams post (optional, once a day):** the first publish of a day also posts the schedule to a Teams
   chat or channel through a Workflows webhook ("Send webhook alerts to a channel / chat"). Pressing Copy for
   Teams again, by either person, does not post again that day. The webhook address is a secret (whoever has

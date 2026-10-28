@@ -178,8 +178,8 @@ export function useLunchPlanner(): LunchPlanner | null {
     const result = scheduleFromShared({ date: day, shift1, shift2, chat, out, notes }, agents ?? [], today)
     update((d) => ({
       ...d,
-      // Who is in a shift is available; who the publisher listed as out is not. Everyone else stays as it was.
-      agents: d.agents.map((a) => (result.present.has(a.id) ? { ...a, available: true } : result.away.has(a.id) ? { ...a, available: false } : a)),
+      // The table follows the shared schedule: whoever is in a shift is available, everyone else is away.
+      agents: d.agents.map((a) => (a.available === result.present.has(a.id) ? a : { ...a, available: result.present.has(a.id) })),
       schedule: result.schedule,
     }))
     return result.unknown
