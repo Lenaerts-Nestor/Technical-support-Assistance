@@ -9,7 +9,7 @@ import { teamsHtml, teamsText } from '../teamsText'
 import type { LunchPlanner } from '../useLunchPlanner'
 import type { Agent, LanguageWarning, ShiftNo } from '../types'
 import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
-import { PUBLISHERS } from '../../shift/config'
+import { PUBLISHERS, REMINDER_NOTE } from '../../shift/config'
 import { useSharedShift } from '../../shift/sharedShiftContext'
 import type { TeamsPost } from '../../shift/shiftLogic'
 import {
@@ -240,6 +240,12 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
               Copied, but the shifts could not be shared with the team. Check the connection and press Copy for Teams again.
             </p>
           ))}
+        {shared.canPublish && (
+          <p className="text-ink-muted text-xs">
+            Reminders for each shift are posted to the Teams chat ({REMINDER_NOTE}) with the schedule shared here, so press
+            Copy for Teams before then.
+          </p>
+        )}
         {shared.enabled && !shared.canPublish && (
           <p className="text-ink-muted text-xs">
             Only {PUBLISHERS.join(' and ')} share the shifts when copying for Teams. Choose who you are under “I am” in the sidebar.
