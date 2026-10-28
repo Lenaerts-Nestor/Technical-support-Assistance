@@ -9,6 +9,7 @@ import type { Agent, LanguageWarning, ShiftNo } from '../types'
 import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
 import { PUBLISHERS } from '../../shift/config'
 import { useSharedShift } from '../../shift/sharedShiftContext'
+import type { TeamsPost } from '../../shift/shiftLogic'
 import {
   CARD,
   CARD_HEADER,
@@ -28,6 +29,12 @@ import { AlertIcon, CheckIcon, RefreshIcon } from './icons'
 import { ShiftColumn } from './ShiftColumn'
 
 type Pending = { a: Agent; b?: Agent; lost: LanguageWarning[] }
+
+const SHARE_MESSAGE: Record<TeamsPost, string> = {
+  posted: 'Shared with the team and posted to the Teams chat. Everyone who picked their name sees their shift in the sidebar.',
+  already: 'Shared with the team. The Teams chat was already posted today, so it was not posted again.',
+  off: 'Shared with the team: everyone who picked their name sees their shift in the sidebar.',
+}
 
 const WARNING_TONE: Record<LanguageWarning['kind'], string> = {
   uncovered: 'border-rose-400/50 bg-rose-400/10 text-rose-200',
@@ -49,7 +56,7 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   const [copyFailed, setCopyFailed] = useState(false)
   const shared = useSharedShift()
   /** Whether the last Copy for Teams also reached the team, and for which schedule (a later change makes it stale). */
-  const [shareResult, setShareResult] = useState<{ ok: boolean; forText: string } | null>(null)
+  const [shareResult, setShareResult] = useState<{ teams: TeamsPost | null; forText: string } | null>(null)
   /** The card being dragged. A ref, not state: a drop can land before React has re-rendered. */
   const dragging = useRef<string | null>(null)
   /** True while a card is being dragged, as opposed to picked with the Swap button. */
@@ -142,13 +149,16 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
     setCopyFailed(!ok)
     // Kevin C / Nestor: the same press also shows each agent their own shift in their sidebar.
     if (ok && shared.canPublish) {
-      const sent = await shared.publish({
+      const teams = await shared.publish({
         day: planner.today,
         shift1: names.shift1,
         shift2: names.shift2,
         team: agents.map((a) => a.name),
+        chat: names.chat,
+        out: names.out,
+        notes: names.notes,
       })
-      setShareResult({ ok: sent, forText: text })
+      setShareResult({ teams, forText: text })
     } else {
       setShareResult(null)
     }
@@ -209,10 +219,10 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
           </p>
         )}
         {shareResult?.forText === currentText &&
-          (shareResult.ok ? (
+          (shareResult.teams ? (
             <p role="status" className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
               <CheckIcon className="h-4 w-4" />
-              Shared with the team: everyone who picked their name sees their shift in the sidebar.
+              {SHARE_MESSAGE[shareResult.teams]}
             </p>
           ) : (
             <p role="alert" className="text-sm font-semibold text-rose-300">

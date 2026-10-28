@@ -83,15 +83,41 @@ describe('the service calls', () => {
     let body: unknown
     const request = (async (_url: string, init?: RequestInit) => {
       body = JSON.parse(String(init?.body))
-      return new Response(null, { status: 204 })
+      return new Response('"posted"')
     }) as typeof fetch
-    await publishDay(backend, 'Nestor', { day: '2026-10-27', shift1: ['A'], shift2: ['B'], team: ['A', 'B'] }, request)
-    expect(body).toEqual({ p_day: '2026-10-27', p_shift1: ['A'], p_shift2: ['B'], p_team: ['A', 'B'], p_publisher: 'Nestor' })
+    const input = { day: '2026-10-27', shift1: ['A'], shift2: ['B'], team: ['A', 'B'], chat: ['A'], out: ['C'], notes: ['Careful'] }
+    expect(await publishDay(backend, 'Nestor', input, request)).toBe('posted')
+    expect(body).toEqual({
+      p_day: '2026-10-27',
+      p_shift1: ['A'],
+      p_shift2: ['B'],
+      p_team: ['A', 'B'],
+      p_publisher: 'Nestor',
+      p_chat: ['A'],
+      p_out: ['C'],
+      p_notes: ['Careful'],
+    })
+  })
+
+  it('reports what Teams did, and keeps long or empty entries within the database limits', async () => {
+    let body: Record<string, string[]> = {}
+    const answer = (text: string) =>
+      (async (_url: string, init?: RequestInit) => {
+        body = JSON.parse(String(init?.body))
+        return new Response(text)
+      }) as typeof fetch
+    const input = { day: '2026-10-27', shift1: [' A ', ''], shift2: [], team: ['x'.repeat(60)], chat: [], out: [], notes: ['n'.repeat(200)] }
+    expect(await publishDay(backend, 'Nestor', input, answer('"already"'))).toBe('already')
+    expect(body.p_shift1).toEqual(['A'])
+    expect(body.p_team[0]).toHaveLength(40)
+    expect(body.p_notes[0]).toHaveLength(160)
+    expect(await publishDay(backend, 'Nestor', input, answer('"off"'))).toBe('off')
+    expect(await publishDay(backend, 'Nestor', input, answer('garbage'))).toBe('off')
   })
 
   it('surfaces the server’s reason, or the status when there is none', async () => {
     const refused = (async () => new Response(JSON.stringify({ message: 'This name may not publish the lunch shift.' }), { status: 403 })) as typeof fetch
-    await expect(publishDay(backend, 'Ann', day(), refused)).rejects.toThrow('may not publish')
+    await expect(publishDay(backend, 'Ann', { ...day(), chat: [], out: [], notes: [] }, refused)).rejects.toThrow('may not publish')
     const broken = (async () => new Response('<html>', { status: 502 })) as typeof fetch
     await expect(fetchDays(backend, undefined, broken)).rejects.toThrow('502')
   })

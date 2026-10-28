@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { ShiftNo } from '../lunch/types'
-import type { PublishInput } from './shiftLogic'
+import type { PublishInput, TeamsPost } from './shiftLogic'
 
 export type SharedShiftController = {
   /** False until the project key is filled in (config.ts): then nothing below does anything. */
@@ -14,8 +14,8 @@ export type SharedShiftController = {
   myShift: ShiftNo | null
   /** `me` is on the publisher list (and the service is on). */
   canPublish: boolean
-  /** Shares today's shifts; resolves to whether it worked. Does nothing unless `canPublish`. */
-  publish: (input: PublishInput) => Promise<boolean>
+  /** Shares today's shifts; resolves to what happened with Teams, or `null` when it failed. Does nothing unless `canPublish`. */
+  publish: (input: PublishInput) => Promise<TeamsPost | null>
 }
 
 /** Inert by default, so a page or test without the provider keeps working. */
@@ -26,7 +26,7 @@ export const SharedShiftContext = createContext<SharedShiftController>({
   choices: [],
   myShift: null,
   canPublish: false,
-  publish: () => Promise.resolve(false),
+  publish: () => Promise.resolve(null),
 })
 
 export const useSharedShift = () => useContext(SharedShiftContext)

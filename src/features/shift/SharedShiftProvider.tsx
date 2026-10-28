@@ -7,7 +7,7 @@ import { SharedShiftContext } from './sharedShiftContext'
 import type { SharedShiftController } from './sharedShiftContext'
 import { fetchDays, publishDay } from './shiftApi'
 import { choices, isPublisher, shiftFor, withDay } from './shiftLogic'
-import type { PublishInput, SharedDay } from './shiftLogic'
+import type { PublishInput, SharedDay, TeamsPost } from './shiftLogic'
 import { useRosterNames } from './useRosterNames'
 
 const enabled = SHARED_SHIFT.key !== ''
@@ -50,15 +50,17 @@ export function SharedShiftProvider({ children }: { children: ReactNode }) {
   const canPublish = enabled && isPublisher(me, PUBLISHERS)
 
   const publish = useCallback(
-    async (input: PublishInput): Promise<boolean> => {
-      if (!canPublish || !me) return false
+    async (input: PublishInput): Promise<TeamsPost | null> => {
+      if (!canPublish || !me) return null
+      let teams: TeamsPost
       try {
-        await publishDay(SHARED_SHIFT, me, input)
+        teams = await publishDay(SHARED_SHIFT, me, input)
       } catch {
-        return false
+        return null
       }
-      setDays((prev) => withDay(prev, { ...input, publishedBy: me, updatedAt: new Date().toISOString() }))
-      return true
+      const { day, shift1, shift2, team } = input
+      setDays((prev) => withDay(prev, { day, shift1, shift2, team, publishedBy: me, updatedAt: new Date().toISOString() }))
+      return teams
     },
     [canPublish, me],
   )

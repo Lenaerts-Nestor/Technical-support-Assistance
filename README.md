@@ -84,6 +84,13 @@ Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterda
   short names. Without passwords this is an honor system: someone who picks "Kevin C" can publish, and the
   worst they can do is change today's displayed shifts.
 - The sidebar looks for a new schedule every 30 seconds and when the window is brought back.
+- **Teams post (optional, once a day):** the first publish of a day also posts the schedule to a Teams
+  chat or channel through a Workflows webhook ("Send webhook alerts to a channel / chat"). Pressing Copy for
+  Teams again, by either person, does not post again that day. The webhook address is a secret (whoever has
+  it can post to that chat): it is stored in Supabase in `private.settings`, which the public key cannot read,
+  and never in the app or the repository. `supabase/lunch_shift.sql` ends with the statement that stores it,
+  turns posting off, allows a repost for a retest, and checks whether Teams accepted a post. Without the
+  setting nothing is posted.
 
 Where to change things (all under `src/features/lunch/`): `config.ts` holds the language
 list and history length; `scheduler.ts` holds the scheduling rules and their weights at the
