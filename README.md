@@ -88,7 +88,7 @@ Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterda
   chat gets "Reminder: Shift N lunch — Remember to take your lunch. Agents: …", using the schedule shared that day
   (so Copy for Teams must be pressed before then; a swap shared before the time is included, and nothing is sent
   if nothing was shared). Each reminder goes out once a day, and one that is more than 30 minutes late is skipped.
-  A timer inside Supabase does it (`pg_cron`), so no app has to be open. Setup, once: run `supabase/lunch_shift.sql`
+  A timer inside Supabase does it (`pg_cron`, waking only at the two reminder times), so no app has to be open. Setup, once: run `supabase/lunch_shift.sql`
   again, switch on **Integrations → Cron**, then run `supabase/lunch_reminders_schedule.sql`. The times are
   settings (see the end of `lunch_shift.sql`), not code.
 - **Same schedule for Kevin C and Nestor:** the published day also keeps who is on chat, who is out and the

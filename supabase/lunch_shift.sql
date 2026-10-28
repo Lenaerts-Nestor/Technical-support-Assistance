@@ -214,9 +214,9 @@ revoke all on function public.publish_lunch_shift(date, text[], text[], text[], 
 grant execute on function public.publish_lunch_shift(date, text[], text[], text[], text, text[], text[], text[]) to anon;
 
 -- ---------------------------------------------------------------------------------------------------
--- SHIFT REMINDERS. Called by the timer below every 5 minutes on weekdays; it decides by itself whether a reminder
--- is due, so summer / winter time needs nothing. For each shift, once a day, when the Brussels clock has reached the
--- shift's reminder time (and is less than 30 minutes past it, so a late wake-up does not send stale reminders) it
+-- SHIFT REMINDERS. Called by the timer (supabase/lunch_reminders_schedule.sql) at the two reminder times; it decides
+-- by itself, on the Brussels clock, whether a reminder is due, so summer / winter time needs nothing. For each shift, once a day, when the Brussels clock has reached the
+-- shift's reminder time (and is less than 30 minutes past it, so a late wake-up does not send a stale reminder) it
 -- posts "Reminder: Shift N" with that shift's agents from the schedule published today. Nothing is published, nothing
 -- is sent. Not callable from the app: only the timer (and you, in this editor).
 --
@@ -297,7 +297,8 @@ revoke all on function public.send_shift_reminders(timestamptz) from public, ano
 --
 -- Change a reminder time:        insert into private.settings values ('shift1_reminder_time', '11:40')
 --                                  on conflict (name) do update set value = excluded.value;
--- Stop the reminders:            select cron.unschedule('lunch-shift-reminders');   (after the schedule file was run)
+--                                (and change the matching wake-up times in lunch_reminders_schedule.sql, then run it again)
+-- Stop the reminders:            select cron.unschedule('lunch-shift-reminder-1'); select cron.unschedule('lunch-shift-reminder-2');
 -- Send one again today (retest): update public.lunch_shift set shift1_reminded_at = null where day = current_date;
 -- Did the timer run?             select jobname, status, return_message, start_time from cron.job_run_details
 --                                  order by start_time desc limit 5;
