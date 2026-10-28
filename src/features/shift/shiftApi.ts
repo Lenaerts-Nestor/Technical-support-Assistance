@@ -22,7 +22,7 @@ async function failure(res: Response): Promise<Error> {
 
 /** The recent days, newest first. The database only ever returns the last 14 days. */
 export async function fetchDays(backend: Backend, signal?: AbortSignal, request: typeof fetch = fetch): Promise<SharedDay[]> {
-  const query = 'select=day,shift1,shift2,team,published_by,updated_at&order=day.desc&limit=14'
+  const query = 'select=day,shift1,shift2,team,chat,out,notes,published_by,updated_at&order=day.desc&limit=14'
   const res = await request(`${backend.url}/rest/v1/lunch_shift?${query}`, { headers: headers(backend), signal })
   if (!res.ok) throw await failure(res)
   return reviveDays(await res.json())

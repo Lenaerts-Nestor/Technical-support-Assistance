@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useToday } from '../calendar/useToday'
+import { useSharedShift } from '../shift/sharedShiftContext'
 import { boardNames, deriveBoard, matchesEntry } from './board'
 import type { Board } from './board'
 import { mergeHistory, saveEntry } from './history'
 import { lunchStorage } from './lunchStorage'
 import { applyYesterday, newAgent, nameKey, rollOver } from './roster'
+import { adoptShared, scheduleFromShared, sharedToEntries } from './sharedHistory'
 import { generateSchedule } from './scheduler'
 import type { Assignment } from './scheduler'
 import type { Agent, HistoryEntry, LunchData } from './types'
+import type { SharedDay } from '../shift/shiftLogic'
 
 /** How long edits settle before they are written to storage. */
 const SAVE_DEBOUNCE_MS = 400
@@ -38,6 +41,10 @@ export type LunchPlanner = {
   deleteHistory: (date: string) => void
   /** Replace the roster; history, when given, is merged by day. */
   importRoster: (agents: Agent[], history: HistoryEntry[] | null) => void
+  /** Today's schedule as shared by Kevin C or Nestor, when there is one. */
+  sharedToday: SharedDay | null
+  /** Use the shared schedule as today's; returns the names this roster does not have. */
+  loadShared: () => string[]
 }
 
 /**
@@ -48,6 +55,9 @@ export type LunchPlanner = {
  */
 export function useLunchPlanner(): LunchPlanner | null {
   const today = useToday()
+  const { days: sharedDays } = useSharedShift()
+  const sharedEntries = useMemo(() => sharedToEntries(sharedDays), [sharedDays])
+  const sharedToday = useMemo(() => sharedDays.find((d) => d.day === today) ?? null, [sharedDays, today])
   const [stored, setStored] = useState<LunchData | null>(null)
   const [saveFailed, setSaveFailed] = useState(false)
 
@@ -62,7 +72,11 @@ export function useLunchPlanner(): LunchPlanner | null {
   }, [])
 
   // Derived rather than stored, so a new day shows up without an effect; the next edit makes it permanent.
-  const data = useMemo(() => (stored ? rollOver(stored, today) : null), [stored, today])
+  // Earlier days published by Kevin C or Nestor count as history first, so whoever generates next builds on them.
+  const data = useMemo(
+    () => (stored ? rollOver(adoptShared(stored, sharedEntries, today), today) : null),
+    [stored, sharedEntries, today],
+  )
 
   useEffect(() => {
     if (!data) return
@@ -76,8 +90,9 @@ export function useLunchPlanner(): LunchPlanner | null {
   }, [data])
 
   const update = useCallback(
-    (change: (d: LunchData) => LunchData) => setStored((prev) => (prev ? change(rollOver(prev, today)) : prev)),
-    [today],
+    (change: (d: LunchData) => LunchData) =>
+      setStored((prev) => (prev ? change(rollOver(adoptShared(prev, sharedEntries, today), today)) : prev)),
+    [today, sharedEntries],
   )
 
   const board = useMemo(() => (data ? deriveBoard(data.agents, data.schedule) : null), [data])
@@ -157,6 +172,19 @@ export function useLunchPlanner(): LunchPlanner | null {
     [update, today],
   )
 
+  const loadShared = useCallback((): string[] => {
+    if (!sharedToday) return []
+    const { day, shift1, shift2, chat, out, notes } = sharedToday
+    const result = scheduleFromShared({ date: day, shift1, shift2, chat, out, notes }, agents ?? [], today)
+    update((d) => ({
+      ...d,
+      // Who is in a shift is available; who the publisher listed as out is not. Everyone else stays as it was.
+      agents: d.agents.map((a) => (result.present.has(a.id) ? { ...a, available: true } : result.away.has(a.id) ? { ...a, available: false } : a)),
+      schedule: result.schedule,
+    }))
+    return result.unknown
+  }, [sharedToday, agents, today, update])
+
   if (!data) return null
   const savedEntry = data.history.find((e) => e.date === today)
   return {
@@ -176,5 +204,7 @@ export function useLunchPlanner(): LunchPlanner | null {
     saveToday,
     deleteHistory,
     importRoster,
+    sharedToday,
+    loadShared,
   }
 }

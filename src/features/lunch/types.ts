@@ -47,6 +47,8 @@ export type LunchData = {
   schedule: Schedule | null
   /** The day the "new day" step (yesterday's shifts, availability reset) last ran for. */
   syncedDate: string
+  /** The published day the roster was last brought up to date from (see `sharedHistory.ts`); empty when none. */
+  sharedKey?: string
 }
 
 /** A language problem in a schedule. */
