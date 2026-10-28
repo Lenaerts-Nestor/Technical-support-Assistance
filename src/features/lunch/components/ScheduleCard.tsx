@@ -3,6 +3,8 @@ import type { DragEvent } from 'react'
 import { SHIFT_LABELS } from '../config'
 import { applyMove, coverageLost } from '../coverage'
 import { boardNames } from '../board'
+import { sameShifts } from '../sharedHistory'
+import { nameKey } from '../roster'
 import { teamsHtml, teamsText } from '../teamsText'
 import type { LunchPlanner } from '../useLunchPlanner'
 import type { Agent, LanguageWarning, ShiftNo } from '../types'
@@ -55,6 +57,8 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   const { copied, copy } = useCopyToClipboard()
   const [copyFailed, setCopyFailed] = useState(false)
   const shared = useSharedShift()
+  /** Names of the shared schedule this roster does not have (kept here: the card is rebuilt when a schedule appears). */
+  const [notOnRoster, setNotOnRoster] = useState<string[]>([])
   /** Whether the last Copy for Teams also reached the team, and for which schedule (a later change makes it stale). */
   const [shareResult, setShareResult] = useState<{ teams: TeamsPost | null; forText: string } | null>(null)
   /** The card being dragged. A ref, not state: a drop can land before React has re-rendered. */
@@ -87,7 +91,8 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
     return (
       <section className={CARD} aria-labelledby="lunch-schedule-title">
         <Header planner={planner} onCopy={null} copied={false} />
-        <div className="p-4">
+        <div className="space-y-3 p-4">
+          <SharedBanner planner={planner} differs missing={notOnRoster} onLoad={setNotOnRoster} />
           <p className={EMPTY}>
             No schedule yet. Mark who is in today in the table, then press Generate.
           </p>
@@ -164,6 +169,12 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
     }
   }
   const currentText = teamsText(boardNames(board))
+  /** The shared schedule without the names this roster does not have, which can never be on screen. */
+  const known = new Set(agents.map((a) => nameKey(a.name)))
+  const onRoster = (day: { shift1: string[]; shift2: string[] }) => ({
+    shift1: day.shift1.filter((n) => known.has(nameKey(n))),
+    shift2: day.shift2.filter((n) => known.has(nameKey(n))),
+  })
 
   const columnFor = (shift: ShiftNo, list: Agent[]) => (
     <ShiftColumn
@@ -234,6 +245,13 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
             Only {PUBLISHERS.join(' and ')} share the shifts when copying for Teams. Choose who you are under “I am” in the sidebar.
           </p>
         )}
+
+        <SharedBanner
+          planner={planner}
+          differs={planner.sharedToday ? !sameShifts(boardNames(board), onRoster(planner.sharedToday)) : false}
+          missing={notOnRoster}
+          onLoad={setNotOnRoster}
+        />
 
         <div role="status" aria-label="Language warnings" className="space-y-2">
           {board.warnings.length === 0 ? (
@@ -352,6 +370,44 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         </ConfirmDialog>
       )}
     </section>
+  )
+}
+
+/**
+ * Today's schedule as shared by Kevin C or Nestor (Copy for Teams), offered to whoever opens the page: the other
+ * one picks up the same schedule instead of generating a second, different one.
+ */
+function SharedBanner({
+  planner,
+  differs,
+  missing,
+  onLoad,
+}: {
+  planner: LunchPlanner
+  differs: boolean
+  missing: string[]
+  onLoad: (missing: string[]) => void
+}) {
+  const { enabled } = useSharedShift()
+  const shared = planner.sharedToday
+  return (
+    <>
+      {enabled && shared && differs && (
+        <div className="border-brand/40 bg-brand-soft text-brand-strong flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
+          <p className="font-semibold">
+            {shared.publishedBy} shared today’s schedule{planner.board ? ', and it differs from the one on screen' : ''}.
+          </p>
+          <button type="button" className={GHOST_BTN} onClick={() => onLoad(planner.loadShared())}>
+            {planner.board ? 'Use the shared schedule' : 'Load it'}
+          </button>
+        </div>
+      )}
+      {missing.length > 0 && (
+        <p role="status" className="text-sm font-semibold text-amber-200">
+          Not on your roster, so not placed: {missing.join(', ')}. Add them to the table and load it again.
+        </p>
+      )}
+    </>
   )
 }
 

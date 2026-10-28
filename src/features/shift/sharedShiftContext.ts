@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { ShiftNo } from '../lunch/types'
-import type { PublishInput, TeamsPost } from './shiftLogic'
+import type { PublishInput, SharedDay, TeamsPost } from './shiftLogic'
 
 export type SharedShiftController = {
   /** False until the project key is filled in (config.ts): then nothing below does anything. */
@@ -10,6 +10,8 @@ export type SharedShiftController = {
   setMe: (name: string | null) => void
   /** The names to pick from. */
   choices: string[]
+  /** The published days (newest first, up to 14 days). The Lunch Planner reads them as history. */
+  days: SharedDay[]
   /** The shift `me` has today, from what was published. */
   myShift: ShiftNo | null
   /** `me` is on the publisher list (and the service is on). */
@@ -24,6 +26,7 @@ export const SharedShiftContext = createContext<SharedShiftController>({
   me: null,
   setMe: () => {},
   choices: [],
+  days: [],
   myShift: null,
   canPublish: false,
   publish: () => Promise.resolve(null),

@@ -84,6 +84,14 @@ Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterda
   short names. Without passwords this is an honor system: someone who picks "Kevin C" can publish, and the
   worst they can do is change today's displayed shifts.
 - The sidebar looks for a new schedule every 30 seconds and when the window is brought back.
+- **Same schedule for Kevin C and Nestor:** the published day also keeps who is on chat, who is out and the
+  language warnings. (1) *Generate builds on it.* Earlier published days count as history on every computer,
+  so if Nestor made and shared Monday's schedule and is away on Tuesday, Kevin C's Generate still turns
+  Monday around, and whoever Nestor listed as out is marked away. A published day replaces the same day saved
+  on that computer. The roster is brought up to date once per new published day; availability you change
+  afterwards is left alone. (2) *Load it.* When the other one has shared today's schedule, the schedule card
+  offers **Load it** (or **Use the shared schedule** if yours differs). Names the roster does not have are
+  listed and left out.
 - **Teams post (optional, once a day):** the first publish of a day also posts the schedule to a Teams
   chat or channel through a Workflows webhook ("Send webhook alerts to a channel / chat"). Pressing Copy for
   Teams again, by either person, does not post again that day. The webhook address is a secret (whoever has

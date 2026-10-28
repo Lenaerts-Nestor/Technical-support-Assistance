@@ -58,8 +58,10 @@ export function SharedShiftProvider({ children }: { children: ReactNode }) {
       } catch {
         return null
       }
-      const { day, shift1, shift2, team } = input
-      setDays((prev) => withDay(prev, { day, shift1, shift2, team, publishedBy: me, updatedAt: new Date().toISOString() }))
+      const { day, shift1, shift2, team, chat, out, notes } = input
+      setDays((prev) =>
+        withDay(prev, { day, shift1, shift2, team, chat, out, notes, publishedBy: me, updatedAt: new Date().toISOString() }),
+      )
       return teams
     },
     [canPublish, me],
@@ -71,6 +73,7 @@ export function SharedShiftProvider({ children }: { children: ReactNode }) {
       me,
       setMe,
       choices: choices(days, roster, me),
+      days,
       myShift: shiftFor(days, today, me),
       canPublish,
       publish,

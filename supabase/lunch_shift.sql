@@ -33,6 +33,16 @@ create table if not exists public.lunch_shift (
 -- One Teams post per day: set by the first publish that posts, so a second press cannot post again.
 alter table public.lunch_shift add column if not exists teams_posted_at timestamptz;
 
+-- The rest of the published schedule, so the next day's Generate can build on it (who was out, on chat) and
+-- anyone can load it: names and short warnings only.
+alter table public.lunch_shift add column if not exists chat  text[] not null default '{}';
+alter table public.lunch_shift add column if not exists "out" text[] not null default '{}';
+alter table public.lunch_shift add column if not exists notes text[] not null default '{}';
+alter table public.lunch_shift drop constraint if exists lunch_shift_extra_sizes;
+alter table public.lunch_shift add constraint lunch_shift_extra_sizes check (
+  cardinality(chat) <= 60 and cardinality("out") <= 60 and cardinality(notes) <= 10
+);
+
 -- Sends the Teams post (a queued web request that runs after the publish is saved).
 create extension if not exists pg_net;
 
@@ -115,12 +125,15 @@ begin
     raise exception 'Every name must be 1 to 40 characters.' using errcode = '22023';
   end if;
 
-  insert into public.lunch_shift as t (day, shift1, shift2, team, published_by, updated_at)
-  values (p_day, v_shift1, v_shift2, v_team, v_publisher, now())
+  insert into public.lunch_shift as t (day, shift1, shift2, team, chat, "out", notes, published_by, updated_at)
+  values (p_day, v_shift1, v_shift2, v_team, v_chat, v_out, v_notes, v_publisher, now())
   on conflict (day) do update
     set shift1       = excluded.shift1,
         shift2       = excluded.shift2,
         team         = excluded.team,
+        chat         = excluded.chat,
+        "out"        = excluded."out",
+        notes        = excluded.notes,
         published_by = excluded.published_by,
         updated_at   = excluded.updated_at;   -- teams_posted_at is deliberately left alone
 

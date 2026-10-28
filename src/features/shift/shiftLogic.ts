@@ -8,6 +8,10 @@ export type SharedDay = {
   shift2: string[]
   /** Everyone on the publisher's roster, to fill the "I am" list. */
   team: string[]
+  /** The rest of the published schedule: who handles chat, who is out, and the language warnings. */
+  chat: string[]
+  out: string[]
+  notes: string[]
   publishedBy: string
   updatedAt: string
 }
@@ -38,6 +42,9 @@ export function reviveDays(raw: unknown): SharedDay[] {
       shift1: asStrings(r.shift1),
       shift2: asStrings(r.shift2),
       team: asStrings(r.team),
+      chat: asStrings(r.chat),
+      out: asStrings(r.out),
+      notes: asStrings(r.notes),
       publishedBy: typeof r.published_by === 'string' ? r.published_by : '',
       updatedAt: typeof r.updated_at === 'string' ? r.updated_at : '',
     })

@@ -70,6 +70,7 @@ export function reviveLunchData(raw: unknown): LunchData | null {
     history: reviveHistory(o.history),
     schedule: reviveSchedule(o.schedule),
     syncedDate: typeof o.syncedDate === 'string' ? o.syncedDate : '',
+    sharedKey: typeof o.sharedKey === 'string' ? o.sharedKey : '',
   }
 }
 
