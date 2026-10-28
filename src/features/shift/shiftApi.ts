@@ -1,7 +1,10 @@
 import { reviveDays } from './shiftLogic'
-import type { PublishInput, SharedDay } from './shiftLogic'
+import type { PublishInput, SharedDay, TeamsPost } from './shiftLogic'
 
 export type Backend = { url: string; key: string }
+
+/** Keeps what is sent within what the database accepts (names 40 characters, notes 160). */
+const fit = (list: string[], max: number) => list.map((s) => s.trim().slice(0, max)).filter(Boolean)
 
 const headers = (backend: Backend) => ({ apikey: backend.key, 'Content-Type': 'application/json' })
 
@@ -25,23 +28,31 @@ export async function fetchDays(backend: Backend, signal?: AbortSignal, request:
   return reviveDays(await res.json())
 }
 
-/** Publishes today's shifts. Rejects with the server's reason when the name may not publish. */
+/**
+ * Publishes today's shifts. Resolves to what happened with Teams (the first publish of a day posts it, later ones
+ * do not). Rejects with the server's reason when the name may not publish.
+ */
 export async function publishDay(
   backend: Backend,
   publisher: string,
   input: PublishInput,
   request: typeof fetch = fetch,
-): Promise<void> {
+): Promise<TeamsPost> {
   const res = await request(`${backend.url}/rest/v1/rpc/publish_lunch_shift`, {
     method: 'POST',
     headers: headers(backend),
     body: JSON.stringify({
       p_day: input.day,
-      p_shift1: input.shift1,
-      p_shift2: input.shift2,
-      p_team: input.team,
+      p_shift1: fit(input.shift1, 40),
+      p_shift2: fit(input.shift2, 40),
+      p_team: fit(input.team, 40),
       p_publisher: publisher,
+      p_chat: fit(input.chat, 40),
+      p_out: fit(input.out, 40),
+      p_notes: fit(input.notes, 160),
     }),
   })
   if (!res.ok) throw await failure(res)
+  const answer: unknown = await res.json().catch(() => null)
+  return answer === 'posted' || answer === 'already' ? answer : 'off'
 }

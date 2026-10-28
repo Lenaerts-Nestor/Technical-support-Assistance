@@ -12,8 +12,15 @@ export type SharedDay = {
   updatedAt: string
 }
 
-/** What a publisher sends. */
-export type PublishInput = Pick<SharedDay, 'day' | 'shift1' | 'shift2' | 'team'>
+/** What a publisher sends. `chat`, `out` and `notes` are only used for the Teams post; they are not stored. */
+export type PublishInput = Pick<SharedDay, 'day' | 'shift1' | 'shift2' | 'team'> & {
+  chat: string[]
+  out: string[]
+  notes: string[]
+}
+
+/** What the Teams side did: `posted` (this press posted), `already` (Teams was posted earlier today), `off` (no Teams link set up). */
+export type TeamsPost = 'posted' | 'already' | 'off'
 
 const asStrings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
