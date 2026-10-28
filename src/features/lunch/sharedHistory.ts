@@ -36,9 +36,11 @@ export type SharedSchedule = {
   schedule: Schedule
   /** Names the roster does not have, so they could not be placed. */
   unknown: string[]
-  /** Roster agents to mark available (they are in a shift) and away (listed as out). */
+  /**
+   * The roster agents the schedule places. Exactly these are available today: the published schedule is everyone who
+   * was in, so anyone else on this roster is away, whether or not the publisher listed them as out.
+   */
   present: Set<string>
-  away: Set<string>
 }
 
 /** A published day as a schedule of this roster's agent ids. */
@@ -54,8 +56,7 @@ export function scheduleFromShared(entry: HistoryEntry, agents: Agent[], today: 
     })
   const shift1 = place(entry.shift1)
   const shift2 = place(entry.shift2)
-  const away = new Set(entry.out.flatMap((n) => byName.get(nameKey(n)) ?? []))
-  return { schedule: { date: today, shift1, shift2 }, unknown, present: new Set([...shift1, ...shift2]), away }
+  return { schedule: { date: today, shift1, shift2 }, unknown, present: new Set([...shift1, ...shift2]) }
 }
 
 const sortedKeys = (names: string[]) => names.map(nameKey).sort().join('|')

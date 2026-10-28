@@ -91,7 +91,6 @@ describe('scheduleFromShared', () => {
     expect(result.schedule).toEqual({ date: TUE, shift1: ['ann'], shift2: ['bo'] })
     expect(result.unknown).toEqual(['Cy'])
     expect([...result.present].sort()).toEqual(['ann', 'bo'])
-    expect([...result.away]).toEqual(['eve'])
   })
 })
 
