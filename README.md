@@ -122,12 +122,6 @@ list and history length; `scheduler.ts` holds the scheduling rules and their wei
 top; `lunchStorage.ts` is the only file that touches `localStorage` (swap it for a backend
 there); `components/rosterColumns.tsx` lists the table's columns.
 
-## Game
-
-A small Snake game for the break between calls. Steer with the arrow keys or W A S D, Space starts and
-pauses, and the on-screen arrows cover touch screens. The clock stops while another page is open. The best
-score is kept in this browser only. The rules are in `src/features/game/snake.ts`.
-
 ## Updates
 
 On the **Sync** page, **App updates** shows the version, checks for a newer one, and installs it: **Check

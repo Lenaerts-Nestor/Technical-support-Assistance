@@ -16,7 +16,6 @@ import { CalendarPage } from '../features/calendar/CalendarPage'
 import { NvxPage } from '../features/nvx/NvxPage'
 import { TerminalPage } from '../features/terminal/TerminalPage'
 import { LunchPlannerPage } from '../features/lunch/LunchPlannerPage'
-import { GamePage } from '../features/game/GamePage'
 import { SyncPage } from '../features/sync/SyncPage'
 
 const PAGES: Record<PageId, () => React.ReactElement> = {
@@ -29,7 +28,6 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
   terminal: TerminalPage,
   calendar: CalendarPage,
   lunch: LunchPlannerPage,
-  game: GamePage,
   sync: SyncPage,
 }
 
