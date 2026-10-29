@@ -1,4 +1,5 @@
 import type { ComboKind, EnemyKind } from './config'
+import type { Mods, Picks, UpgradeId } from './upgrades'
 
 export type Facing = 1 | -1
 
@@ -14,6 +15,7 @@ export type Player = {
   grounded: boolean
   hp: number
   maxHp: number
+  maxStamina: number
   stamina: number
   /** Seconds until stamina starts coming back. */
   staminaDelay: number
@@ -59,6 +61,8 @@ export type Enemy = {
   poiseTimer: number
   /** Seconds left of the white hit flash. */
   flash: number
+  /** Multiplies the damage of everything it does; grows with the round. */
+  power: number
 }
 
 /** A wave of rock racing along the ground. */
@@ -85,6 +89,19 @@ export type Particle = {
   color: string
 }
 
+/** `fight`: the round is on. `cleared`: it is won and the banner shows. `break`: the menu between rounds. */
+export type Stage = 'fight' | 'cleared' | 'break'
+
+/** What the break between rounds reports about the round just won. */
+export type RoundSummary = {
+  round: number
+  kills: number
+  parries: number
+  clearBonus: number
+  flawlessBonus: number
+  healed: number
+}
+
 export type World = {
   /** Game time: stands still during hit-stop. */
   time: number
@@ -94,9 +111,29 @@ export type World = {
   particles: Particle[]
   nextId: number
   spawnTimer: number
+  round: number
+  stage: Stage
+  stageTime: number
+  /** What is left to spend on enemies this round, and what the round started with. */
+  budget: number
+  roundBudget: number
+  roundKills: number
+  roundParries: number
+  /** Whether the player has been hurt this round (a round without it is flawless). */
+  hurtThisRound: boolean
+  /** Kills in a row, and the seconds left to land the next one before it ends. */
+  streak: number
+  streakTimer: number
   kills: number
   parries: number
   score: number
+  upgrades: Picks
+  mods: Mods
+  /** The upgrades on offer in the current break, and the one taken. */
+  offer: UpgradeId[]
+  picked: UpgradeId | null
+  summary: RoundSummary | null
+  revivesUsed: number
   /** Seconds of hit-stop left; the world holds still while it runs. */
   freeze: number
   /** Screen shake strength, decaying. */

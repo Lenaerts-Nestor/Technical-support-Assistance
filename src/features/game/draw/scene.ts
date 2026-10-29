@@ -1,4 +1,5 @@
-import { ARENA, ENEMIES, PLAYER } from '../config'
+import { ARENA, COST, ENEMIES } from '../config'
+import { streakMultiplier } from '../rounds'
 import type { Enemy, World } from '../types'
 
 const { width: W, height: H, groundY } = ARENA
@@ -156,7 +157,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World) {
   ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, 32, 30)
 
   // Stamina: spent by the dash, heavy swings and blocking; it flashes red when you asked for more than you had.
-  const stamina = p.stamina / PLAYER.maxStamina
+  const stamina = p.stamina / p.maxStamina
   ctx.fillStyle = 'rgba(10,10,14,.65)'
   roundRect(ctx, 20, 46, 164, 12, 5)
   ctx.fillStyle = 'rgba(10,10,14,.65)'
@@ -203,4 +204,71 @@ export function drawWaves(ctx: CanvasRenderingContext2D, w: World) {
     }
     ctx.restore()
   }
+}
+
+/** The round counter and its progress bar, top centre, and the kill streak under the score. */
+export function drawRoundHud(ctx: CanvasRenderingContext2D, w: World) {
+  const aliveCost = w.enemies.reduce((sum, e) => sum + (e.state === 'dying' ? 0 : COST[e.kind]), 0)
+  const progress = w.stage === 'fight' ? 1 - (w.budget + aliveCost) / w.roundBudget : 1
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#fff'
+  ctx.font = '800 14px Inter, system-ui, sans-serif'
+  ctx.fillText(`ROUND ${w.round}`, W / 2, 26)
+  ctx.fillStyle = 'rgba(10,10,14,.65)'
+  roundRect(ctx, W / 2 - 70, 38, 140, 8, 4)
+  ctx.fill()
+  ctx.fillStyle = '#f5a93a'
+  roundRect(ctx, W / 2 - 68, 40, 136 * Math.max(0, Math.min(1, progress)), 4, 2)
+  ctx.fill()
+
+  if (w.streak >= 2) {
+    ctx.textAlign = 'right'
+    ctx.fillStyle = '#ffd27a'
+    ctx.font = '800 13px Inter, system-ui, sans-serif'
+    ctx.fillText(`STREAK ${w.streak}  ×${streakMultiplier(w.streak).toFixed(1)}`, W - 24, 70)
+    const left = Math.min(1, w.streakTimer / (3 + w.mods.streakTime))
+    ctx.fillStyle = 'rgba(10,10,14,.65)'
+    roundRect(ctx, W - 24 - 90, 78, 90, 5, 2.5)
+    ctx.fill()
+    ctx.fillStyle = '#ffd27a'
+    roundRect(ctx, W - 24 - 90, 78, 90 * left, 5, 2.5)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
+/** The big words in the middle of the screen: a round starting, a round won. */
+export function drawBanner(ctx: CanvasRenderingContext2D, w: World) {
+  let title = ''
+  let sub = ''
+  let alpha = 0
+  let color = '#fff'
+  if (w.stage === 'fight' && w.stageTime < 1.8) {
+    title = `ROUND ${w.round}`
+    sub = w.round === 1 ? 'Hold the line' : 'They are back, and more of them'
+    alpha = Math.min(1, (1.8 - w.stageTime) / 0.6, w.stageTime / 0.2)
+  } else if (w.stage === 'cleared' && w.summary) {
+    title = `ROUND ${w.summary.round} CLEARED`
+    sub = w.summary.flawlessBonus > 0 ? 'FLAWLESS' : ''
+    color = '#ffd27a'
+    alpha = Math.min(1, w.stageTime / 0.2)
+  }
+  if (alpha <= 0) return
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.shadowColor = 'rgba(0,0,0,.7)'
+  ctx.shadowBlur = 12
+  ctx.fillStyle = color
+  ctx.font = '900 44px Inter, system-ui, sans-serif'
+  ctx.fillText(title, W / 2, H / 2 - 70)
+  if (sub) {
+    ctx.fillStyle = w.stage === 'cleared' ? '#ffffff' : 'rgba(255,255,255,.8)'
+    ctx.font = '700 16px Inter, system-ui, sans-serif'
+    ctx.fillText(sub, W / 2, H / 2 - 32)
+  }
+  ctx.restore()
 }

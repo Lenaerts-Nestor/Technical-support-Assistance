@@ -227,16 +227,29 @@ export const ENEMIES: Record<EnemyKind, EnemyStats> = {
   },
 }
 
-export const SPAWN = {
+/** What each kind of enemy costs out of a round's budget. */
+export const COST: Record<EnemyKind, number> = { goblin: 1, orc: 3, ogre: 8 }
+
+export const ROUNDS = {
   firstDelay: 1,
-  interval: 2.4,
-  fastestInterval: 1.2,
-  maxAlive: 5,
-  /** A stand-in for the round system: tougher enemies are mixed in after this many kills. */
-  orcAfterKills: 3,
-  ogreAfterKills: 8,
-  maxOrcs: 2,
-  maxOgres: 1,
+  /** Round one gets goblins only; tougher kinds appear from these rounds on. */
+  orcFromRound: 2,
+  ogreFromRound: 4,
+  /** How long the "Round cleared" banner shows before the menu opens. */
+  clearedTime: 1.7,
+  /** The share of maximum health given back when a round is cleared. */
+  healShare: 0.35,
   /** Spawns start this far outside the visible arena, beyond the enemy's own half width. */
   margin: 30,
+} as const
+
+export const SCORE = {
+  /** A kill within this many seconds of the last one keeps the streak going. */
+  streakTime: 3,
+  /** Each kill in a streak adds this to the score multiplier, up to the maximum. */
+  streakStep: 0.1,
+  maxMultiplier: 2.5,
+  clearBonus: 100,
+  flawlessBase: 75,
+  flawlessPerRound: 25,
 } as const

@@ -1,6 +1,8 @@
 import { ARENA } from './config'
 import { InputState } from './input'
+import { nextRound, pickUpgrade } from './rounds'
 import { createWorld, stepWorld } from './sim'
+import type { UpgradeId } from './upgrades'
 import { renderWorld } from './draw/renderWorld'
 import type { World } from './types'
 
@@ -20,7 +22,19 @@ export class GameEngine {
     this.input.clear()
   }
 
+  /** Take one of the upgrades on offer during the break between rounds. */
+  pickUpgrade(id: UpgradeId) {
+    return pickUpgrade(this.world, id)
+  }
+
+  /** Leave the break and start the next round. */
+  nextRound() {
+    this.input.clear()
+    return nextRound(this.world)
+  }
+
   advance(seconds: number) {
+    if (this.world.stage === 'break') return
     const dt = Math.min(seconds, MAX_FRAME)
     const steps = Math.max(1, Math.ceil(dt / MAX_STEP))
     // Button presses belong to the first slice only; held keys apply to all of them.

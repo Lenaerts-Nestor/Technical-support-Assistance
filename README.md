@@ -141,10 +141,19 @@ Goblins leap, orcs chop and ogres slam the ground, which sends a wave of rock al
 dash. Orcs and ogres shrug off light hits until their **poise** (the bar under their health) breaks; then
 they stagger, with stars over their head, and take extra damage. Every attack shows a warning marker first.
 
-It is built in stages. So far: movement, light and heavy combos, shield and parry, stamina, and the three
-enemy types. Still to come: rounds with upgrades, the other weapons, a boss, and character customization.
-The rules are in `src/features/game/sim.ts` (tests next to it), every tuning number in `config.ts`, and the
-characters are vector shapes in `art/` that `draw/` poses and animates.
+**Rounds.** Each round is a budget of enemies that arrive one by one (a goblin costs 1, an orc 3, an ogre 8).
+Orcs join from round 2 and ogres from round 4; from round 5 on every enemy also has more health and hits
+harder. Clear a round and you are patched up (a third of your health, full stamina), get a clear bonus and a
+**flawless** bonus if nothing touched you, then **pick 1 of 3 upgrades** (press 1, 2 or 3, then Enter). Upgrades
+last for the run. Kills in quick succession build a **streak** that multiplies their points, and a hit on you
+ends it. The game is endless; the list of this session's runs is on the "You fell" screen and is not saved.
+
+It is built in stages. So far: movement, light and heavy combos, shield and parry, stamina, the three enemy
+types, rounds, scoring and upgrades. Still to come: the other three weapons (the weapon rack in the break
+screen shows them as coming soon) and the Q hotkey, a boss every fifth round, and character customization.
+The rules are in `src/features/game/sim.ts` and `rounds.ts` (tests next to them), the upgrade list in
+`upgrades.ts`, every tuning number in `config.ts` and `pacing.ts`, and the characters are vector shapes in
+`art/` that `draw/` poses and animates.
 
 ## Updates
 

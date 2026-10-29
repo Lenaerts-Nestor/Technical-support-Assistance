@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ARENA, COMBOS, DASH, ENEMIES, PLAYER, SHIELD, SPAWN } from './config'
+import { ARENA, COMBOS, DASH, ENEMIES, PLAYER, SHIELD } from './config'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
 import { NO_INPUT } from './types'
 import type { Enemy, EnemyState, FrameInput, World } from './types'
@@ -404,47 +404,6 @@ describe('orc and ogre', () => {
     press(w, { dashPressed: true, move: 1 })
     run(w, 0.2)
     expect(w.player.x).toBeGreaterThan(x + 60)
-  })
-})
-
-describe('spawning', () => {
-  it('brings in tougher enemies as the kills mount, within the caps', () => {
-    const w = createWorld()
-    w.kills = 20
-    let seed = 7
-    const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
-    const seen = new Set<string>()
-    let most = { orc: 0, ogre: 0, all: 0 }
-    for (let t = 0; t < 120; t += DT) {
-      stepWorld(w, NO_INPUT, DT, rng)
-      // Nobody fights back here, so clear the field now and then as a real player would.
-      if (Math.round(t / DT) % 600 === 0) w.enemies = []
-      w.player.hp = w.player.maxHp
-      w.player.invuln = 1
-      const alive = w.enemies.filter((e) => e.state !== 'dying')
-      alive.forEach((e) => seen.add(e.kind))
-      most = {
-        orc: Math.max(most.orc, alive.filter((e) => e.kind === 'orc').length),
-        ogre: Math.max(most.ogre, alive.filter((e) => e.kind === 'ogre').length),
-        all: Math.max(most.all, alive.length),
-      }
-    }
-    expect([...seen].sort()).toEqual(['goblin', 'ogre', 'orc'])
-    expect(most.orc).toBeLessThanOrEqual(SPAWN.maxOrcs)
-    expect(most.ogre).toBeLessThanOrEqual(SPAWN.maxOgres)
-    expect(most.all).toBeLessThanOrEqual(SPAWN.maxAlive)
-  })
-
-  it('starts with goblins only', () => {
-    const w = createWorld()
-    let seed = 3
-    const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
-    for (let t = 0; t < 10; t += DT) {
-      stepWorld(w, NO_INPUT, DT, rng)
-      w.player.hp = w.player.maxHp
-      w.player.invuln = 1
-    }
-    expect(w.enemies.every((e) => e.kind === 'goblin')).toBe(true)
   })
 })
 

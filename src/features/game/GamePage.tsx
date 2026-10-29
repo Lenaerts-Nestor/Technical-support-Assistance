@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, FocusEvent } from 'react'
+import { BreakScreen } from './BreakScreen'
 import { ARENA } from './config'
 import { GameEngine } from './engine'
 import { isGameKey } from './input'
+import type { UpgradeId } from './upgrades'
 import { CARD, GHOST_BTN_MD, PAGE_SUBTITLE, PAGE_TITLE, PRIMARY_BTN, SECTION_LABEL } from '../../shared/ui/styles'
 
-type Phase = 'idle' | 'playing' | 'paused' | 'over'
+type Phase = 'idle' | 'playing' | 'paused' | 'break' | 'over'
 
-type Run = { score: number; kills: number }
+type Run = { score: number; kills: number; round: number }
 
 /** How long the fallen knight stays on screen before the results appear. */
 const DEATH_LINGER = 1.1
@@ -32,6 +34,8 @@ export function GamePage() {
   const [engine] = useState(() => new GameEngine())
   const [phase, setPhase] = useState<Phase>('idle')
   const [onScreen, setOnScreen] = useState(true)
+  /** The upgrade taken in the current break, if any. */
+  const [picked, setPicked] = useState<UpgradeId | null>(null)
   /** Finished runs of this visit. Kept in memory only: a reload starts the list again. */
   const [runs, setRuns] = useState<Run[]>([])
   const frameRef = useRef<HTMLDivElement>(null)
@@ -84,8 +88,13 @@ export function GamePage() {
       draw()
       const { world } = engine
       if (world.over && world.player.stateTime > DEATH_LINGER) {
-        setRuns((r) => [...r, { score: world.score, kills: world.kills }])
+        setRuns((r) => [...r, { score: world.score, kills: world.kills, round: world.round }])
         setPhase('over')
+        return
+      }
+      if (world.stage === 'break') {
+        setPicked(null)
+        setPhase('break')
         return
       }
       raf = requestAnimationFrame(frame)
@@ -95,9 +104,19 @@ export function GamePage() {
   }, [running, engine, draw])
 
   const begin = () => {
-    if (phase !== 'paused') engine.reset()
+    if (phase === 'break') {
+      if (!picked) return
+      engine.nextRound()
+    } else if (phase !== 'paused') {
+      engine.reset()
+    }
+    setPicked(null)
     setPhase('playing')
     frameRef.current?.focus()
+  }
+
+  const pick = (id: UpgradeId) => {
+    if (phase === 'break' && engine.pickUpgrade(id)) setPicked(id)
   }
 
   const pause = () => {
@@ -107,6 +126,13 @@ export function GamePage() {
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return
+    if (phase === 'break') {
+      const index = ['Digit1', 'Digit2', 'Digit3'].indexOf(event.code)
+      if (index >= 0 && engine.world.offer[index]) pick(engine.world.offer[index])
+      // On a focused button Enter already clicks it; handling it here as well would act twice.
+      else if (event.code === 'Enter' && !(event.target instanceof HTMLButtonElement)) begin()
+      return
+    }
     if (isGameKey(event.code)) {
       event.preventDefault()
       if (phase === 'playing') engine.input.keyDown(event.code, event.repeat)
@@ -166,12 +192,13 @@ export function GamePage() {
           className="border-line-strong focus-visible:outline-brand relative mx-auto w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
-          {phase !== 'playing' && (
+          {phase === 'break' && <BreakScreen world={engine.world} picked={picked} onPick={pick} onContinue={begin} />}
+          {phase !== 'playing' && phase !== 'break' && (
             <div className="bg-black/50 absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center backdrop-blur-[2px]">
               {phase === 'idle' && (
                 <>
                   <p className="text-3xl font-extrabold tracking-tight text-white">Last Stand</p>
-                  <p className="max-w-md text-sm text-white/75">Goblins, orcs and ogres pour in from both sides. Parry, dodge and cut them down.</p>
+                  <p className="max-w-md text-sm text-white/75">Goblins, orcs and ogres pour in from both sides, round after round. Parry, dodge and cut them down.</p>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to start</p>
                 </>
               )}
@@ -185,9 +212,25 @@ export function GamePage() {
                 <>
                   <p className="text-3xl font-extrabold tracking-tight text-white">You fell</p>
                   <p className="text-sm text-white/75">
-                    Score <b className="text-white">{last.score}</b> · {last.kills} kill{last.kills === 1 ? '' : 's'} · best this session{' '}
-                    <b className="text-white">{best}</b>
+                    Round <b className="text-white">{last.round}</b> · score <b className="text-white">{last.score}</b> · {last.kills} kill
+                    {last.kills === 1 ? '' : 's'}
                   </p>
+                  <ol className="w-full max-w-xs space-y-0.5 text-left text-xs text-white/75" aria-label="Runs this session">
+                    {runs.slice(-5).map((run, i, shown) => {
+                      const number = runs.length - shown.length + i + 1
+                      return (
+                        <li key={number} className={`flex justify-between rounded px-2 py-0.5 ${run === last ? 'bg-white/15 font-bold text-white' : ''}`}>
+                          <span>
+                            #{number} · round {run.round}
+                          </span>
+                          <span>
+                            {run.score}
+                            {run.score === best && runs.length > 1 ? ' ★' : ''}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ol>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to try again</p>
                 </>
               )}

@@ -13,11 +13,14 @@ import {
   PLAYER,
   POISE_RESET,
   SHIELD,
-  SPAWN,
   VULNERABLE_BONUS,
 } from './config'
-import type { AttackStep, ComboKind, EnemyKind, EnemyStats } from './config'
+import type { AttackStep, ComboKind, EnemyStats } from './config'
+import { awardKill, stepRound } from './rounds'
 import type { Enemy, FrameInput, Player, World } from './types'
+import { createWorld, spawnEnemy } from './world'
+
+export { createWorld, spawnEnemy }
 
 type Rng = () => number
 
@@ -37,73 +40,6 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 /** Move `value` towards `target` by at most `delta`. */
 function approach(value: number, target: number, delta: number) {
   return value < target ? Math.min(target, value + delta) : Math.max(target, value - delta)
-}
-
-export function createWorld(): World {
-  const player: Player = {
-    x: ARENA.width / 2,
-    y: 0,
-    vx: 0,
-    vy: 0,
-    facing: 1,
-    grounded: true,
-    hp: PLAYER.maxHp,
-    maxHp: PLAYER.maxHp,
-    stamina: PLAYER.maxStamina,
-    staminaDelay: 0,
-    state: 'free',
-    stateTime: 0,
-    attackKind: 'light',
-    attackIndex: 0,
-    comboWindow: 0,
-    struck: new Set(),
-    dashCooldown: 0,
-    invuln: 0,
-    blockCooldown: 0,
-    guardDelay: 0,
-    parryFlash: 0,
-    lowStamina: 0,
-  }
-  return {
-    time: 0,
-    player,
-    enemies: [],
-    waves: [],
-    particles: [],
-    nextId: 1,
-    spawnTimer: SPAWN.firstDelay,
-    kills: 0,
-    parries: 0,
-    score: 0,
-    freeze: 0,
-    shake: 0,
-    buffer: { jump: 0, dash: 0, light: 0, heavy: 0 },
-    over: false,
-  }
-}
-
-export function spawnEnemy(w: World, kind: EnemyKind, x: number): Enemy {
-  const stats = ENEMIES[kind]
-  const enemy: Enemy = {
-    id: w.nextId++,
-    kind,
-    x,
-    y: 0,
-    vx: 0,
-    vy: 0,
-    facing: x < w.player.x ? 1 : -1,
-    hp: stats.hp,
-    maxHp: stats.hp,
-    state: 'walk',
-    stateTime: 0,
-    cooldown: 0.5,
-    struckPlayer: false,
-    poiseHit: 0,
-    poiseTimer: 0,
-    flash: 0,
-  }
-  w.enemies.push(enemy)
-  return enemy
 }
 
 export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
@@ -131,7 +67,7 @@ export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
   stepWaves(w, dt, rng)
   keepApart(w)
   w.enemies = w.enemies.filter((e) => e.state !== 'dying' || e.stateTime < 0.7)
-  spawnEnemies(w, dt, rng)
+  stepRound(w, dt, rng)
   stepParticles(w, dt)
 }
 
@@ -154,14 +90,14 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   p.staminaDelay = Math.max(0, p.staminaDelay - dt)
   if (p.staminaDelay === 0 && p.state !== 'dead') {
     const share = p.state === 'block' ? PLAYER.blockRegenShare : 1
-    p.stamina = Math.min(PLAYER.maxStamina, p.stamina + PLAYER.staminaRegen * share * dt)
+    p.stamina = Math.min(p.maxStamina, p.stamina + PLAYER.staminaRegen * w.mods.staminaRegen * share * dt)
   }
 
   switch (p.state) {
     case 'free': {
       if (input.move !== 0) p.facing = input.move
       const accel = p.grounded ? PLAYER.groundAccel : PLAYER.airAccel
-      p.vx = approach(p.vx, input.move * PLAYER.speed, accel * dt)
+      p.vx = approach(p.vx, input.move * PLAYER.speed * w.mods.moveSpeed, accel * dt)
       cutJump(p, input)
       if (tryJump(w, p)) break
       if (w.buffer.dash > 0 && tryDash(w, p, input)) break
@@ -184,7 +120,7 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
         p.facing = input.move
         p.guardDelay = SHIELD.turnDelay
       }
-      p.vx = approach(p.vx, input.move * PLAYER.speed * SHIELD.moveShare, PLAYER.groundAccel * dt)
+      p.vx = approach(p.vx, input.move * PLAYER.speed * SHIELD.moveShare * w.mods.moveSpeed, PLAYER.groundAccel * dt)
       if (tryJump(w, p)) break
       if (w.buffer.dash > 0 && tryDash(w, p, input)) break
       if (w.buffer.heavy > 0 && tryAttack(w, p, input, 'heavy')) break
@@ -267,17 +203,18 @@ function lowerShield(p: Player) {
 /** Dash if it is ready and affordable. Returns whether it started. */
 function tryDash(w: World, p: Player, input: FrameInput) {
   if (p.dashCooldown > 0) return false
-  if (p.stamina < DASH.stamina) {
+  const cost = DASH.stamina * w.mods.dashCost
+  if (p.stamina < cost) {
     w.buffer.dash = 0
     p.lowStamina = 0.5
     return false
   }
-  spend(p, DASH.stamina)
+  spend(p, cost)
   p.facing = input.move !== 0 ? input.move : p.facing
   p.state = 'dash'
   p.stateTime = 0
   p.vy = 0
-  p.dashCooldown = DASH.cooldown
+  p.dashCooldown = DASH.cooldown * w.mods.dashCooldown
   p.invuln = Math.max(p.invuln, DASH.invuln)
   w.buffer.dash = 0
   return true
@@ -363,9 +300,11 @@ function hitEnemy(w: World, e: Enemy, step: AttackStep, rng: Rng) {
 
   // Catching an enemy off guard (mid-recovery, or staggered) hurts more.
   const exposed = e.state === 'recover' || e.state === 'stagger'
-  e.hp -= step.damage * (exposed ? VULNERABLE_BONUS : 1)
+  const combo = COMBOS[p.attackKind]
+  const finisher = step === combo[combo.length - 1] ? w.mods.finisher : 1
+  e.hp -= step.damage * w.mods.damage * finisher * (exposed ? VULNERABLE_BONUS : 1)
   e.flash = 0.1
-  e.poiseHit += step.poise
+  e.poiseHit += step.poise * w.mods.poise
   e.poiseTimer = POISE_RESET
   const breaks = stats.poise === 0 || e.poiseHit >= stats.poise
 
@@ -375,8 +314,7 @@ function hitEnemy(w: World, e: Enemy, step: AttackStep, rng: Rng) {
     e.facing = (dir * -1) as 1 | -1
     e.vx = dir * step.knockback * 1.2 * Math.max(stats.knockScale, 0.4)
     e.vy = stats.heavy ? 0 : 380
-    w.kills += 1
-    w.score += stats.score
+    awardKill(w, stats)
   } else if (e.state === 'stagger') {
     // Already reeling: it takes the damage and the shove, but the clock does not restart.
     e.vx = dir * step.knockback * stats.knockScale * 0.5
@@ -404,20 +342,23 @@ function hitEnemy(w: World, e: Enemy, step: AttackStep, rng: Rng) {
  * only blocks, which costs stamina, and with none left the guard breaks and part of the blow
  * lands anyway.
  */
-function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, blockCost: number): HitResult {
+function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlockCost: number): HitResult {
   const p = w.player
   if (p.invuln > 0 || p.state === 'dead') return 'none'
+  const blockCost = baseBlockCost * w.mods.blockCost
   const front = (fromX - p.x) * p.facing >= -10
   let result: HitResult = 'hit'
 
   if (p.state === 'block' && p.guardDelay === 0 && front) {
     const sparkX = p.x + p.facing * 34
     const sparkY = p.y + 70
-    if (p.stateTime <= SHIELD.parryWindow) {
-      p.stamina = Math.min(PLAYER.maxStamina, p.stamina + SHIELD.parryStamina)
+    if (p.stateTime <= SHIELD.parryWindow + w.mods.parryWindow) {
+      p.stamina = Math.min(p.maxStamina, p.stamina + SHIELD.parryStamina + w.mods.parryStamina)
+      p.hp = Math.min(p.maxHp, p.hp + w.mods.parryHeal)
       p.parryFlash = 0.35
       p.invuln = 0.25
       w.parries += 1
+      w.roundParries += 1
       w.score += SHIELD.parryScore
       w.freeze = Math.max(w.freeze, 0.13)
       w.shake = Math.max(w.shake, 6)
@@ -441,8 +382,19 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, blockCo
   }
 
   const dir = p.x >= fromX ? 1 : -1
-  p.hp = Math.max(0, p.hp - amount)
-  p.invuln = PLAYER.invulnAfterHit
+  p.hp = Math.max(0, p.hp - Math.max(1, Math.round(amount * w.mods.damageTaken)))
+  w.hurtThisRound = true
+  w.streak = 0
+  w.streakTimer = 0
+  // A phoenix feather turns a fatal blow into a second chance, once.
+  if (p.hp === 0 && w.revivesUsed < w.mods.revive) {
+    w.revivesUsed += 1
+    p.hp = Math.ceil(p.maxHp / 3)
+    p.invuln = 1.6
+    burst(w, p.x, p.y + PLAYER.height * 0.5, 0, rng, 28, ['#ffd27a', '#ffffff', '#ff8f5c'])
+  } else {
+    p.invuln = PLAYER.invulnAfterHit
+  }
   p.vx = dir * 320
   p.vy = 260
   p.grounded = false
@@ -545,7 +497,7 @@ function beginEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
       vx: e.facing * wave.speed,
       life: wave.life,
       maxLife: wave.life,
-      damage: wave.damage,
+      damage: wave.damage * e.power,
       height: wave.height,
       halfWidth: wave.halfWidth,
       blockCost: wave.blockCost,
@@ -558,7 +510,7 @@ function beginEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
 
 function stepEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
   if (stats.style === 'leap') {
-    if (!e.struckPlayer && overlapsPlayer(w, e, stats.halfWidth + 10)) settleStrike(e, stats, damagePlayer(w, stats.damage, e.x, rng, stats.blockCost))
+    if (!e.struckPlayer && overlapsPlayer(w, e, stats.halfWidth + 10)) settleStrike(e, stats, damagePlayer(w, stats.damage * e.power, e.x, rng, stats.blockCost))
     if (e.y <= 0 && e.stateTime > 0.05) {
       e.state = 'recover'
       e.stateTime = 0
@@ -566,7 +518,7 @@ function stepEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
     }
     return
   }
-  if (!e.struckPlayer && inStrikeZone(w, e, stats)) settleStrike(e, stats, damagePlayer(w, stats.damage, e.x, rng, stats.blockCost))
+  if (!e.struckPlayer && inStrikeZone(w, e, stats)) settleStrike(e, stats, damagePlayer(w, stats.damage * e.power, e.x, rng, stats.blockCost))
   if (e.stateTime >= stats.active) {
     e.state = 'recover'
     e.stateTime = 0
@@ -655,32 +607,6 @@ function keepApart(w: World) {
       b.x += push * side
     }
   }
-}
-
-/** Mostly goblins, with orcs and the odd ogre mixed in as the kills mount. */
-function pickKind(w: World, rng: Rng): EnemyKind {
-  const count = (kind: EnemyKind) => w.enemies.filter((e) => e.kind === kind && e.state !== 'dying').length
-  const options: [EnemyKind, number][] = [['goblin', 6]]
-  if (w.kills >= SPAWN.orcAfterKills && count('orc') < SPAWN.maxOrcs) options.push(['orc', 3])
-  if (w.kills >= SPAWN.ogreAfterKills && count('ogre') < SPAWN.maxOgres) options.push(['ogre', 1.4])
-  let roll = rng() * options.reduce((sum, [, weight]) => sum + weight, 0)
-  for (const [kind, weight] of options) {
-    roll -= weight
-    if (roll < 0) return kind
-  }
-  return 'goblin'
-}
-
-function spawnEnemies(w: World, dt: number, rng: Rng) {
-  if (w.over) return
-  w.spawnTimer -= dt
-  if (w.spawnTimer > 0) return
-  const alive = w.enemies.filter((e) => e.state !== 'dying').length
-  if (alive >= SPAWN.maxAlive) return
-  const kind = pickKind(w, rng)
-  const edge = ENEMIES[kind].halfWidth + SPAWN.margin
-  spawnEnemy(w, kind, rng() < 0.5 ? -edge : ARENA.width + edge)
-  w.spawnTimer = Math.max(SPAWN.fastestInterval, SPAWN.interval - w.kills * 0.05)
 }
 
 /* -- Particles ------------------------------------------------------------- */
