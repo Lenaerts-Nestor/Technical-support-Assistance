@@ -122,6 +122,62 @@ list and history length; `scheduler.ts` holds the scheduling rules and their wei
 top; `lunchStorage.ts` is the only file that touches `localStorage` (swap it for a backend
 there); `components/rosterColumns.tsx` lists the table's columns.
 
+## Game (Last Stand)
+
+A side-view sword fight for the break between calls: goblins, orcs and ogres pour in from both sides of a
+keep and you hold them off. **Enter** starts and **Esc** pauses. The game only runs while the page is open
+and has the keyboard, and scores last until the page is reloaded.
+
+| Key | Does |
+|---|---|
+| **A / D** | walk |
+| **W / Space** | jump (hold for height) |
+| **Shift** | dash: you cannot be hit for a moment; costs stamina |
+| **J** | light combo: tap three times |
+| **K** | heavy combo: tap twice; slow, costs stamina, breaks poise. Can follow a light hit. With the bow, hold to draw and let go to shoot |
+| **L** (hold) | shield (sword & shield only): guards the way you face and costs stamina per hit. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
+| **Q** | swap to your other weapon |
+
+Goblins leap, orcs chop and ogres slam the ground, which sends a wave of rock along it that you can jump or
+dash. Orcs and ogres shrug off light hits until their **poise** (the bar under their health) breaks; then
+they stagger, with stars over their head, and take extra damage. Every attack shows a warning marker first.
+
+**Rounds.** Each round is a budget of enemies that arrive one by one (a goblin costs 1, an orc 3, an ogre 8).
+Orcs join from round 2 and ogres from round 4; from round 5 on every enemy also has more health and hits
+harder. Clear a round and you are patched up (a third of your health, full stamina), get a clear bonus and a
+**flawless** bonus if nothing touched you, then **pick 1 of 3 upgrades** (press 1, 2 or 3, then Enter). Upgrades
+last for the run. Kills in quick succession build a **streak** that multiplies their points, and a hit on you
+ends it. The game is endless; the list of this session's runs is on the "You fell" screen and is not saved.
+
+**Weapons.** You carry two, chosen on the start screen and again in every break (and on the game-over screen):
+
+| Weapon | Light (J) | Heavy (K) | Notes |
+|---|---|---|---|
+| Sword & Shield | quick 3-hit combo | overhead chop, then a rising cut | the only one that can shield and parry |
+| Long Sword | longer reach, 3 hits | **spin** that cuts both sides, then a long thrust | no shield |
+| Spiked Mace | slow, hard 3 hits | **slam** that sends a shockwave along the ground, then a crushing swing | staggers orcs and ogres fast |
+| Bow | arrows from a distance (a kick if an enemy is right there) | hold to draw, let go for a shot that pierces everything in line | no shield |
+
+**Your hero.** On the start screen (and from "Change look and weapons" after a run) pick a helmet (great helm,
+open face, horned), armour (plate, chainmail, leather) and a colour. It is cosmetic only and is remembered in
+this browser.
+
+**Bosses.** Every fifth round is a boss: the **Ogre Warlord**, an armoured ogre with its own health bar. It
+slams the ground (and, once enraged below half health, sends waves both ways), **charges** across the arena
+(dash through it or take it on the shield; if it hits the wall it is stunned and open) and **roars** to call
+goblins. Every attack shows a red danger zone on the ground before it lands.
+
+**Feedback.** Damage numbers float up from every hit, with PARRY!, BLOCK and STAGGER! called out; enemies
+shove back and flash white when hit, glow red as an attack is about to land, and the screen edge flashes
+red when you are hit. Motion is smoothed (poses blend, capes and ears ride springs, landings squash) so
+nothing snaps from one pose to the next.
+
+It is built in stages and this was the last: movement, the four weapons and the swap, shield and parry,
+stamina, enemies and the boss, rounds, scoring and upgrades, and customization. The rules are in
+`src/features/game/sim.ts` and `rounds.ts` (tests next to them), the weapons in `weapons.ts`, the upgrade list
+in `upgrades.ts`, every tuning number in `config.ts` and `pacing.ts`, and the characters are vector shapes
+in `art/` that `draw/` poses and animates (`draw/anim.ts` is the smoothing).
+
 ## Updates
 
 On the **Sync** page, **App updates** shows the version, checks for a newer one, and installs it: **Check
