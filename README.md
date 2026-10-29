@@ -122,6 +122,18 @@ list and history length; `scheduler.ts` holds the scheduling rules and their wei
 top; `lunchStorage.ts` is the only file that touches `localStorage` (swap it for a backend
 there); `components/rosterColumns.tsx` lists the table's columns.
 
+## Game (Last Stand)
+
+A side-view sword fight for the break between calls: goblins pour in from both sides of a keep and you
+hold them off. **Enter** starts, **A / D** walk, **W / Space** jump (hold for height), **Shift** dashes
+(you cannot be hit for a moment), **J** attacks (tap three times for the combo), **Esc** pauses. The game
+only runs while the page is open and has the keyboard, and scores last until the page is reloaded.
+
+It is built in stages. So far: walking, jumping, dashing, the three-hit light combo and goblins. Still to
+come: orcs and ogres, a heavy attack and shield, rounds with upgrades, the other weapons, and character
+customization. The rules are in `src/features/game/sim.ts`, every tuning number in `config.ts`, and the
+characters are vector shapes in `art/` that `draw/` poses and animates.
+
 ## Updates
 
 On the **Sync** page, **App updates** shows the version, checks for a newer one, and installs it: **Check
