@@ -222,16 +222,6 @@ describe('feedback you can see', () => {
     run(w, 0.2, { blockHeld: true })
     expect(w.floaters.some((f) => f.text === 'PARRY!')).toBe(true)
   })
-
-  it('landing from a jump squashes the hero for a moment', () => {
-    const w = quiet()
-    stepWorld(w, { ...NO_INPUT, jumpPressed: true, jumpHeld: true }, DT, first)
-    until(w, () => w.player.grounded === false)
-    until(w, () => w.player.landTime > 0, { jumpHeld: true })
-    expect(w.player.landTime).toBeGreaterThan(0)
-    run(w, 0.4)
-    expect(w.player.landTime).toBe(0)
-  })
 })
 
 describe('arena', () => {

@@ -3,12 +3,12 @@
  * a small slice of time given what the player is pressing. The random source is passed in so a
  * test can play the same game twice.
  */
-import { ARENA, COMBO_WINDOW, DASH, ENEMIES, PLAYER, POISE_RESET, ROUNDS, SHIELD, SWAP, VULNERABLE_BONUS } from './config'
-import type { AttackStep, ComboKind, EnemyStats } from './config'
+import { ARENA, COMBO_WINDOW, DASH, ENEMIES, PLAYER, POISE_RESET, ROUNDS, SHIELD, VULNERABLE_BONUS } from './config'
+import type { AttackStep, EnemyStats } from './config'
+import { HEROES } from './heroes'
+import type { HeroDef } from './heroes'
 import { awardKill, stepRound } from './rounds'
 import type { Enemy, FrameInput, Player, World } from './types'
-import { WEAPONS } from './weapons'
-import type { WeaponDef } from './weapons'
 import { createWorld, spawnEnemy } from './world'
 
 export { createWorld, spawnEnemy }
@@ -39,7 +39,6 @@ export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
   if (input.dashPressed) buffer.dash = PLAYER.inputBuffer
   if (input.lightPressed) buffer.light = PLAYER.inputBuffer
   if (input.heavyPressed) buffer.heavy = PLAYER.inputBuffer
-  if (input.swapPressed) buffer.swap = PLAYER.inputBuffer
   w.shake *= Math.exp(-dt * 10)
 
   // Hit-stop: the whole world holds its breath for a moment after a solid hit, and so do
@@ -51,17 +50,12 @@ export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
 
   buffer.jump = Math.max(0, buffer.jump - dt)
   buffer.dash = Math.max(0, buffer.dash - dt)
-  // An attack pressed while a new weapon is still coming up waits for it instead of being lost.
-  if (w.player.swapAnim >= SWAP.time) {
-    buffer.light = Math.max(0, buffer.light - dt)
-    buffer.heavy = Math.max(0, buffer.heavy - dt)
-  }
-  buffer.swap = Math.max(0, buffer.swap - dt)
+  buffer.light = Math.max(0, buffer.light - dt)
+  buffer.heavy = Math.max(0, buffer.heavy - dt)
   w.time += dt
   stepPlayer(w, input, dt, rng)
   for (const enemy of w.enemies) stepEnemy(w, enemy, dt, rng)
   stepWaves(w, dt, rng)
-  stepArrows(w, dt, rng)
   keepApart(w)
   w.enemies = w.enemies.filter((e) => e.state !== 'dying' || e.stateTime < 0.7)
   stepRound(w, dt, rng)
@@ -70,15 +64,15 @@ export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
 
 /* -- Player ---------------------------------------------------------------- */
 
-/** The weapon in hand. */
-export const weaponOf = (w: World): WeaponDef => WEAPONS[w.loadout[w.activeSlot]]
+/** The hero being played. */
+export const heroOf = (w: World): HeroDef => HEROES[w.hero]
 
 /** The step of the combo being swung. */
-const stepOf = (w: World, p: Player): AttackStep => weaponOf(w).combos[p.attackKind][p.attackIndex]
+const stepOf = (w: World, p: Player): AttackStep => heroOf(w).combos[p.attackKind][p.attackIndex]
 
 function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   const p = w.player
-  const weapon = weaponOf(w)
+  const hero = heroOf(w)
   p.stateTime += dt
   p.invuln = Math.max(0, p.invuln - dt)
   p.dashCooldown = Math.max(0, p.dashCooldown - dt)
@@ -86,10 +80,8 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   p.guardDelay = Math.max(0, p.guardDelay - dt)
   p.parryFlash = Math.max(0, p.parryFlash - dt)
   p.lowStamina = Math.max(0, p.lowStamina - dt)
-  p.swapCooldown = Math.max(0, p.swapCooldown - dt)
-  p.landTime = Math.max(0, p.landTime - dt)
   p.hitTime = Math.max(0, p.hitTime - dt)
-  p.swapAnim += dt
+  p.dropTime = Math.max(0, p.dropTime - dt)
   if (p.comboWindow > 0) {
     p.comboWindow = Math.max(0, p.comboWindow - dt)
     if (p.comboWindow === 0) p.attackIndex = 0
@@ -105,14 +97,15 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
     case 'free': {
       if (input.move !== 0) p.facing = input.move
       const accel = p.grounded ? PLAYER.groundAccel : PLAYER.airAccel
-      p.vx = approach(p.vx, input.move * PLAYER.speed * w.mods.moveSpeed, accel * dt)
+      p.vx = approach(p.vx, input.move * p.speed * w.mods.moveSpeed, accel * dt)
       cutJump(p, input)
+      // Holding down on a ledge steps off it.
+      if (input.downHeld && p.grounded && p.y > 0) dropThrough(p)
       if (tryJump(w, p)) break
-      if (w.buffer.swap > 0 && trySwap(w, p, rng)) break
       if (w.buffer.dash > 0 && tryDash(w, p, input)) break
       if (w.buffer.heavy > 0 && tryAttack(w, p, input, 'heavy')) break
       if (w.buffer.light > 0 && tryAttack(w, p, input, 'light')) break
-      if (input.blockHeld && weapon.canBlock && p.grounded && p.blockCooldown === 0 && p.swapAnim >= SWAP.time) {
+      if (input.blockHeld && hero.canBlock && p.grounded && p.blockCooldown === 0) {
         p.state = 'block'
         p.stateTime = 0
         p.guardDelay = 0
@@ -120,7 +113,7 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
       break
     }
     case 'block': {
-      if (!input.blockHeld || !p.grounded || !weapon.canBlock) {
+      if (!input.blockHeld || !p.grounded || !hero.canBlock) {
         lowerShield(p)
         break
       }
@@ -129,9 +122,8 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
         p.facing = input.move
         p.guardDelay = SHIELD.turnDelay
       }
-      p.vx = approach(p.vx, input.move * PLAYER.speed * SHIELD.moveShare * w.mods.moveSpeed, PLAYER.groundAccel * dt)
+      p.vx = approach(p.vx, input.move * p.speed * SHIELD.moveShare * w.mods.moveSpeed, PLAYER.groundAccel * dt)
       if (tryJump(w, p)) break
-      if (w.buffer.swap > 0 && trySwap(w, p, rng)) break
       if (w.buffer.dash > 0 && tryDash(w, p, input)) break
       if (w.buffer.heavy > 0 && tryAttack(w, p, input, 'heavy')) break
       if (w.buffer.light > 0 && tryAttack(w, p, input, 'light')) break
@@ -139,23 +131,20 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
     }
     case 'attack': {
       const step = stepOf(w, p)
-      if (step.charge && p.drawing) drawBow(p, step, input, dt)
       const t = p.stateTime
       if (t - dt < step.hitStart && t >= step.hitStart) {
         p.vx = p.facing * step.lunge
-        if (step.projectile) fireArrow(w, p, step)
+        if (step.hop) {
+          p.vy = step.hop
+          p.grounded = false
+        }
         if (step.wave) spawnPlayerWave(w, p, step, rng)
-      } else if (step.charge && p.drawing) {
-        // A drawn bow can be walked with, slowly, and aimed by turning.
-        if (input.move !== 0) p.facing = input.move
-        p.vx = approach(p.vx, input.move * PLAYER.speed * 0.4, PLAYER.groundAccel * dt)
       } else if (t < step.hitStart || t > step.hitEnd) p.vx = approach(p.vx, 0, 1500 * dt)
-      cutJump(p, input)
-      if (!step.projectile && t >= step.hitStart && t <= step.hitEnd) strike(w, step, rng)
-      if (p.drawing) {
-        if (w.buffer.dash > 0 && tryDash(w, p, input)) break
-      } else if (t >= step.cancelAt) continueAttack(w, p, input, rng)
-      if (p.state === 'attack' && !p.drawing && t >= step.duration) endAttack(w, p)
+      // A rush cannot be touched while the blow is out.
+      if (step.rush && t >= step.hitStart && t <= step.hitEnd) p.invuln = Math.max(p.invuln, 0.06)
+      if (t >= step.hitStart && t <= step.hitEnd) strike(w, step, rng)
+      if (t >= step.cancelAt) continueAttack(w, p, input)
+      if (p.state === 'attack' && t >= step.duration) endAttack(w, p)
       break
     }
     case 'dash': {
@@ -164,7 +153,7 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
       if (p.stateTime >= DASH.time) {
         p.state = 'free'
         p.stateTime = 0
-        p.vx = p.facing * PLAYER.speed
+        p.vx = p.facing * p.speed
       }
       break
     }
@@ -184,19 +173,52 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   const wanted = p.x + p.vx * dt
   p.x = clamp(wanted, WALL_MARGIN, ARENA.width - WALL_MARGIN)
   if (p.x !== wanted) p.vx = 0
-  p.y += p.vy * dt
-  if (p.y <= 0) {
-    // Coming down hard squashes the knight for a moment and kicks up a little dust.
-    if (!p.grounded && p.vy < -350) {
-      p.landTime = 0.2
-      burst(w, p.x, 2, 0, rng, 7, DUST)
-    }
-    p.y = 0
-    if (p.vy < 0) p.vy = 0
+  const fallSpeed = p.vy
+  const floor = moveVertically(w, p, dt, p.dropTime > 0)
+  if (floor !== null) {
+    // Coming down hard kicks up a little dust.
+    if (!p.grounded && fallSpeed < -350) burst(w, p.x, p.y, 0, rng, 7, DUST)
     p.grounded = true
   } else {
     p.grounded = false
   }
+}
+
+/**
+ * Move something up or down by its speed and land it on whatever it falls onto: the ground, or a
+ * ledge it comes down on from above (they are solid only from above). Returns the height it landed
+ * on, or null if it is still in the air.
+ */
+function moveVertically(w: World, body: { x: number; y: number; vy: number }, dt: number, ignoreLedges: boolean): number | null {
+  const before = body.y
+  body.y += body.vy * dt
+  let land: number | null = body.y <= 0 ? 0 : null
+  if (land === null && body.vy <= 0 && !ignoreLedges) {
+    for (const ledge of w.platforms) {
+      const onIt = body.x >= ledge.cx - ledge.width / 2 && body.x <= ledge.cx + ledge.width / 2
+      if (onIt && before >= ledge.y - 0.01 && body.y <= ledge.y) land = Math.max(land ?? 0, ledge.y)
+    }
+  }
+  if (land === null) return null
+  body.y = land
+  if (body.vy < 0) body.vy = 0
+  return land
+}
+
+/** The height of the highest surface at or below `y` under `x`: a ledge, or the ground (0). */
+export function floorBelow(w: World, x: number, y: number): number {
+  let floor = 0
+  for (const ledge of w.platforms) {
+    if (ledge.y > floor && ledge.y <= y + 1 && x >= ledge.cx - ledge.width / 2 && x <= ledge.cx + ledge.width / 2) floor = ledge.y
+  }
+  return floor
+}
+
+/** Let go of the ledge underfoot: fall through it, and through any other for a moment. */
+function dropThrough(p: Player) {
+  p.dropTime = 0.28
+  p.grounded = false
+  p.y -= 1
 }
 
 function spend(p: Player, amount: number) {
@@ -204,7 +226,7 @@ function spend(p: Player, amount: number) {
   p.staminaDelay = PLAYER.staminaDelay
 }
 
-/** Starts a jump if one was asked for and the player stands on the ground. */
+/** Starts a jump if one was asked for and the player stands on something. */
 function tryJump(w: World, p: Player) {
   if (w.buffer.jump <= 0 || !p.grounded) return false
   p.vy = PLAYER.jumpSpeed
@@ -228,7 +250,7 @@ function lowerShield(p: Player) {
 /** Dash if it is ready and affordable. Returns whether it started. */
 function tryDash(w: World, p: Player, input: FrameInput) {
   if (p.dashCooldown > 0) return false
-  const cost = DASH.stamina * w.mods.dashCost
+  const cost = DASH.stamina * heroOf(w).dashCost * w.mods.dashCost
   if (p.stamina < cost) {
     w.buffer.dash = 0
     p.lowStamina = 0.5
@@ -238,7 +260,6 @@ function tryDash(w: World, p: Player, input: FrameInput) {
   p.facing = input.move !== 0 ? input.move : p.facing
   p.state = 'dash'
   p.stateTime = 0
-  p.drawing = false
   p.vy = 0
   p.dashCooldown = DASH.cooldown * w.mods.dashCooldown
   p.invuln = Math.max(p.invuln, DASH.invuln)
@@ -246,31 +267,10 @@ function tryDash(w: World, p: Player, input: FrameInput) {
   return true
 }
 
-/** Q: take the other weapon. It takes a moment to come up, and cannot be done again at once. */
-function trySwap(w: World, p: Player, rng: Rng) {
-  w.buffer.swap = 0
-  if (p.swapCooldown > 0 || p.state === 'dead') return false
-  w.activeSlot = w.activeSlot === 0 ? 1 : 0
-  p.swapCooldown = SWAP.cooldown
-  p.swapAnim = 0
-  p.comboWindow = 0
-  p.attackIndex = 0
-  p.drawing = false
-  p.state = 'free'
-  p.stateTime = 0
-  burst(w, p.x + p.facing * 30, p.y + 70, p.facing, rng, 10, ['#ffd27a', '#ffffff', '#c9d1de'])
-  return true
-}
-
 /** Start the first hit of a combo, or the next one while the chain is still alive. */
 function tryAttack(w: World, p: Player, input: FrameInput, button: 'light' | 'heavy') {
-  if (p.swapAnim < SWAP.time) return false
-  const weapon = weaponOf(w)
-  // With an enemy right in the bow's face, a light press kicks instead of shooting.
-  const close = button === 'light' && weapon.closeRange > 0 && weapon.combos.close.length > 0 && nearestEnemy(w, weapon.closeRange) !== null
-  const kind: ComboKind = close ? 'close' : button
-  const continues = p.comboWindow > 0 && p.attackKind === kind
-  return beginAttack(w, p, input, button, kind, continues ? p.attackIndex : 0)
+  const continues = p.comboWindow > 0 && p.attackKind === button
+  return beginAttack(w, p, input, button, continues ? p.attackIndex : 0)
 }
 
 function nearestEnemy(w: World, range: number): Enemy | null {
@@ -283,9 +283,9 @@ function nearestEnemy(w: World, range: number): Enemy | null {
   return best
 }
 
-function beginAttack(w: World, p: Player, input: FrameInput, button: 'light' | 'heavy', kind: ComboKind, index: number) {
-  const weapon = weaponOf(w)
-  const step = weapon.combos[kind][index]
+function beginAttack(w: World, p: Player, input: FrameInput, button: 'light' | 'heavy', index: number) {
+  const hero = heroOf(w)
+  const step = hero.combos[button][index]
   if (!step) return false
   if (p.stamina < step.stamina) {
     w.buffer[button] = 0
@@ -295,83 +295,38 @@ function beginAttack(w: World, p: Player, input: FrameInput, button: 'light' | '
   spend(p, step.stamina)
   p.state = 'attack'
   p.stateTime = 0
-  p.attackKind = kind
+  p.attackKind = button
   p.attackIndex = index
   p.comboWindow = 0
   p.struck.clear()
-  p.drawing = Boolean(step.charge)
-  p.drawTime = 0
-  p.drawPower = 0
   w.buffer[button] = 0
   if (input.move !== 0) p.facing = input.move
   else {
     // Nothing held: turn towards the closest enemy in reach, so a swing is rarely wasted.
-    const target = nearestEnemy(w, kind === 'close' ? weapon.closeRange : weapon.aimRange)
+    const target = nearestEnemy(w, hero.aimRange)
     if (target) p.facing = target.x >= p.x ? 1 : -1
   }
   return true
 }
 
 /** Late in a swing the next action may cut the recovery short. */
-function continueAttack(w: World, p: Player, input: FrameInput, rng: Rng) {
-  const combo = weaponOf(w).combos
-  const steps = combo[p.attackKind]
-  const last = p.attackIndex >= steps.length - 1
+function continueAttack(w: World, p: Player, input: FrameInput) {
+  const combos = heroOf(w).combos
+  const last = p.attackIndex >= combos[p.attackKind].length - 1
   if (w.buffer.dash > 0 && tryDash(w, p, input)) return
-  if (w.buffer.swap > 0 && trySwap(w, p, rng)) return
-  if (w.buffer.heavy > 0) {
-    // Heavy follows a light hit, and a heavy chop leads into the next heavy one.
-    if (p.attackKind !== 'heavy' && combo.heavy.length > 0 && beginAttack(w, p, input, 'heavy', 'heavy', 0)) return
-    if (p.attackKind === 'heavy' && !last && beginAttack(w, p, input, 'heavy', 'heavy', p.attackIndex + 1)) return
-  }
-  if (w.buffer.light > 0 && p.attackKind === 'light' && !last && beginAttack(w, p, input, 'light', 'light', p.attackIndex + 1)) return
+  // The heavy blow can follow any light one.
+  if (w.buffer.heavy > 0 && p.attackKind === 'light' && beginAttack(w, p, input, 'heavy', 0)) return
+  if (w.buffer.light > 0 && p.attackKind === 'light' && !last && beginAttack(w, p, input, 'light', p.attackIndex + 1)) return
   if (tryJump(w, p)) endAttack(w, p)
 }
 
 function endAttack(w: World, p: Player) {
-  const steps = weaponOf(w).combos[p.attackKind]
+  const steps = heroOf(w).combos[p.attackKind]
   const last = p.attackIndex >= steps.length - 1
   p.state = 'free'
   p.stateTime = 0
-  p.drawing = false
   p.comboWindow = last ? 0 : COMBO_WINDOW
   p.attackIndex = last ? 0 : p.attackIndex + 1
-}
-
-/** A bow held drawn: it waits at the point of release until the button is let go or the draw is full. */
-function drawBow(p: Player, step: AttackStep, input: FrameInput, dt: number) {
-  const charge = step.charge
-  if (!charge) return
-  p.drawTime += dt
-  p.drawPower = clamp((p.drawTime - charge.min) / (charge.max - charge.min), 0, 1)
-  if (p.drawTime >= charge.max || (!input.heavyHeld && p.drawTime >= charge.min)) {
-    p.drawing = false
-    p.stateTime = step.hitStart
-  } else {
-    p.stateTime = Math.min(p.stateTime, step.hitStart - 0.001)
-  }
-}
-
-function fireArrow(w: World, p: Player, step: AttackStep) {
-  const shot = step.projectile
-  if (!shot) return
-  const power = step.charge ? step.charge.minPower + (1 - step.charge.minPower) * p.drawPower : 1
-  w.arrows.push({
-    x: p.x + p.facing * 40,
-    y: p.y + 62,
-    vx: p.facing * shot.speed,
-    damage: step.damage * power,
-    poise: step.poise * power,
-    knockback: step.knockback * power,
-    hitStop: step.hitStop,
-    shake: step.shake * power,
-    pierce: shot.pierce,
-    charged: Boolean(step.charge),
-    hit: new Set(),
-    life: shot.life,
-    maxLife: shot.life,
-  })
-  p.vx = -p.facing * 90
 }
 
 function spawnPlayerWave(w: World, p: Player, step: AttackStep, rng: Rng) {
@@ -392,48 +347,29 @@ function spawnPlayerWave(w: World, p: Player, step: AttackStep, rng: Rng) {
     knockback: wave.knockback,
     hit: new Set(),
   })
-  burst(w, p.x + p.facing * step.reach * 0.9, 6, p.facing, rng, 16, DUST)
+  burst(w, p.x + p.facing * step.reach * 0.9, p.y + 6, p.facing, rng, 16, DUST)
 }
 
-/** What lands on an enemy, whether from a blade, an arrow or a wave of rock. */
+/** What lands on an enemy, whether from a blade or a wave of rock. */
 type HitInfo = { damage: number; poise: number; knockback: number; hitStop: number; shake: number; dir: 1 | -1; finisher: boolean }
 
 /** The blade is out: hurt every enemy in reach that this swing has not touched yet. */
 function strike(w: World, step: AttackStep, rng: Rng) {
   const p = w.player
-  const steps = weaponOf(w).combos[p.attackKind]
-  const finisher = p.attackKind !== 'close' && step === steps[steps.length - 1]
-  const x0 = step.bothSides || p.facing < 0 ? p.x - step.reach : p.x - 10
-  const x1 = step.bothSides || p.facing > 0 ? p.x + step.reach : p.x + 10
+  const steps = heroOf(w).combos[p.attackKind]
+  const finisher = step === steps[steps.length - 1]
+  const x0 = p.facing < 0 ? p.x - step.reach : p.x - 10
+  const x1 = p.facing > 0 ? p.x + step.reach : p.x + 10
   const y0 = p.y - 10
-  const y1 = p.y + PLAYER.height + 10
+  const y1 = p.y + p.height + 10
   for (const e of w.enemies) {
     if (e.state === 'dying' || p.struck.has(e.id)) continue
     const stats = ENEMIES[e.kind]
     const overlaps = e.x - stats.halfWidth < x1 && e.x + stats.halfWidth > x0 && e.y < y1 && e.y + stats.height > y0
     if (!overlaps) continue
     p.struck.add(e.id)
-    const dir = step.bothSides ? (e.x >= p.x ? 1 : -1) : p.facing
-    hitEnemy(w, e, { ...step, dir, finisher }, rng)
+    hitEnemy(w, e, { ...step, dir: p.facing, finisher }, rng)
   }
-}
-
-function stepArrows(w: World, dt: number, rng: Rng) {
-  for (const arrow of w.arrows) {
-    arrow.life -= dt
-    arrow.x += arrow.vx * dt
-    const dir = arrow.vx >= 0 ? 1 : -1
-    for (const e of w.enemies) {
-      if (arrow.life <= 0) break
-      if (e.state === 'dying' || arrow.hit.has(e.id)) continue
-      const stats = ENEMIES[e.kind]
-      if (Math.abs(arrow.x - e.x) > stats.halfWidth + 6 || arrow.y < e.y || arrow.y > e.y + stats.height) continue
-      arrow.hit.add(e.id)
-      hitEnemy(w, e, { ...arrow, dir, finisher: arrow.charged }, rng)
-      if (arrow.pierce-- <= 0) arrow.life = 0
-    }
-  }
-  w.arrows = w.arrows.filter((a) => a.life > 0 && a.x > -60 && a.x < ARENA.width + 60)
 }
 
 function hitEnemy(w: World, e: Enemy, hit: HitInfo, rng: Rng) {
@@ -513,7 +449,7 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
       w.shake = Math.max(w.shake, 6)
       burst(w, sparkX, sparkY, p.facing, rng, 18, STEEL_SPARKS)
       impact(w, sparkX, sparkY, p.facing, 56, '#ffd27a')
-      floater(w, p.x, p.y + PLAYER.height + 14, 'PARRY!', '#ffd27a', 28)
+      floater(w, p.x, p.y + p.height + 14, 'PARRY!', '#ffd27a', 28)
       return 'parried'
     }
     if (p.stamina >= blockCost) {
@@ -524,7 +460,7 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
       w.shake = Math.max(w.shake, 3)
       burst(w, sparkX, sparkY, p.facing, rng, 9, STEEL_SPARKS)
       impact(w, sparkX, sparkY, p.facing, 30, '#9fc4ff')
-      floater(w, p.x, p.y + PLAYER.height + 10, 'BLOCK', '#9fc4ff', 17)
+      floater(w, p.x, p.y + p.height + 10, 'BLOCK', '#9fc4ff', 17)
       return 'blocked'
     }
     amount = Math.ceil(amount * 0.5)
@@ -532,16 +468,15 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
     p.staminaDelay = PLAYER.staminaDelay * 2
     result = 'broken'
     burst(w, sparkX, sparkY, p.facing, rng, 8, STEEL_SPARKS)
-    floater(w, p.x, p.y + PLAYER.height + 34, 'GUARD BROKEN!', '#ff8f8f', 20)
+    floater(w, p.x, p.y + p.height + 34, 'GUARD BROKEN!', '#ff8f8f', 20)
   }
 
   const dir = p.x >= fromX ? 1 : -1
-  p.drawing = false
   const taken = Math.max(1, Math.round(amount * w.mods.damageTaken))
   p.hp = Math.max(0, p.hp - taken)
   p.hitTime = 0.34
-  floater(w, p.x, p.y + PLAYER.height + 8, `-${taken}`, '#ff6b6b', 26)
-  impact(w, p.x, p.y + PLAYER.height * 0.6, (dir * -1) as 1 | -1, 54, '#ff8f8f')
+  floater(w, p.x, p.y + p.height + 8, `-${taken}`, '#ff6b6b', 26)
+  impact(w, p.x, p.y + p.height * 0.6, (dir * -1) as 1 | -1, 54, '#ff8f8f')
   w.hurtThisRound = true
   w.streak = 0
   w.streakTimer = 0
@@ -550,7 +485,7 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
     w.revivesUsed += 1
     p.hp = Math.ceil(p.maxHp / 3)
     p.invuln = 1.6
-    burst(w, p.x, p.y + PLAYER.height * 0.5, 0, rng, 28, ['#ffd27a', '#ffffff', '#ff8f5c'])
+    burst(w, p.x, p.y + p.height * 0.5, 0, rng, 28, ['#ffd27a', '#ffffff', '#ff8f5c'])
   } else {
     p.invuln = PLAYER.invulnAfterHit
   }
@@ -560,7 +495,7 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
   p.stateTime = 0
   w.freeze = Math.max(w.freeze, 0.07)
   w.shake = Math.max(w.shake, 7)
-  burst(w, p.x, p.y + PLAYER.height * 0.6, dir, rng, 10, ['#ff8f8f', '#ffffff', '#f5a93a'])
+  burst(w, p.x, p.y + p.height * 0.6, dir, rng, 10, ['#ff8f8f', '#ffffff', '#f5a93a'])
   if (p.hp === 0) {
     p.state = 'dead'
     w.over = true
@@ -596,6 +531,7 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
   e.hitTime = Math.max(0, e.hitTime - dt)
   e.cooldown = Math.max(0, e.cooldown - dt)
   e.poiseTimer = Math.max(0, e.poiseTimer - dt)
+  e.jumpCooldown = Math.max(0, e.jumpCooldown - dt)
   if (e.poiseTimer === 0) e.poiseHit = 0
   const dx = p.x - e.x
   const toward = dx >= 0 ? 1 : -1
@@ -610,11 +546,11 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
       }
       e.vx = approach(e.vx, toward * stats.speed * (enraged ? 1.3 : 1), 2600 * dt)
       if (stats.style === 'boss') {
-        if (e.cooldown === 0 && e.y === 0) chooseBossMove(w, e, stats, Math.abs(dx))
-      } else if (Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.y === 0) {
+        if (e.cooldown === 0 && e.grounded) chooseBossMove(w, e, stats, Math.abs(dx))
+      } else if (Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.grounded && Math.abs(p.y - e.y) < 60) {
         e.state = 'windup'
         e.stateTime = 0
-      }
+      } else if (stats.canJump && e.grounded && e.jumpCooldown === 0 && !w.over) hopTowardPlayer(w, e)
       break
     case 'windup':
       e.facing = toward
@@ -654,11 +590,26 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
 
   e.vy -= ENEMY_GRAVITY * dt
   e.x += e.vx * dt
-  e.y += e.vy * dt
-  if (e.y <= 0) {
-    e.y = 0
-    if (e.vy < 0) e.vy = 0
+  e.grounded = moveVertically(w, e, dt, false) !== null
+}
+
+/** The speed of an enemy's hop up onto a ledge: just enough to clear one. */
+const ENEMY_HOP = 780
+
+/** Light enemies climb to the player when they stand on a ledge, and come down to them when they do not. */
+function hopTowardPlayer(w: World, e: Enemy) {
+  const p = w.player
+  const stats = ENEMIES[e.kind]
+  const rise = p.y - e.y
+  // The player is up on a ledge nearby: jump for it.
+  if (rise > 40 && p.grounded && Math.abs(p.x - e.x) < stats.halfWidth + 140) {
+    e.vy = ENEMY_HOP
+    e.grounded = false
+    e.jumpCooldown = 1.1
+    return
   }
+  // Waiting under a ledge the player is on, or boxed in on a ledge: a short wait before trying again.
+  e.jumpCooldown = 0.25
 }
 
 /** The boss cycles through its moves: close in, it slams or roars; at range, it charges or roars. */
@@ -685,6 +636,7 @@ function pushWave(w: World, e: Enemy, stats: EnemyStats, dir: 1 | -1) {
     halfWidth: wave.halfWidth,
     blockCost: wave.blockCost,
     struck: false,
+    friendly: false,
   })
 }
 
@@ -722,7 +674,7 @@ function beginEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
 function stepEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
   if (stats.style === 'leap') {
     if (!e.struckPlayer && overlapsPlayer(w, e, stats.halfWidth + 10)) settleStrike(e, stats, damagePlayer(w, stats.damage * e.power, e.x, rng, stats.blockCost))
-    if (e.y <= 0 && e.stateTime > 0.05) {
+    if (e.grounded && e.stateTime > 0.05) {
       e.state = 'recover'
       e.stateTime = 0
       e.vx = 0
@@ -788,7 +740,7 @@ function settleStrike(e: Enemy, stats: EnemyStats, result: HitResult) {
 function overlapsPlayer(w: World, e: Enemy, reach: number) {
   const p = w.player
   const stats = ENEMIES[e.kind]
-  return Math.abs(p.x - e.x) < PLAYER.halfWidth + reach && e.y < p.y + PLAYER.height && e.y + stats.height > p.y
+  return Math.abs(p.x - e.x) < p.halfWidth + reach && e.y < p.y + p.height && e.y + stats.height > p.y
 }
 
 /** The ground a chop or slam covers, in front of the enemy. */
@@ -796,7 +748,7 @@ function inStrikeZone(w: World, e: Enemy, stats: EnemyStats) {
   const p = w.player
   const x0 = e.facing > 0 ? e.x - stats.halfWidth * 0.5 : e.x - stats.reach
   const x1 = e.facing > 0 ? e.x + stats.reach : e.x + stats.halfWidth * 0.5
-  return p.x + PLAYER.halfWidth > x0 && p.x - PLAYER.halfWidth < x1 && p.y < e.y + stats.hitHeight && p.y + PLAYER.height > e.y
+  return p.x + p.halfWidth > x0 && p.x - p.halfWidth < x1 && p.y < e.y + stats.hitHeight && p.y + p.height > e.y
 }
 
 function stepWaves(w: World, dt: number, rng: Rng) {
@@ -815,7 +767,7 @@ function stepWaves(w: World, dt: number, rng: Rng) {
       }
       continue
     }
-    if (wave.struck || Math.abs(p.x - wave.x) >= wave.halfWidth + PLAYER.halfWidth * 0.8 || p.y >= wave.height) continue
+    if (wave.struck || Math.abs(p.x - wave.x) >= wave.halfWidth + p.halfWidth * 0.8 || p.y >= wave.height) continue
     const result = damagePlayer(w, wave.damage, wave.x - Math.sign(wave.vx) * 30, rng, wave.blockCost)
     if (result === 'none') continue
     wave.struck = true
@@ -838,7 +790,7 @@ function keepApart(w: World) {
       const stats = ENEMIES[e.kind]
       if (p.y > stats.height * 0.7) continue
       const dx = p.x - e.x
-      const overlap = stats.halfWidth + PLAYER.halfWidth * 0.5 - Math.abs(dx)
+      const overlap = stats.halfWidth + p.halfWidth * 0.5 - Math.abs(dx)
       if (overlap <= 0) continue
       const side = dx === 0 ? p.facing : Math.sign(dx)
       if (stats.heavy) p.x = clamp(p.x + side * overlap, WALL_MARGIN, ARENA.width - WALL_MARGIN)
@@ -908,7 +860,11 @@ function stepParticles(w: World, dt: number) {
     q.life -= dt
     q.vy -= 1500 * dt
     q.x += q.vx * dt
-    q.y = Math.max(0, q.y + q.vy * dt)
+    const before = q.y
+    q.y += q.vy * dt
+    // Sparks and dust settle on a ledge as on the ground.
+    if (q.vy < 0) q.y = Math.max(q.y, floorBelow(w, q.x, before))
+    else q.y = Math.max(q.y, 0)
   }
   w.particles = w.particles.filter((q) => q.life > 0)
 }

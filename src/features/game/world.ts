@@ -1,14 +1,15 @@
+import { BIOMES } from './biomes'
 import { ARENA, ENEMIES, PLAYER, ROUNDS } from './config'
 import type { EnemyKind } from './config'
+import { ENEMY_LOOKS } from './enemyLooks'
+import { DEFAULT_HERO, HEROES } from './heroes'
+import type { HeroId } from './heroes'
 import { BASE_MODS } from './upgrades'
 import type { Enemy, Player, World } from './types'
 import { enemyHealthScale, enemyPower, roundBudget } from './pacing'
-import { DEFAULT_LOOK } from './appearance'
-import type { Appearance } from './appearance'
-import { DEFAULT_LOADOUT } from './weapons'
-import type { WeaponId } from './weapons'
 
-export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOADOUT, look: Appearance = DEFAULT_LOOK): World {
+export function createWorld(hero: HeroId = DEFAULT_HERO): World {
+  const def = HEROES[hero]
   const player: Player = {
     x: ARENA.width / 2,
     y: 0,
@@ -16,8 +17,8 @@ export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOA
     vy: 0,
     facing: 1,
     grounded: true,
-    hp: PLAYER.maxHp,
-    maxHp: PLAYER.maxHp,
+    hp: def.hp,
+    maxHp: def.hp,
     maxStamina: PLAYER.maxStamina,
     stamina: PLAYER.maxStamina,
     staminaDelay: 0,
@@ -33,13 +34,11 @@ export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOA
     guardDelay: 0,
     parryFlash: 0,
     lowStamina: 0,
-    swapCooldown: 0,
-    swapAnim: 99,
-    drawing: false,
-    drawTime: 0,
-    drawPower: 0,
-    landTime: 0,
+    dropTime: 0,
     hitTime: 0,
+    speed: def.speed,
+    halfWidth: def.halfWidth,
+    height: def.height,
   }
   const budget = roundBudget(1)
   return {
@@ -47,13 +46,12 @@ export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOA
     player,
     enemies: [],
     waves: [],
-    arrows: [],
-    loadout: [loadout[0], loadout[1]],
-    activeSlot: 0,
     particles: [],
     floaters: [],
     impacts: [],
-    look: { ...look },
+    hero,
+    biome: 'cave',
+    platforms: [...BIOMES.cave.platforms],
     bossSpawned: false,
     nextId: 1,
     spawnTimer: ROUNDS.firstDelay,
@@ -78,15 +76,17 @@ export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOA
     revivesUsed: 0,
     freeze: 0,
     shake: 0,
-    buffer: { jump: 0, dash: 0, light: 0, heavy: 0, swap: 0 },
+    buffer: { jump: 0, dash: 0, light: 0, heavy: 0 },
     over: false,
   }
 }
 
-export function spawnEnemy(w: World, kind: EnemyKind, x: number): Enemy {
+/** Put an enemy in the world. `variant` picks one of the kind's looks; by default they take turns. */
+export function spawnEnemy(w: World, kind: EnemyKind, x: number, variant?: number): Enemy {
   const stats = ENEMIES[kind]
+  const id = w.nextId++
   const enemy: Enemy = {
-    id: w.nextId++,
+    id,
     kind,
     x,
     y: 0,
@@ -106,6 +106,9 @@ export function spawnEnemy(w: World, kind: EnemyKind, x: number): Enemy {
     hitTime: 0,
     move: null,
     pattern: 0,
+    grounded: true,
+    jumpCooldown: 0,
+    variant: (variant ?? id) % ENEMY_LOOKS[kind].length,
   }
   w.enemies.push(enemy)
   return enemy

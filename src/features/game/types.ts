@@ -1,7 +1,7 @@
 import type { ComboKind, EnemyKind } from './config'
 import type { Mods, Picks, UpgradeId } from './upgrades'
-import type { WeaponId } from './weapons'
-import type { Appearance } from './appearance'
+import type { BiomeId, Platform } from './biomes'
+import type { HeroId } from './heroes'
 
 export type Facing = 1 | -1
 
@@ -39,17 +39,14 @@ export type Player = {
   /** Seconds left of the flash after a parry, and of the warning that stamina ran short. */
   parryFlash: number
   lowStamina: number
-  /** Q cannot be used again until this runs out; `swapAnim` counts up from a swap for the weapon to come up. */
-  swapCooldown: number
-  swapAnim: number
-  /** A bow drawn and waiting for the button to be let go, and for how long. */
-  drawing: boolean
-  drawTime: number
-  /** How hard the last arrow was drawn, 0 to 1, for the picture. */
-  drawPower: number
-  /** Seconds left of the landing squash, and of the white flash and recoil after being hit. */
-  landTime: number
+  /** While this runs the hero falls through ledges instead of landing on them. */
+  dropTime: number
+  /** Seconds left of the flash and recoil after being hit. */
   hitTime: number
+  /** The hero's body, copied from its definition so the rules need not look it up. */
+  speed: number
+  halfWidth: number
+  height: number
 }
 
 /** What the boss is doing with its current attack. */
@@ -84,6 +81,12 @@ export type Enemy = {
   /** The boss's current attack, and how many it has made (it cycles through them). */
   move: BossMove | null
   pattern: number
+  /** Standing on the ground or a ledge (as opposed to in the air). */
+  grounded: boolean
+  /** An enemy that can hop up to a ledge waits this long between hops. */
+  jumpCooldown: number
+  /** Which of the kind's looks it wears (a goblin may be a green goblin or a small demon). */
+  variant: number
 }
 
 /** A wave of rock racing along the ground: the ogre's, or the mace's when `friendly`. */
@@ -103,26 +106,6 @@ export type Shockwave = {
   knockback?: number
   /** Enemies a friendly wave has already struck. */
   hit?: Set<number>
-}
-
-/** An arrow in flight. */
-export type Arrow = {
-  x: number
-  /** Height above the ground. */
-  y: number
-  vx: number
-  damage: number
-  poise: number
-  knockback: number
-  hitStop: number
-  shake: number
-  /** How many more enemies it can pass through after the one it hits. */
-  pierce: number
-  /** A drawn shot counts as a finisher for the Executioner upgrade. */
-  charged: boolean
-  hit: Set<number>
-  life: number
-  maxLife: number
 }
 
 /** A number or word that floats up from where something happened: damage, PARRY!, STAGGER! */
@@ -179,15 +162,13 @@ export type World = {
   player: Player
   enemies: Enemy[]
   waves: Shockwave[]
-  arrows: Arrow[]
-  /** The two weapons carried, and which one is in hand. */
-  loadout: [WeaponId, WeaponId]
-  activeSlot: 0 | 1
   particles: Particle[]
   floaters: Floater[]
   impacts: Impact[]
-  /** How the hero looks. */
-  look: Appearance
+  /** Who is being played, where the fight is, and the ledges there. */
+  hero: HeroId
+  biome: BiomeId
+  platforms: Platform[]
   /** Whether this round's boss has come yet. */
   bossSpawned: boolean
   nextId: number
@@ -220,7 +201,7 @@ export type World = {
   /** Screen shake strength, decaying. */
   shake: number
   /** Seconds each button press is still waiting to be used. */
-  buffer: { jump: number; dash: number; light: number; heavy: number; swap: number }
+  buffer: { jump: number; dash: number; light: number; heavy: number }
   over: boolean
 }
 
@@ -232,9 +213,9 @@ export type FrameInput = {
   dashPressed: boolean
   lightPressed: boolean
   heavyPressed: boolean
-  heavyHeld: boolean
   blockHeld: boolean
-  swapPressed: boolean
+  /** Held to drop down through a ledge. */
+  downHeld: boolean
 }
 
 export const NO_INPUT: FrameInput = {
@@ -244,7 +225,6 @@ export const NO_INPUT: FrameInput = {
   dashPressed: false,
   lightPressed: false,
   heavyPressed: false,
-  heavyHeld: false,
   blockHeld: false,
-  swapPressed: false,
+  downHeld: false,
 }

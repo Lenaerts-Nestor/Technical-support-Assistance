@@ -117,8 +117,11 @@ export function computeMods(picks: Picks): Mods {
 }
 
 /** `count` different upgrades that are not yet maxed, chosen by weight. */
-export function offerUpgrades(picks: Picks, rng: () => number, count = 3): UpgradeId[] {
-  const pool = UPGRADES.filter((u) => (picks[u.id] ?? 0) < u.max)
+const SHIELD_UPGRADES: readonly UpgradeId[] = ['bulwark', 'keenEye', 'riposte']
+
+/** `canBlock`: whether the hero has a shield; the shield upgrades are left out when not. */
+export function offerUpgrades(picks: Picks, rng: () => number, count = 3, canBlock = true): UpgradeId[] {
+  const pool = UPGRADES.filter((u) => (picks[u.id] ?? 0) < u.max && (canBlock || !SHIELD_UPGRADES.includes(u.id)))
   const offer: UpgradeId[] = []
   while (offer.length < count && pool.length > 0) {
     let roll = rng() * pool.reduce((sum, u) => sum + u.weight, 0)

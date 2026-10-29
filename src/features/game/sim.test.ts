@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { ARENA, DASH, ENEMIES, PLAYER, SHIELD } from './config'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
 import { NO_INPUT } from './types'
-import { WEAPONS } from './weapons'
+import { HEROES } from './heroes'
 
-const COMBOS = WEAPONS.swordShield.combos
+const COMBOS = HEROES.soldier.combos
 import type { Enemy, EnemyState, FrameInput, World } from './types'
 
 const DT = 1 / 120
@@ -118,7 +118,7 @@ describe('light combo', () => {
     press(w, { lightPressed: true })
     run(w, 0.3)
     expect(goblin.hp).toBe(ENEMIES.goblin.hp - COMBOS.light[0].damage)
-    expect(goblin.x).toBeGreaterThan(startX + 10)
+    expect(goblin.x).toBeGreaterThan(startX + 5)
   })
 
   it('does not hit an enemy behind the player', () => {
@@ -190,18 +190,6 @@ describe('heavy combo', () => {
     expect(COMBOS.heavy[0].damage).toBeGreaterThan(COMBOS.light[0].damage * 2)
   })
 
-  it('leads into the rising cut with a second press', () => {
-    const w = quiet()
-    dummy(w, 'orc', 80)
-    press(w, { heavyPressed: true })
-    until(w, () => w.player.stateTime >= COMBOS.heavy[0].cancelAt - 0.03)
-    press(w, { heavyPressed: true })
-    run(w, 0.05)
-    expect(w.player.attackKind).toBe('heavy')
-    expect(w.player.attackIndex).toBe(1)
-    expect(w.player.state).toBe('attack')
-  })
-
   it('can follow a light cut', () => {
     const w = quiet()
     press(w, { lightPressed: true })
@@ -266,15 +254,14 @@ describe('poise', () => {
     expect(ogre.state).toBe('walk')
   })
 
-  it('takes both heavy hits to stagger an ogre', () => {
+  it('takes two heavy hits to stagger an ogre', () => {
     const w = quiet()
     const ogre = dummy(w, 'ogre', 110)
     press(w, { heavyPressed: true })
-    run(w, 0.45)
+    run(w, COMBOS.heavy[0].duration + 0.05)
     expect(stagger(ogre)).toBe(false)
-    run(w, COMBOS.heavy[0].cancelAt - 0.45 - 0.02)
     press(w, { heavyPressed: true })
-    run(w, 0.5)
+    run(w, 0.6)
     expect(stagger(ogre)).toBe(true)
   })
 })
@@ -379,12 +366,12 @@ describe('orc and ogre', () => {
   it('a wave hurts a player on the ground but passes under one who jumps', () => {
     const wave = () => ({ x: 0, vx: 340, life: 0.85, maxLife: 0.85, damage: 14, height: 34, halfWidth: 22, blockCost: 15, struck: false })
     const standing = quiet()
-    standing.waves.push({ ...wave(), x: standing.player.x - 160 })
+    standing.waves.push({ ...wave(), x: standing.player.x - 120 })
     run(standing, 0.7)
     expect(standing.player.hp).toBe(PLAYER.maxHp - 14)
 
     const jumping = quiet()
-    jumping.waves.push({ ...wave(), x: jumping.player.x - 160 })
+    jumping.waves.push({ ...wave(), x: jumping.player.x - 120 })
     press(jumping, { jumpPressed: true, jumpHeld: true })
     run(jumping, 0.7, { jumpHeld: true })
     expect(jumping.player.hp).toBe(PLAYER.maxHp)

@@ -1,7 +1,5 @@
 import type { Category, UpgradeId } from './upgrades'
 import { UPGRADES, upgradeById } from './upgrades'
-import { LoadoutPicker } from './LoadoutPicker'
-import type { WeaponId } from './weapons'
 import type { World } from './types'
 
 /** Chip colours by kind of upgrade. The screen is always dark, whichever page theme is on. */
@@ -15,14 +13,12 @@ const CATEGORY: Record<Category, { label: string; chip: string }> = {
 type BreakScreenProps = {
   world: World
   picked: UpgradeId | null
-  loadout: readonly [WeaponId, WeaponId]
   onPick: (id: UpgradeId) => void
-  onAssign: (slot: 0 | 1, weapon: WeaponId, fromMouse: boolean) => void
   onContinue: () => void
 }
 
-/** The pause between rounds: what the round paid, one upgrade to take, and the weapon rack. */
-export function BreakScreen({ world, picked, loadout, onPick, onAssign, onContinue }: BreakScreenProps) {
+/** The pause between rounds: what the round paid, one upgrade to take, and the place to come. */
+export function BreakScreen({ world, picked, onPick, onContinue }: BreakScreenProps) {
   const { summary } = world
   if (!summary) return null
   const owned = UPGRADES.filter((u) => (world.upgrades[u.id] ?? 0) > 0)
@@ -85,11 +81,6 @@ export function BreakScreen({ world, picked, loadout, onPick, onAssign, onContin
               Yours so far: {owned.map((u) => `${u.name}${(world.upgrades[u.id] ?? 0) > 1 ? ` ×${world.upgrades[u.id]}` : ''}`).join(' · ')}
             </p>
           )}
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-center text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Weapons</p>
-          <LoadoutPicker loadout={loadout} onAssign={onAssign} compact />
         </div>
 
         <div className="text-center">

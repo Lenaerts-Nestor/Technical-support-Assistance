@@ -3,9 +3,9 @@ import { DASH, ENEMIES, SHIELD } from './config'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
 import { BASE_MODS, UPGRADES, computeMods, offerUpgrades } from './upgrades'
 import { NO_INPUT } from './types'
-import { WEAPONS } from './weapons'
+import { HEROES } from './heroes'
 
-const COMBOS = WEAPONS.swordShield.combos
+const COMBOS = HEROES.soldier.combos
 import type { Picks } from './upgrades'
 import type { Enemy, EnemyState, World } from './types'
 
