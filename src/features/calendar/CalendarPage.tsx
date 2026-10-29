@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useCalendarData } from '../../app/appDataContext'
+import { useSharedShift } from '../shift/sharedShiftContext'
 import {
   MONTH_NAMES,
   countDays,
@@ -18,8 +19,27 @@ import { useToday } from './useToday'
 import { PlusIcon } from '../../shared/ui/icons'
 import { GHOST_BTN_MD, ICON_BTN, PAGE_SUBTITLE, PAGE_TITLE, PRIMARY_BTN } from '../../shared/ui/styles'
 import type { CalendarEntry } from './types'
+import type { DatabaseStatus } from './useCalendar'
 
 type View = 'month' | 'all'
+
+/** Where the days are kept besides this computer — or what to do (pick a name in the sidebar) to keep them there. */
+function DatabaseNote({ status, me }: { status: DatabaseStatus; me: string | null }) {
+  const text =
+    status === 'off'
+      ? 'pick who you are in the sidebar to also keep it in the database'
+      : status === 'synced'
+        ? `saved to the database as ${me}`
+        : status === 'error'
+          ? 'the database could not be reached, trying again'
+          : 'syncing with the database'
+  return (
+    <span role="status" className={status === 'error' ? 'text-rose-400' : 'text-ink-faint'}>
+      {' '}
+      · {text}
+    </span>
+  )
+}
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'month', label: 'Month' },
@@ -33,6 +53,7 @@ const VIEWS: { id: View; label: string }[] = [
  */
 export function CalendarPage() {
   const calendar = useCalendarData()
+  const { enabled: serviceOn, me } = useSharedShift()
   const today = useToday()
   const [view, setView] = useState<View>('month')
   /** The month the user navigated to; `null` follows today's month. */
@@ -60,6 +81,7 @@ export function CalendarPage() {
           <p className={PAGE_SUBTITLE}>
             Your PTO and other days away
             {calendar.savedToFile && <span className="text-ink-faint"> · saved to calendar.json</span>}
+            {serviceOn && <DatabaseNote status={calendar.database} me={me} />}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
