@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ARENA, COMBOS, DASH, ENEMIES, PLAYER, SHIELD } from './config'
+import { ARENA, DASH, ENEMIES, PLAYER, SHIELD } from './config'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
 import { NO_INPUT } from './types'
+import { WEAPONS } from './weapons'
+
+const COMBOS = WEAPONS.swordShield.combos
 import type { Enemy, EnemyState, FrameInput, World } from './types'
 
 const DT = 1 / 120

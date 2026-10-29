@@ -1,4 +1,7 @@
-import { ARENA, COST, ENEMIES } from '../config'
+import { ARENA, COST, ENEMIES, SWAP } from '../config'
+import { WEAPON_ICONS } from '../art/weaponIcons'
+import { WEAPONS } from '../weapons'
+import type { WeaponId } from '../weapons'
 import { streakMultiplier } from '../rounds'
 import type { Enemy, World } from '../types'
 
@@ -194,7 +197,7 @@ export function drawWaves(ctx: CanvasRenderingContext2D, w: World) {
     for (let i = 0; i < 4; i++) {
       const x = (i - 1.5) * wave.halfWidth * 0.55 * -dir
       const h = wave.height * (1 - i * 0.16) * (0.85 + 0.15 * Math.sin(w.time * 30 + i))
-      ctx.fillStyle = i % 2 ? '#8a7a62' : '#6b5a44'
+      ctx.fillStyle = wave.friendly ? (i % 2 ? '#e0c28a' : '#b08a4c') : i % 2 ? '#8a7a62' : '#6b5a44'
       ctx.beginPath()
       ctx.moveTo(x - 11, 0)
       ctx.lineTo(x + dir * 2, -h)
@@ -270,5 +273,105 @@ export function drawBanner(ctx: CanvasRenderingContext2D, w: World) {
     ctx.font = '700 16px Inter, system-ui, sans-serif'
     ctx.fillText(sub, W / 2, H / 2 - 32)
   }
+  ctx.restore()
+}
+
+/** Arrows in flight: a shaft with a head and feathers, longer and brighter when fully drawn. */
+export function drawArrows(ctx: CanvasRenderingContext2D, w: World) {
+  for (const a of w.arrows) {
+    const dir = a.vx >= 0 ? 1 : -1
+    const y = groundY - a.y
+    const length = a.charged ? 52 : 34
+    ctx.save()
+    ctx.translate(a.x, y)
+    ctx.scale(dir, 1)
+    if (a.charged) {
+      ctx.globalAlpha = 0.28
+      ctx.fillStyle = '#ffd27a'
+      ctx.beginPath()
+      ctx.moveTo(8, 0)
+      ctx.lineTo(-length - 40, -3)
+      ctx.lineTo(-length - 40, 3)
+      ctx.closePath()
+      ctx.fill()
+      ctx.globalAlpha = 1
+    }
+    ctx.strokeStyle = '#c9b88f'
+    ctx.lineWidth = 2.6
+    ctx.lineCap = 'round'
+    ctx.beginPath()
+    ctx.moveTo(-length, 0)
+    ctx.lineTo(4, 0)
+    ctx.stroke()
+    ctx.fillStyle = '#e3e8f0'
+    ctx.beginPath()
+    ctx.moveTo(3, -4)
+    ctx.lineTo(14, 0)
+    ctx.lineTo(3, 4)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = '#d6525c'
+    ctx.beginPath()
+    ctx.moveTo(-length, 0)
+    ctx.lineTo(-length + 9, -4)
+    ctx.lineTo(-length + 12, 0)
+    ctx.lineTo(-length + 9, 4)
+    ctx.closePath()
+    ctx.fill()
+    ctx.restore()
+  }
+}
+
+/** One weapon's line icon, drawn from the same paths the menus use. */
+export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, x: number, y: number, size: number, color: string) {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.scale(size / 24, size / 24)
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (const d of WEAPON_ICONS[id]) ctx.stroke(new Path2D(d))
+  ctx.restore()
+}
+
+/** The two carried weapons, bottom left: the one in hand is lit, and Q swaps. */
+export function drawWeaponHud(ctx: CanvasRenderingContext2D, w: World) {
+  const size = 44
+  const x0 = 20
+  const y0 = H - size - 20
+  ctx.save()
+  w.loadout.forEach((id, slot) => {
+    const x = x0 + slot * (size + 8)
+    const active = slot === w.activeSlot
+    ctx.fillStyle = active ? 'rgba(245,169,58,.22)' : 'rgba(10,10,14,.62)'
+    roundRect(ctx, x, y0, size, size, 9)
+    ctx.fill()
+    ctx.strokeStyle = active ? '#f5a93a' : 'rgba(255,255,255,.18)'
+    ctx.lineWidth = active ? 2.5 : 1.5
+    roundRect(ctx, x + 0.5, y0 + 0.5, size - 1, size - 1, 9)
+    ctx.stroke()
+    drawWeaponIcon(ctx, id, x + 8, y0 + 8, size - 16, active ? '#ffd27a' : 'rgba(255,255,255,.5)')
+    ctx.fillStyle = active ? '#ffd27a' : 'rgba(255,255,255,.45)'
+    ctx.font = '800 10px Inter, system-ui, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    ctx.fillText(String(slot + 1), x + 5, y0 + 4)
+  })
+  // The swap key, and a thin bar that fills while it is cooling down.
+  const midX = x0 + size + 4
+  ctx.fillStyle = 'rgba(255,255,255,.7)'
+  ctx.font = '800 10px Inter, system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('Q', midX, y0 + size + 9)
+  if (w.player.swapCooldown > 0) {
+    ctx.fillStyle = 'rgba(255,255,255,.35)'
+    ctx.fillRect(x0, y0 + size + 16, (size * 2 + 8) * (w.player.swapCooldown / SWAP.cooldown), 2)
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.6)'
+  ctx.font = '700 11px Inter, system-ui, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.fillText(WEAPONS[w.loadout[w.activeSlot]].name, x0 + size * 2 + 20, y0 + size / 2)
   ctx.restore()
 }

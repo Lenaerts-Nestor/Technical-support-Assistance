@@ -5,7 +5,7 @@ import { drawBars, drawDizzy, drawWarning } from './heavies'
 import { drawKnight } from './knight'
 import { drawOgre } from './ogre'
 import { drawOrc } from './orc'
-import { drawBackground, drawBanner, drawHud, drawIncoming, drawParticles, drawRoundHud, drawShadow, drawWaves } from './scene'
+import { drawArrows, drawBackground, drawBanner, drawHud, drawIncoming, drawParticles, drawRoundHud, drawShadow, drawWaves, drawWeaponHud } from './scene'
 
 /** Biggest first, so the big ones stand behind the small ones; anyone down goes furthest back. */
 const DEPTH: Record<Enemy['kind'], number> = { ogre: 0, orc: 1, goblin: 2 }
@@ -37,10 +37,12 @@ export function renderWorld(ctx: CanvasRenderingContext2D, w: World) {
   for (const e of ordered) drawEnemy(ctx, e, w)
   drawWaves(ctx, w)
   drawKnight(ctx, w)
+  drawArrows(ctx, w)
   drawParticles(ctx, w)
   drawIncoming(ctx, w.enemies, w.time)
   ctx.restore()
   drawHud(ctx, w)
   drawRoundHud(ctx, w)
+  drawWeaponHud(ctx, w)
   drawBanner(ctx, w)
 }

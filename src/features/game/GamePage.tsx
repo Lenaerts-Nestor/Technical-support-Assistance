@@ -4,7 +4,9 @@ import { BreakScreen } from './BreakScreen'
 import { ARENA } from './config'
 import { GameEngine } from './engine'
 import { isGameKey } from './input'
+import { LoadoutPicker } from './LoadoutPicker'
 import type { UpgradeId } from './upgrades'
+import type { WeaponId } from './weapons'
 import { CARD, GHOST_BTN_MD, PAGE_SUBTITLE, PAGE_TITLE, PRIMARY_BTN, SECTION_LABEL } from '../../shared/ui/styles'
 
 type Phase = 'idle' | 'playing' | 'paused' | 'break' | 'over'
@@ -19,8 +21,9 @@ const CONTROLS: [string, string][] = [
   ['W / Space', 'jump (hold for height)'],
   ['Shift', 'dash — you cannot be hit for a moment (uses stamina)'],
   ['J', 'attack — tap three times for the combo'],
-  ['K', 'heavy attack — tap twice; costs stamina, breaks poise'],
-  ['L (hold)', 'shield — only guards the way you face. Raise it just before a hit to parry'],
+  ['K', 'heavy attack — tap twice; costs stamina, breaks poise. Bow: hold to draw, let go to shoot'],
+  ['L (hold)', 'shield — sword & shield only. Raise it just before a hit to parry'],
+  ['Q', 'swap to your other weapon'],
   ['Esc', 'pause'],
 ]
 
@@ -36,6 +39,8 @@ export function GamePage() {
   const [onScreen, setOnScreen] = useState(true)
   /** The upgrade taken in the current break, if any. */
   const [picked, setPicked] = useState<UpgradeId | null>(null)
+  /** The two weapons carried. The engine keeps them between runs; this mirrors them for the menus. */
+  const [loadout, setLoadout] = useState<readonly [WeaponId, WeaponId]>(() => engine.loadout)
   /** Finished runs of this visit. Kept in memory only: a reload starts the list again. */
   const [runs, setRuns] = useState<Run[]>([])
   const frameRef = useRef<HTMLDivElement>(null)
@@ -115,6 +120,13 @@ export function GamePage() {
     frameRef.current?.focus()
   }
 
+  const assign = (slot: 0 | 1, weapon: WeaponId, fromMouse: boolean) => {
+    engine.setWeapon(slot, weapon)
+    setLoadout(engine.loadout)
+    // After a click the keyboard goes back to the game, so Enter then starts it.
+    if (fromMouse) frameRef.current?.focus()
+  }
+
   const pick = (id: UpgradeId) => {
     if (phase === 'break' && engine.pickUpgrade(id)) setPicked(id)
   }
@@ -137,6 +149,8 @@ export function GamePage() {
       event.preventDefault()
       if (phase === 'playing') engine.input.keyDown(event.code, event.repeat)
     } else if (event.code === 'Enter') {
+      // On a focused button Enter already clicks it; acting here as well would do both.
+      if (event.target instanceof HTMLButtonElement) return
       event.preventDefault()
       if (phase !== 'playing') begin()
     } else if (event.code === 'Escape' || event.code === 'KeyP') {
@@ -192,13 +206,17 @@ export function GamePage() {
           className="border-line-strong focus-visible:outline-brand relative mx-auto w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
-          {phase === 'break' && <BreakScreen world={engine.world} picked={picked} onPick={pick} onContinue={begin} />}
+          {phase === 'break' && <BreakScreen world={engine.world} picked={picked} loadout={loadout} onPick={pick} onAssign={assign} onContinue={begin} />}
           {phase !== 'playing' && phase !== 'break' && (
-            <div className="bg-black/50 absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center backdrop-blur-[2px]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-black/50 px-6 py-3 text-center backdrop-blur-[2px]">
               {phase === 'idle' && (
                 <>
                   <p className="text-3xl font-extrabold tracking-tight text-white">Last Stand</p>
                   <p className="max-w-md text-sm text-white/75">Goblins, orcs and ogres pour in from both sides, round after round. Parry, dodge and cut them down.</p>
+                  <div className="w-full max-w-3xl">
+                    <p className="mb-1.5 text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Choose two weapons</p>
+                    <LoadoutPicker loadout={loadout} onAssign={assign} />
+                  </div>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to start</p>
                 </>
               )}
@@ -231,6 +249,9 @@ export function GamePage() {
                       )
                     })}
                   </ol>
+                  <div className="w-full max-w-2xl">
+                    <LoadoutPicker loadout={loadout} onAssign={assign} compact />
+                  </div>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to try again</p>
                 </>
               )}

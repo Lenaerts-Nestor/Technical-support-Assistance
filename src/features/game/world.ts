@@ -3,8 +3,10 @@ import type { EnemyKind } from './config'
 import { BASE_MODS } from './upgrades'
 import type { Enemy, Player, World } from './types'
 import { enemyHealthScale, enemyPower, roundBudget } from './pacing'
+import { DEFAULT_LOADOUT } from './weapons'
+import type { WeaponId } from './weapons'
 
-export function createWorld(): World {
+export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOADOUT): World {
   const player: Player = {
     x: ARENA.width / 2,
     y: 0,
@@ -29,6 +31,11 @@ export function createWorld(): World {
     guardDelay: 0,
     parryFlash: 0,
     lowStamina: 0,
+    swapCooldown: 0,
+    swapAnim: 99,
+    drawing: false,
+    drawTime: 0,
+    drawPower: 0,
   }
   const budget = roundBudget(1)
   return {
@@ -36,6 +43,9 @@ export function createWorld(): World {
     player,
     enemies: [],
     waves: [],
+    arrows: [],
+    loadout: [loadout[0], loadout[1]],
+    activeSlot: 0,
     particles: [],
     nextId: 1,
     spawnTimer: ROUNDS.firstDelay,
@@ -60,7 +70,7 @@ export function createWorld(): World {
     revivesUsed: 0,
     freeze: 0,
     shake: 0,
-    buffer: { jump: 0, dash: 0, light: 0, heavy: 0 },
+    buffer: { jump: 0, dash: 0, light: 0, heavy: 0, swap: 0 },
     over: false,
   }
 }

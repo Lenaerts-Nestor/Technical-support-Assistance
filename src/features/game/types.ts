@@ -1,5 +1,6 @@
 import type { ComboKind, EnemyKind } from './config'
 import type { Mods, Picks, UpgradeId } from './upgrades'
+import type { WeaponId } from './weapons'
 
 export type Facing = 1 | -1
 
@@ -37,6 +38,14 @@ export type Player = {
   /** Seconds left of the flash after a parry, and of the warning that stamina ran short. */
   parryFlash: number
   lowStamina: number
+  /** Q cannot be used again until this runs out; `swapAnim` counts up from a swap for the weapon to come up. */
+  swapCooldown: number
+  swapAnim: number
+  /** A bow drawn and waiting for the button to be let go, and for how long. */
+  drawing: boolean
+  drawTime: number
+  /** How hard the last arrow was drawn, 0 to 1, for the picture. */
+  drawPower: number
 }
 
 export type EnemyState = 'walk' | 'windup' | 'attack' | 'recover' | 'hurt' | 'stagger' | 'dying'
@@ -65,7 +74,7 @@ export type Enemy = {
   power: number
 }
 
-/** A wave of rock racing along the ground. */
+/** A wave of rock racing along the ground: the ogre's, or the mace's when `friendly`. */
 export type Shockwave = {
   x: number
   vx: number
@@ -76,6 +85,32 @@ export type Shockwave = {
   halfWidth: number
   blockCost: number
   struck: boolean
+  /** The player's own wave: it hurts enemies, never the player. */
+  friendly?: boolean
+  poise?: number
+  knockback?: number
+  /** Enemies a friendly wave has already struck. */
+  hit?: Set<number>
+}
+
+/** An arrow in flight. */
+export type Arrow = {
+  x: number
+  /** Height above the ground. */
+  y: number
+  vx: number
+  damage: number
+  poise: number
+  knockback: number
+  hitStop: number
+  shake: number
+  /** How many more enemies it can pass through after the one it hits. */
+  pierce: number
+  /** A drawn shot counts as a finisher for the Executioner upgrade. */
+  charged: boolean
+  hit: Set<number>
+  life: number
+  maxLife: number
 }
 
 export type Particle = {
@@ -108,6 +143,10 @@ export type World = {
   player: Player
   enemies: Enemy[]
   waves: Shockwave[]
+  arrows: Arrow[]
+  /** The two weapons carried, and which one is in hand. */
+  loadout: [WeaponId, WeaponId]
+  activeSlot: 0 | 1
   particles: Particle[]
   nextId: number
   spawnTimer: number
@@ -139,7 +178,7 @@ export type World = {
   /** Screen shake strength, decaying. */
   shake: number
   /** Seconds each button press is still waiting to be used. */
-  buffer: { jump: number; dash: number; light: number; heavy: number }
+  buffer: { jump: number; dash: number; light: number; heavy: number; swap: number }
   over: boolean
 }
 
@@ -151,7 +190,9 @@ export type FrameInput = {
   dashPressed: boolean
   lightPressed: boolean
   heavyPressed: boolean
+  heavyHeld: boolean
   blockHeld: boolean
+  swapPressed: boolean
 }
 
 export const NO_INPUT: FrameInput = {
@@ -161,5 +202,7 @@ export const NO_INPUT: FrameInput = {
   dashPressed: false,
   lightPressed: false,
   heavyPressed: false,
+  heavyHeld: false,
   blockHeld: false,
+  swapPressed: false,
 }

@@ -73,32 +73,28 @@ export type AttackStep = {
   lunge: number
   hitStop: number
   shake: number
-  /** Sword arm angle in radians, relative to resting: negative is raised, positive is swung down. */
+  /** Weapon arm angle in radians, relative to resting: negative is raised, positive is swung down. */
   swing: { from: number; to: number }
+  /** A cut that reaches behind as well as in front (a spin). */
+  bothSides?: boolean
+  /** How the body moves: `spin` turns right round, `thrust` drives the weapon straight out, `kick` is a boot. */
+  motion?: 'spin' | 'thrust' | 'kick'
+  /** Fires an arrow at `hitStart` instead of cutting. */
+  projectile?: { speed: number; pierce: number; life: number }
+  /** Holds the weapon drawn while the button stays down, between `min` and `max` seconds, and fires on release. */
+  charge?: { min: number; max: number; minPower: number }
+  /** Sends a wave of rock along the ground at `hitStart`. */
+  wave?: { speed: number; life: number; damage: number; height: number; halfWidth: number; poise: number; knockback: number }
 }
 
-export type ComboKind = 'light' | 'heavy'
-
-/** The light combo: two quick cuts, then a slower finisher with knockback. */
-const LIGHT_COMBO: readonly AttackStep[] = [
-  { duration: 0.3, hitStart: 0.07, hitEnd: 0.15, cancelAt: 0.2, damage: 10, poise: 8, stamina: 0, reach: 116, knockback: 190, lunge: 140, hitStop: 0.045, shake: 2, swing: { from: -1.35, to: 0.95 } },
-  { duration: 0.3, hitStart: 0.07, hitEnd: 0.15, cancelAt: 0.2, damage: 10, poise: 8, stamina: 0, reach: 116, knockback: 190, lunge: 140, hitStop: 0.045, shake: 2, swing: { from: 1.05, to: -1.25 } },
-  { duration: 0.52, hitStart: 0.17, hitEnd: 0.27, cancelAt: 0.52, damage: 16, poise: 14, stamina: 0, reach: 132, knockback: 430, lunge: 270, hitStop: 0.1, shake: 6, swing: { from: -2.3, to: 1.3 } },
-]
-
-/** The heavy combo: a slow overhead chop, then a rising cut. Costs stamina, breaks poise. */
-const HEAVY_COMBO: readonly AttackStep[] = [
-  { duration: 0.64, hitStart: 0.26, hitEnd: 0.36, cancelAt: 0.46, damage: 26, poise: 40, stamina: 22, reach: 128, knockback: 300, lunge: 190, hitStop: 0.09, shake: 5, swing: { from: -2.45, to: 1.25 } },
-  { duration: 0.72, hitStart: 0.24, hitEnd: 0.34, cancelAt: 0.72, damage: 34, poise: 55, stamina: 26, reach: 142, knockback: 540, lunge: 250, hitStop: 0.13, shake: 8, swing: { from: 1.5, to: -2.1 } },
-]
-
-export const COMBOS: Record<ComboKind, readonly AttackStep[]> = { light: LIGHT_COMBO, heavy: HEAVY_COMBO }
+/** `light` and `heavy` are the two buttons; `close` is what a weapon does instead of `light` with an enemy at point-blank. */
+export type ComboKind = 'light' | 'heavy' | 'close'
 
 /** After a combo hit the next press continues the chain for this long; after that it starts over. */
 export const COMBO_WINDOW = 0.32
 
-/** With no direction held, a swing turns towards an enemy this close. */
-export const AIM_ASSIST_RANGE = 170
+/** Swapping weapons with Q: how long the new one takes to come up, and how soon you can swap again. */
+export const SWAP = { time: 0.28, cooldown: 0.7 } as const
 
 /** An enemy that is staggered or recovering from its own attack takes this much more damage. */
 export const VULNERABLE_BONUS = 1.3

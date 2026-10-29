@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { COMBOS, DASH, ENEMIES, SHIELD } from './config'
+import { DASH, ENEMIES, SHIELD } from './config'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
 import { BASE_MODS, UPGRADES, computeMods, offerUpgrades } from './upgrades'
 import { NO_INPUT } from './types'
+import { WEAPONS } from './weapons'
+
+const COMBOS = WEAPONS.swordShield.combos
 import type { Picks } from './upgrades'
 import type { Enemy, EnemyState, World } from './types'
 

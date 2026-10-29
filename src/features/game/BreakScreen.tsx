@@ -1,6 +1,7 @@
 import type { Category, UpgradeId } from './upgrades'
 import { UPGRADES, upgradeById } from './upgrades'
-import { WEAPONS } from './weapons'
+import { LoadoutPicker } from './LoadoutPicker'
+import type { WeaponId } from './weapons'
 import type { World } from './types'
 
 /** Chip colours by kind of upgrade. The screen is always dark, whichever page theme is on. */
@@ -14,12 +15,14 @@ const CATEGORY: Record<Category, { label: string; chip: string }> = {
 type BreakScreenProps = {
   world: World
   picked: UpgradeId | null
+  loadout: readonly [WeaponId, WeaponId]
   onPick: (id: UpgradeId) => void
+  onAssign: (slot: 0 | 1, weapon: WeaponId, fromMouse: boolean) => void
   onContinue: () => void
 }
 
 /** The pause between rounds: what the round paid, one upgrade to take, and the weapon rack. */
-export function BreakScreen({ world, picked, onPick, onContinue }: BreakScreenProps) {
+export function BreakScreen({ world, picked, loadout, onPick, onAssign, onContinue }: BreakScreenProps) {
   const { summary } = world
   if (!summary) return null
   const owned = UPGRADES.filter((u) => (world.upgrades[u.id] ?? 0) > 0)
@@ -85,21 +88,8 @@ export function BreakScreen({ world, picked, onPick, onContinue }: BreakScreenPr
         </div>
 
         <div>
-          <p className="mb-1.5 text-center text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Weapon</p>
-          <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-            {WEAPONS.map((weapon) => (
-              <li
-                key={weapon.id}
-                title={weapon.available ? weapon.tagline : `${weapon.tagline} Not in the game yet.`}
-                className={`rounded-md border px-2 py-1.5 text-[11px] leading-tight ${
-                  weapon.available ? 'border-[#ffd27a]/70 bg-[#ffd27a]/10' : 'border-white/10 bg-white/5 opacity-50'
-                }`}
-              >
-                <span className="block font-bold">{weapon.name}</span>
-                <span className="block text-white/65">{weapon.available ? 'Equipped' : 'Coming soon'}</span>
-              </li>
-            ))}
-          </ul>
+          <p className="mb-1.5 text-center text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Weapons</p>
+          <LoadoutPicker loadout={loadout} onAssign={onAssign} compact />
         </div>
 
         <div className="text-center">

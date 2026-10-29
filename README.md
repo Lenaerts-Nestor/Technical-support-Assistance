@@ -134,8 +134,9 @@ and has the keyboard, and scores last until the page is reloaded.
 | **W / Space** | jump (hold for height) |
 | **Shift** | dash: you cannot be hit for a moment; costs stamina |
 | **J** | light combo: tap three times |
-| **K** | heavy combo: tap twice; slow, costs stamina, breaks poise. Can follow a light hit |
-| **L** (hold) | shield: guards the way you face and costs stamina per hit. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
+| **K** | heavy combo: tap twice; slow, costs stamina, breaks poise. Can follow a light hit. With the bow, hold to draw and let go to shoot |
+| **L** (hold) | shield (sword & shield only): guards the way you face and costs stamina per hit. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
+| **Q** | swap to your other weapon |
 
 Goblins leap, orcs chop and ogres slam the ground, which sends a wave of rock along it that you can jump or
 dash. Orcs and ogres shrug off light hits until their **poise** (the bar under their health) breaks; then
@@ -148,12 +149,20 @@ harder. Clear a round and you are patched up (a third of your health, full stami
 last for the run. Kills in quick succession build a **streak** that multiplies their points, and a hit on you
 ends it. The game is endless; the list of this session's runs is on the "You fell" screen and is not saved.
 
-It is built in stages. So far: movement, light and heavy combos, shield and parry, stamina, the three enemy
-types, rounds, scoring and upgrades. Still to come: the other three weapons (the weapon rack in the break
-screen shows them as coming soon) and the Q hotkey, a boss every fifth round, and character customization.
-The rules are in `src/features/game/sim.ts` and `rounds.ts` (tests next to them), the upgrade list in
-`upgrades.ts`, every tuning number in `config.ts` and `pacing.ts`, and the characters are vector shapes in
-`art/` that `draw/` poses and animates.
+**Weapons.** You carry two, chosen on the start screen and again in every break (and on the game-over screen):
+
+| Weapon | Light (J) | Heavy (K) | Notes |
+|---|---|---|---|
+| Sword & Shield | quick 3-hit combo | overhead chop, then a rising cut | the only one that can shield and parry |
+| Long Sword | longer reach, 3 hits | **spin** that cuts both sides, then a long thrust | no shield |
+| Spiked Mace | slow, hard 3 hits | **slam** that sends a shockwave along the ground, then a crushing swing | staggers orcs and ogres fast |
+| Bow | arrows from a distance (a kick if an enemy is right there) | hold to draw, let go for a shot that pierces everything in line | no shield |
+
+It is built in stages. So far: movement, the four weapons and the swap, shield and parry, stamina, the three
+enemy types, rounds, scoring and upgrades. Still to come: a boss every fifth round and character
+customization. The rules are in `src/features/game/sim.ts` and `rounds.ts` (tests next to them), the weapons
+in `weapons.ts`, the upgrade list in `upgrades.ts`, every tuning number in `config.ts` and `pacing.ts`, and the
+characters are vector shapes in `art/` that `draw/` poses and animates.
 
 ## Updates
 
