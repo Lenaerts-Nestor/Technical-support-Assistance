@@ -1,6 +1,7 @@
 import type { ComboKind, EnemyKind } from './config'
 import type { Mods, Picks, UpgradeId } from './upgrades'
 import type { WeaponId } from './weapons'
+import type { Appearance } from './appearance'
 
 export type Facing = 1 | -1
 
@@ -46,7 +47,13 @@ export type Player = {
   drawTime: number
   /** How hard the last arrow was drawn, 0 to 1, for the picture. */
   drawPower: number
+  /** Seconds left of the landing squash, and of the white flash and recoil after being hit. */
+  landTime: number
+  hitTime: number
 }
+
+/** What the boss is doing with its current attack. */
+export type BossMove = 'slam' | 'charge' | 'roar'
 
 export type EnemyState = 'walk' | 'windup' | 'attack' | 'recover' | 'hurt' | 'stagger' | 'dying'
 
@@ -72,6 +79,11 @@ export type Enemy = {
   flash: number
   /** Multiplies the damage of everything it does; grows with the round. */
   power: number
+  /** Seconds left of the recoil animation after a hit (the white flash is shorter). */
+  hitTime: number
+  /** The boss's current attack, and how many it has made (it cycles through them). */
+  move: BossMove | null
+  pattern: number
 }
 
 /** A wave of rock racing along the ground: the ogre's, or the mace's when `friendly`. */
@@ -113,6 +125,30 @@ export type Arrow = {
   maxLife: number
 }
 
+/** A number or word that floats up from where something happened: damage, PARRY!, STAGGER! */
+export type Floater = {
+  x: number
+  /** Height above the ground. */
+  y: number
+  text: string
+  color: string
+  size: number
+  life: number
+  maxLife: number
+}
+
+/** A ring and slash mark where a hit landed. */
+export type Impact = {
+  x: number
+  y: number
+  life: number
+  maxLife: number
+  size: number
+  color: string
+  /** The direction the blow travelled, for the slash mark. */
+  dir: 1 | -1
+}
+
 export type Particle = {
   x: number
   y: number
@@ -148,6 +184,12 @@ export type World = {
   loadout: [WeaponId, WeaponId]
   activeSlot: 0 | 1
   particles: Particle[]
+  floaters: Floater[]
+  impacts: Impact[]
+  /** How the hero looks. */
+  look: Appearance
+  /** Whether this round's boss has come yet. */
+  bossSpawned: boolean
   nextId: number
   spawnTimer: number
   round: number

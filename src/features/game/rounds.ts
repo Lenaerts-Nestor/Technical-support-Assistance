@@ -8,7 +8,7 @@ import type { EnemyKind, EnemyStats } from './config'
 import { computeMods, offerUpgrades } from './upgrades'
 import type { UpgradeId } from './upgrades'
 import type { World } from './types'
-import { maxAlive, maxOf, roundBudget, spawnInterval } from './pacing'
+import { isBossRound, maxAlive, maxOf, roundBudget, spawnInterval } from './pacing'
 import { spawnEnemy } from './world'
 
 type Rng = () => number
@@ -17,10 +17,13 @@ const alive = (w: World) => w.enemies.filter((e) => e.state !== 'dying')
 
 /** Which kind arrives next: goblins mostly, with the tougher kinds mixed in as the rounds go on. */
 function pickKind(w: World, rng: Rng): EnemyKind {
+  // The boss comes first in a boss round; while it lives the crowd is only the small fry.
+  if (isBossRound(w.round) && !w.bossSpawned) return 'warlord'
+  const bossAlive = alive(w).some((e) => e.kind === 'warlord')
   const options: [EnemyKind, number][] = [['goblin', 6]]
   const count = (kind: EnemyKind) => alive(w).filter((e) => e.kind === kind).length
   if (w.round >= ROUNDS.orcFromRound && w.budget >= COST.orc && count('orc') < maxOf('orc', w.round)) options.push(['orc', 3])
-  if (w.round >= ROUNDS.ogreFromRound && w.budget >= COST.ogre && count('ogre') < maxOf('ogre', w.round)) options.push(['ogre', 1.5])
+  if (w.round >= ROUNDS.ogreFromRound && w.budget >= COST.ogre && !bossAlive && count('ogre') < maxOf('ogre', w.round)) options.push(['ogre', 1.5])
   let roll = rng() * options.reduce((sum, [, weight]) => sum + weight, 0)
   for (const [kind, weight] of options) {
     roll -= weight
@@ -51,7 +54,9 @@ export function stepRound(w: World, dt: number, rng: Rng) {
       const edge = ENEMIES[kind].halfWidth + ROUNDS.margin
       spawnEnemy(w, kind, rng() < 0.5 ? -edge : ARENA.width + edge)
       w.budget -= COST[kind]
-      w.spawnTimer = spawnInterval(w.round)
+      // The boss walks in alone; its crowd follows after a moment.
+      if (kind === 'warlord') w.bossSpawned = true
+      w.spawnTimer = kind === 'warlord' ? 3 : spawnInterval(w.round)
     }
   } else if (alive(w).length === 0) {
     clearRound(w, rng)
@@ -97,6 +102,7 @@ export function nextRound(w: World) {
   w.stage = 'fight'
   w.stageTime = 0
   w.budget = w.roundBudget = roundBudget(w.round)
+  w.bossSpawned = false
   w.spawnTimer = ROUNDS.firstDelay
   w.roundKills = 0
   w.roundParries = 0

@@ -1,7 +1,9 @@
 import { BOW_ARM, BOW_COLORS, LONG_SWORD, MACE, bowPoints } from '../art/knightWeapons'
-import { KNIGHT, SWORD_PIVOT } from '../art/knight'
+import { SWORD_PIVOT } from '../art/knight'
+import type { KnightRig } from '../art/knight'
 import type { WeaponId } from '../weapons'
 import { drawPart } from './rigDraw'
+import type { Tint } from './rigDraw'
 
 /** How a weapon rests when nothing is being swung: radians from the arm's own direction. */
 export const REST_ANGLE: Record<WeaponId, number> = { swordShield: 0, longSword: -0.2, mace: -0.75, bow: 0 }
@@ -10,15 +12,15 @@ export const REST_ANGLE: Record<WeaponId, number> = { swordShield: 0, longSword:
 export const SWING_RADIUS: Record<WeaponId, number> = { swordShield: 100, longSword: 150, mace: 118, bow: 0 }
 
 /** Draw the weapon in hand, turned `rot` about the shoulder. `pull` is how far a bow string is drawn. */
-export function drawWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId, rot: number, pull: number, nocked: boolean) {
-  if (weapon === 'swordShield') drawPart(ctx, KNIGHT.swordArm, { rot })
-  else if (weapon === 'longSword') drawPart(ctx, LONG_SWORD, { rot })
-  else if (weapon === 'mace') drawPart(ctx, MACE, { rot })
-  else drawBow(ctx, rot, pull, nocked)
+export function drawWeapon(ctx: CanvasRenderingContext2D, rig: KnightRig, weapon: WeaponId, rot: number, pull: number, nocked: boolean, tint: Tint | boolean = false) {
+  if (weapon === 'swordShield') drawPart(ctx, rig.swordArm, { rot }, tint)
+  else if (weapon === 'longSword') drawPart(ctx, LONG_SWORD, { rot }, tint)
+  else if (weapon === 'mace') drawPart(ctx, MACE, { rot }, tint)
+  else drawBow(ctx, rot, pull, nocked, tint)
 }
 
-function drawBow(ctx: CanvasRenderingContext2D, rot: number, pull: number, nocked: boolean) {
-  drawPart(ctx, BOW_ARM, { rot })
+function drawBow(ctx: CanvasRenderingContext2D, rot: number, pull: number, nocked: boolean, tint: Tint | boolean) {
+  drawPart(ctx, BOW_ARM, { rot }, tint)
   const [px, py] = SWORD_PIVOT
   const { top, bottom, nock, belly, front } = bowPoints(pull)
   ctx.save()

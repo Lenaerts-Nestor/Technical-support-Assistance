@@ -1,4 +1,6 @@
 import { ARENA, COST, ENEMIES, SWAP } from '../config'
+import { isBossRound } from '../pacing'
+import { isEnraged, windupTime } from '../sim'
 import { WEAPON_ICONS } from '../art/weaponIcons'
 import { WEAPONS } from '../weapons'
 import type { WeaponId } from '../weapons'
@@ -252,6 +254,10 @@ export function drawBanner(ctx: CanvasRenderingContext2D, w: World) {
     title = `ROUND ${w.round}`
     sub = w.round === 1 ? 'Hold the line' : 'They are back, and more of them'
     alpha = Math.min(1, (1.8 - w.stageTime) / 0.6, w.stageTime / 0.2)
+    if (isBossRound(w.round)) {
+      sub = 'THE OGRE WARLORD'
+      color = '#ff9a8f'
+    }
   } else if (w.stage === 'cleared' && w.summary) {
     title = `ROUND ${w.summary.round} CLEARED`
     sub = w.summary.flawlessBonus > 0 ? 'FLAWLESS' : ''
@@ -373,5 +379,153 @@ export function drawWeaponHud(ctx: CanvasRenderingContext2D, w: World) {
   ctx.font = '700 11px Inter, system-ui, sans-serif'
   ctx.textAlign = 'left'
   ctx.fillText(WEAPONS[w.loadout[w.activeSlot]].name, x0 + size * 2 + 20, y0 + size / 2)
+  ctx.restore()
+}
+
+/** The numbers and words that float up from a blow: damage, PARRY!, STAGGER!. */
+export function drawFloaters(ctx: CanvasRenderingContext2D, w: World) {
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineJoin = 'round'
+  for (const f of w.floaters) {
+    const age = f.maxLife - f.life
+    const pop = age < 0.14 ? 1.45 - 0.45 * (age / 0.14) : 1
+    ctx.globalAlpha = Math.min(1, (f.life / f.maxLife) * 1.8)
+    ctx.font = `900 ${Math.round(f.size * pop)}px Inter, system-ui, sans-serif`
+    ctx.lineWidth = 5
+    ctx.strokeStyle = 'rgba(10,10,14,.85)'
+    ctx.strokeText(f.text, f.x, groundY - f.y)
+    ctx.fillStyle = f.color
+    ctx.fillText(f.text, f.x, groundY - f.y)
+  }
+  ctx.restore()
+}
+
+/** A ring and a slash mark where a blow landed, quick and bright. */
+export function drawImpacts(ctx: CanvasRenderingContext2D, w: World) {
+  ctx.save()
+  ctx.lineCap = 'round'
+  for (const hit of w.impacts) {
+    const t = 1 - hit.life / hit.maxLife
+    ctx.globalAlpha = 1 - t
+    ctx.strokeStyle = hit.color
+    ctx.lineWidth = 4 * (1 - t) + 1
+    ctx.beginPath()
+    ctx.arc(hit.x, groundY - hit.y, hit.size * (0.35 + 0.65 * t), 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.lineWidth = 5 * (1 - t) + 1.5
+    ctx.beginPath()
+    ctx.moveTo(hit.x - hit.dir * hit.size * 0.8, groundY - hit.y + hit.size * 0.45)
+    ctx.lineTo(hit.x + hit.dir * hit.size * 0.8 * (0.4 + t), groundY - hit.y - hit.size * 0.45)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/**
+ * The ground an attack is about to hit, drawn red from the moment the enemy starts its wind-up
+ * and brighter and pulsing as the blow gets closer: step out of it, jump, dash, or raise the shield.
+ */
+export function drawDangerZones(ctx: CanvasRenderingContext2D, w: World) {
+  for (const e of w.enemies) {
+    if (e.state !== 'windup') continue
+    const stats = ENEMIES[e.kind]
+    const windup = Math.max(0.01, windupTime(e))
+    const k = Math.min(1, e.stateTime / windup)
+    const dir = e.facing
+    let x0: number
+    let x1: number
+    if (e.kind === 'goblin') {
+      x0 = e.x
+      x1 = e.x + dir * 150
+    } else if (e.kind === 'warlord' && e.move === 'charge') {
+      x0 = e.x
+      x1 = dir > 0 ? W : 0
+    } else if (e.kind === 'warlord' && e.move === 'roar') {
+      continue
+    } else {
+      x0 = e.x - dir * stats.halfWidth * 0.5
+      x1 = e.x + dir * stats.reach
+    }
+    const left = Math.min(x0, x1)
+    const width = Math.abs(x1 - x0)
+    const pulse = 0.5 + 0.5 * Math.sin(e.stateTime * (12 + 24 * k))
+    const alpha = (0.1 + 0.42 * k * k) * (0.6 + 0.4 * pulse)
+    ctx.save()
+    const g = ctx.createLinearGradient(0, groundY - 8, 0, groundY + 20)
+    g.addColorStop(0, `rgba(255,70,50,${alpha * 0.2})`)
+    g.addColorStop(0.35, `rgba(255,70,50,${alpha})`)
+    g.addColorStop(1, `rgba(255,70,50,${alpha * 0.25})`)
+    ctx.fillStyle = g
+    ctx.fillRect(left, groundY - 8, width, 28)
+    ctx.strokeStyle = `rgba(255,140,110,${0.25 + 0.6 * k})`
+    ctx.lineWidth = 2
+    ctx.setLineDash([10, 8])
+    ctx.lineDashOffset = -e.stateTime * 80 * dir
+    ctx.strokeRect(left + 1, groundY - 7, width - 2, 26)
+    if (e.kind === 'warlord' && e.move === 'charge') {
+      // Chevrons run along a charge's path.
+      ctx.setLineDash([])
+      ctx.strokeStyle = `rgba(255,200,180,${0.3 + 0.5 * k})`
+      ctx.lineWidth = 3
+      for (let i = 0; i < 12; i++) {
+        const cx = x0 + dir * (60 + i * 70 + ((e.stateTime * 180) % 70))
+        if (cx < 0 || cx > W) continue
+        ctx.beginPath()
+        ctx.moveTo(cx - dir * 8, groundY - 2)
+        ctx.lineTo(cx + dir * 4, groundY + 6)
+        ctx.lineTo(cx - dir * 8, groundY + 14)
+        ctx.stroke()
+      }
+    }
+    ctx.restore()
+  }
+}
+
+/** A red glow round the edges of the screen for a moment after the hero is hit. */
+export function drawHurtVignette(ctx: CanvasRenderingContext2D, w: World) {
+  const t = w.player.hitTime / 0.34
+  if (t <= 0) return
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.95)
+  g.addColorStop(0, 'rgba(255,40,40,0)')
+  g.addColorStop(1, `rgba(255,40,40,${0.5 * t})`)
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, W, H)
+}
+
+/** The boss's health, poise and mood, in a wide bar of its own. */
+export function drawBossBar(ctx: CanvasRenderingContext2D, w: World) {
+  const boss = w.enemies.find((e) => e.kind === 'warlord' && e.state !== 'dying')
+  if (!boss) return
+  const stats = ENEMIES.warlord
+  const width = 400
+  const x = (W - width) / 2
+  const y = 58
+  const enraged = isEnraged(boss)
+  ctx.save()
+  ctx.fillStyle = 'rgba(10,10,14,.7)'
+  roundRect(ctx, x - 4, y - 4, width + 8, 30, 8)
+  ctx.fill()
+  ctx.fillStyle = enraged ? '#ff4d4d' : '#d6525c'
+  roundRect(ctx, x, y, Math.max(0, width * (boss.hp / boss.maxHp)), 14, 5)
+  ctx.fill()
+  // Where it turns enraged.
+  ctx.fillStyle = 'rgba(255,255,255,.55)'
+  ctx.fillRect(x + width * (stats.boss?.enrageAt ?? 0.5) - 1, y - 2, 2, 18)
+  if (boss.state !== 'stagger' && boss.poiseHit > 0) {
+    ctx.fillStyle = '#ffd27a'
+    ctx.fillRect(x, y + 17, width * Math.min(1, boss.poiseHit / stats.poise), 3)
+  }
+  ctx.fillStyle = '#fff'
+  ctx.font = '800 11px Inter, system-ui, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'bottom'
+  ctx.fillText('OGRE WARLORD', x, y - 6)
+  if (enraged) {
+    ctx.textAlign = 'right'
+    ctx.fillStyle = '#ff8f8f'
+    ctx.fillText('ENRAGED', x + width, y - 6)
+  }
   ctx.restore()
 }

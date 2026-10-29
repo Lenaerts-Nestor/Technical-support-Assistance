@@ -3,10 +3,12 @@ import type { EnemyKind } from './config'
 import { BASE_MODS } from './upgrades'
 import type { Enemy, Player, World } from './types'
 import { enemyHealthScale, enemyPower, roundBudget } from './pacing'
+import { DEFAULT_LOOK } from './appearance'
+import type { Appearance } from './appearance'
 import { DEFAULT_LOADOUT } from './weapons'
 import type { WeaponId } from './weapons'
 
-export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOADOUT): World {
+export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOADOUT, look: Appearance = DEFAULT_LOOK): World {
   const player: Player = {
     x: ARENA.width / 2,
     y: 0,
@@ -36,6 +38,8 @@ export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOA
     drawing: false,
     drawTime: 0,
     drawPower: 0,
+    landTime: 0,
+    hitTime: 0,
   }
   const budget = roundBudget(1)
   return {
@@ -47,6 +51,10 @@ export function createWorld(loadout: readonly [WeaponId, WeaponId] = DEFAULT_LOA
     loadout: [loadout[0], loadout[1]],
     activeSlot: 0,
     particles: [],
+    floaters: [],
+    impacts: [],
+    look: { ...look },
+    bossSpawned: false,
     nextId: 1,
     spawnTimer: ROUNDS.firstDelay,
     round: 1,
@@ -95,6 +103,9 @@ export function spawnEnemy(w: World, kind: EnemyKind, x: number): Enemy {
     poiseTimer: 0,
     flash: 0,
     power: enemyPower(w.round),
+    hitTime: 0,
+    move: null,
+    pattern: 0,
   }
   w.enemies.push(enemy)
   return enemy

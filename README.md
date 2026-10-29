@@ -158,11 +158,25 @@ ends it. The game is endless; the list of this session's runs is on the "You fel
 | Spiked Mace | slow, hard 3 hits | **slam** that sends a shockwave along the ground, then a crushing swing | staggers orcs and ogres fast |
 | Bow | arrows from a distance (a kick if an enemy is right there) | hold to draw, let go for a shot that pierces everything in line | no shield |
 
-It is built in stages. So far: movement, the four weapons and the swap, shield and parry, stamina, the three
-enemy types, rounds, scoring and upgrades. Still to come: a boss every fifth round and character
-customization. The rules are in `src/features/game/sim.ts` and `rounds.ts` (tests next to them), the weapons
-in `weapons.ts`, the upgrade list in `upgrades.ts`, every tuning number in `config.ts` and `pacing.ts`, and the
-characters are vector shapes in `art/` that `draw/` poses and animates.
+**Your hero.** On the start screen (and from "Change look and weapons" after a run) pick a helmet (great helm,
+open face, horned), armour (plate, chainmail, leather) and a colour. It is cosmetic only and is remembered in
+this browser.
+
+**Bosses.** Every fifth round is a boss: the **Ogre Warlord**, an armoured ogre with its own health bar. It
+slams the ground (and, once enraged below half health, sends waves both ways), **charges** across the arena
+(dash through it or take it on the shield; if it hits the wall it is stunned and open) and **roars** to call
+goblins. Every attack shows a red danger zone on the ground before it lands.
+
+**Feedback.** Damage numbers float up from every hit, with PARRY!, BLOCK and STAGGER! called out; enemies
+shove back and flash white when hit, glow red as an attack is about to land, and the screen edge flashes
+red when you are hit. Motion is smoothed (poses blend, capes and ears ride springs, landings squash) so
+nothing snaps from one pose to the next.
+
+It is built in stages and this was the last: movement, the four weapons and the swap, shield and parry,
+stamina, enemies and the boss, rounds, scoring and upgrades, and customization. The rules are in
+`src/features/game/sim.ts` and `rounds.ts` (tests next to them), the weapons in `weapons.ts`, the upgrade list
+in `upgrades.ts`, every tuning number in `config.ts` and `pacing.ts`, and the characters are vector shapes
+in `art/` that `draw/` poses and animates (`draw/anim.ts` is the smoothing).
 
 ## Updates
 

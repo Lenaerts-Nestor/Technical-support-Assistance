@@ -3,7 +3,7 @@
  * a small slice of time given what the player is pressing. The random source is passed in so a
  * test can play the same game twice.
  */
-import { ARENA, COMBO_WINDOW, DASH, ENEMIES, PLAYER, POISE_RESET, SHIELD, SWAP, VULNERABLE_BONUS } from './config'
+import { ARENA, COMBO_WINDOW, DASH, ENEMIES, PLAYER, POISE_RESET, ROUNDS, SHIELD, SWAP, VULNERABLE_BONUS } from './config'
 import type { AttackStep, ComboKind, EnemyStats } from './config'
 import { awardKill, stepRound } from './rounds'
 import type { Enemy, FrameInput, Player, World } from './types'
@@ -87,6 +87,8 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   p.parryFlash = Math.max(0, p.parryFlash - dt)
   p.lowStamina = Math.max(0, p.lowStamina - dt)
   p.swapCooldown = Math.max(0, p.swapCooldown - dt)
+  p.landTime = Math.max(0, p.landTime - dt)
+  p.hitTime = Math.max(0, p.hitTime - dt)
   p.swapAnim += dt
   if (p.comboWindow > 0) {
     p.comboWindow = Math.max(0, p.comboWindow - dt)
@@ -184,6 +186,11 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   if (p.x !== wanted) p.vx = 0
   p.y += p.vy * dt
   if (p.y <= 0) {
+    // Coming down hard squashes the knight for a moment and kicks up a little dust.
+    if (!p.grounded && p.vy < -350) {
+      p.landTime = 0.2
+      burst(w, p.x, 2, 0, rng, 7, DUST)
+    }
     p.y = 0
     if (p.vy < 0) p.vy = 0
     p.grounded = true
@@ -435,11 +442,14 @@ function hitEnemy(w: World, e: Enemy, hit: HitInfo, rng: Rng) {
 
   // Catching an enemy off guard (mid-recovery, or staggered) hurts more.
   const exposed = e.state === 'recover' || e.state === 'stagger'
-  e.hp -= hit.damage * w.mods.damage * (hit.finisher ? w.mods.finisher : 1) * (exposed ? VULNERABLE_BONUS : 1)
+  const dealt = hit.damage * w.mods.damage * (hit.finisher ? w.mods.finisher : 1) * (exposed ? VULNERABLE_BONUS : 1)
+  e.hp -= dealt
   e.flash = 0.1
+  e.hitTime = 0.3
   e.poiseHit += hit.poise * w.mods.poise
   e.poiseTimer = POISE_RESET
   const breaks = stats.poise === 0 || e.poiseHit >= stats.poise
+  const wasStaggered = e.state === 'stagger'
 
   if (e.hp <= 0) {
     e.state = 'dying'
@@ -448,7 +458,7 @@ function hitEnemy(w: World, e: Enemy, hit: HitInfo, rng: Rng) {
     e.vx = dir * hit.knockback * 1.2 * Math.max(stats.knockScale, 0.4)
     e.vy = stats.heavy ? 0 : 380
     awardKill(w, stats)
-  } else if (e.state === 'stagger') {
+  } else if (wasStaggered) {
     // Already reeling: it takes the damage and the shove, but the clock does not restart.
     e.vx = dir * hit.knockback * stats.knockScale * 0.5
   } else if (breaks) {
@@ -459,14 +469,20 @@ function hitEnemy(w: World, e: Enemy, hit: HitInfo, rng: Rng) {
     e.vx = dir * hit.knockback * stats.knockScale
     e.vy = hit.knockback > 300 && !stats.heavy ? 260 : 0
     e.cooldown = Math.max(e.cooldown, 0.3)
+    if (stats.poise > 0) floater(w, e.x, e.y + stats.labelHeight + 14, 'STAGGER!', '#ffd27a', 20)
   } else {
     // Poise soaks it up: the enemy keeps doing what it was doing, only nudged.
     e.vx += dir * hit.knockback * stats.knockScale * 0.3
   }
 
+  const hx = e.x - dir * stats.halfWidth * 0.4
+  const hy = e.y + stats.height * 0.55
+  const big = hit.finisher || hit.knockback > 300
+  floater(w, e.x + (rng() - 0.5) * 16, e.y + stats.height + 6, String(Math.max(1, Math.round(dealt))), exposed ? '#ffb347' : hit.finisher ? '#ffd27a' : '#ffffff', big ? 24 : 18)
+  impact(w, hx, hy, dir, big ? 46 : 30, exposed ? '#ffb347' : '#ffffff')
   w.freeze = Math.max(w.freeze, hit.hitStop)
   w.shake = Math.max(w.shake, hit.shake)
-  burst(w, e.x - dir * stats.halfWidth * 0.4, e.y + stats.height * 0.55, dir, rng, hit.knockback > 300 ? 14 : 8, ['#ffe9a8', '#ffffff', '#a3bd6c'])
+  burst(w, hx, hy, dir, rng, hit.knockback > 300 ? 14 : 8, ['#ffe9a8', '#ffffff', '#a3bd6c'])
 }
 
 /**
@@ -496,6 +512,8 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
       w.freeze = Math.max(w.freeze, 0.13)
       w.shake = Math.max(w.shake, 6)
       burst(w, sparkX, sparkY, p.facing, rng, 18, STEEL_SPARKS)
+      impact(w, sparkX, sparkY, p.facing, 56, '#ffd27a')
+      floater(w, p.x, p.y + PLAYER.height + 14, 'PARRY!', '#ffd27a', 28)
       return 'parried'
     }
     if (p.stamina >= blockCost) {
@@ -505,6 +523,8 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
       w.freeze = Math.max(w.freeze, 0.05)
       w.shake = Math.max(w.shake, 3)
       burst(w, sparkX, sparkY, p.facing, rng, 9, STEEL_SPARKS)
+      impact(w, sparkX, sparkY, p.facing, 30, '#9fc4ff')
+      floater(w, p.x, p.y + PLAYER.height + 10, 'BLOCK', '#9fc4ff', 17)
       return 'blocked'
     }
     amount = Math.ceil(amount * 0.5)
@@ -512,11 +532,16 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
     p.staminaDelay = PLAYER.staminaDelay * 2
     result = 'broken'
     burst(w, sparkX, sparkY, p.facing, rng, 8, STEEL_SPARKS)
+    floater(w, p.x, p.y + PLAYER.height + 34, 'GUARD BROKEN!', '#ff8f8f', 20)
   }
 
   const dir = p.x >= fromX ? 1 : -1
   p.drawing = false
-  p.hp = Math.max(0, p.hp - Math.max(1, Math.round(amount * w.mods.damageTaken)))
+  const taken = Math.max(1, Math.round(amount * w.mods.damageTaken))
+  p.hp = Math.max(0, p.hp - taken)
+  p.hitTime = 0.34
+  floater(w, p.x, p.y + PLAYER.height + 8, `-${taken}`, '#ff6b6b', 26)
+  impact(w, p.x, p.y + PLAYER.height * 0.6, (dir * -1) as 1 | -1, 54, '#ff8f8f')
   w.hurtThisRound = true
   w.streak = 0
   w.streakTimer = 0
@@ -547,16 +572,34 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
 
 /* -- Enemies --------------------------------------------------------------- */
 
+/** The boss is enraged once it is down to its last half. */
+export const isEnraged = (e: Enemy) => {
+  const boss = ENEMIES[e.kind].boss
+  return Boolean(boss) && e.hp < e.maxHp * (boss?.enrageAt ?? 0)
+}
+
+/** How long an enemy winds up for its current attack. The boss's depends on which move it chose. */
+export function windupTime(e: Enemy): number {
+  const stats = ENEMIES[e.kind]
+  const boss = stats.boss
+  const base = boss && e.move === 'charge' ? boss.chargeWindup : boss && e.move === 'roar' ? boss.roarWindup : stats.windup
+  return base * (isEnraged(e) ? 0.85 : 1)
+}
+
+const aliveCount = (w: World) => w.enemies.filter((e) => e.state !== 'dying').length
+
 function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
   const stats = ENEMIES[e.kind]
   const p = w.player
   e.stateTime += dt
   e.flash = Math.max(0, e.flash - dt)
+  e.hitTime = Math.max(0, e.hitTime - dt)
   e.cooldown = Math.max(0, e.cooldown - dt)
   e.poiseTimer = Math.max(0, e.poiseTimer - dt)
   if (e.poiseTimer === 0) e.poiseHit = 0
   const dx = p.x - e.x
   const toward = dx >= 0 ? 1 : -1
+  const enraged = isEnraged(e)
 
   switch (e.state) {
     case 'walk':
@@ -565,8 +608,10 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
         e.vx = approach(e.vx, 0, 2600 * dt)
         break
       }
-      e.vx = approach(e.vx, toward * stats.speed, 2600 * dt)
-      if (Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.y === 0) {
+      e.vx = approach(e.vx, toward * stats.speed * (enraged ? 1.3 : 1), 2600 * dt)
+      if (stats.style === 'boss') {
+        if (e.cooldown === 0 && e.y === 0) chooseBossMove(w, e, stats, Math.abs(dx))
+      } else if (Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.y === 0) {
         e.state = 'windup'
         e.stateTime = 0
       }
@@ -574,7 +619,7 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
     case 'windup':
       e.facing = toward
       e.vx = approach(e.vx, 0, 3000 * dt)
-      if (e.stateTime >= stats.windup) beginEnemyAttack(w, e, stats, rng)
+      if (e.stateTime >= windupTime(e)) beginEnemyAttack(w, e, stats, rng)
       break
     case 'attack':
       stepEnemyAttack(w, e, stats, rng)
@@ -584,7 +629,7 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
       if (e.stateTime >= stats.recover) {
         e.state = 'walk'
         e.stateTime = 0
-        e.cooldown = stats.attackCooldown
+        e.cooldown = stats.attackCooldown * (enraged ? 0.7 : 1)
       }
       break
     case 'hurt':
@@ -616,6 +661,33 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
   }
 }
 
+/** The boss cycles through its moves: close in, it slams or roars; at range, it charges or roars. */
+function chooseBossMove(w: World, e: Enemy, stats: EnemyStats, distance: number) {
+  const n = e.pattern++
+  const roomForGoblins = aliveCount(w) < 4
+  const near = distance < stats.attackRange
+  if (near) e.move = n % 3 === 2 && roomForGoblins ? 'roar' : 'slam'
+  else e.move = n % 2 === 1 && roomForGoblins ? 'roar' : 'charge'
+  e.state = 'windup'
+  e.stateTime = 0
+}
+
+function pushWave(w: World, e: Enemy, stats: EnemyStats, dir: 1 | -1) {
+  const wave = stats.wave
+  if (!wave) return
+  w.waves.push({
+    x: e.x + dir * stats.reach * 0.8,
+    vx: dir * wave.speed,
+    life: wave.life,
+    maxLife: wave.life,
+    damage: wave.damage * e.power,
+    height: wave.height,
+    halfWidth: wave.halfWidth,
+    blockCost: wave.blockCost,
+    struck: false,
+  })
+}
+
 function beginEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
   e.state = 'attack'
   e.stateTime = 0
@@ -623,22 +695,27 @@ function beginEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
   if (stats.style === 'leap') {
     e.vx = e.facing * stats.leapSpeed
     e.vy = stats.leapLift
-  } else if (stats.style === 'slam' && stats.wave) {
+  } else if (stats.style === 'slam') {
     // The club hits the ground and a wave of rock runs out ahead of it.
-    const wave = stats.wave
-    w.waves.push({
-      x: e.x + e.facing * stats.reach * 0.8,
-      vx: e.facing * wave.speed,
-      life: wave.life,
-      maxLife: wave.life,
-      damage: wave.damage * e.power,
-      height: wave.height,
-      halfWidth: wave.halfWidth,
-      blockCost: wave.blockCost,
-      struck: false,
-    })
+    pushWave(w, e, stats, e.facing)
     w.shake = Math.max(w.shake, 9)
     burst(w, e.x + e.facing * stats.reach * 0.8, 6, e.facing, rng, 16, DUST)
+  } else if (stats.style === 'boss' && stats.boss) {
+    if (e.move === 'charge') {
+      e.vx = e.facing * stats.boss.chargeSpeed
+      w.shake = Math.max(w.shake, 4)
+    } else if (e.move === 'roar') {
+      // Goblins answer the call from both edges of the arena.
+      for (let i = 0; i < stats.boss.summon; i++) spawnEnemy(w, 'goblin', i % 2 === 0 ? -ROUNDS.margin - 20 : ARENA.width + ROUNDS.margin + 20)
+      w.shake = Math.max(w.shake, 8)
+      floater(w, e.x, e.y + stats.labelHeight, 'ROAR!', '#c9a3ff', 24)
+      burst(w, e.x, e.y + stats.height * 0.7, e.facing, rng, 20, ['#c9a3ff', '#ffffff', '#8a6fd6'])
+    } else {
+      pushWave(w, e, stats, e.facing)
+      if (isEnraged(e)) pushWave(w, e, stats, (e.facing * -1) as 1 | -1)
+      w.shake = Math.max(w.shake, 12)
+      burst(w, e.x + e.facing * stats.reach * 0.8, 6, e.facing, rng, 22, DUST)
+    }
   }
 }
 
@@ -649,6 +726,38 @@ function stepEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
       e.state = 'recover'
       e.stateTime = 0
       e.vx = 0
+    }
+    return
+  }
+  const boss = stats.boss
+  if (boss && e.move === 'charge') {
+    // A charge keeps its heading until it hits something: the player, or a wall.
+    e.vx = e.facing * boss.chargeSpeed
+    // Only what is in front of it is hit: once the player has slipped past, the charge cannot turn on them.
+    const inFront = (w.player.x - e.x) * e.facing > -10
+    if (!e.struckPlayer && inFront && overlapsPlayer(w, e, stats.halfWidth + 6)) {
+      settleStrike(e, stats, damagePlayer(w, boss.chargeDamage * e.power, e.x, rng, boss.chargeBlockCost))
+    }
+    const atWall = (e.facing < 0 && e.x <= stats.halfWidth + 12) || (e.facing > 0 && e.x >= ARENA.width - stats.halfWidth - 12)
+    if (atWall) {
+      // It runs headlong into the wall and is left reeling: the opening to punish.
+      e.state = 'stagger'
+      e.stateTime = 0
+      e.vx = 0
+      w.shake = Math.max(w.shake, 16)
+      w.freeze = Math.max(w.freeze, 0.08)
+      burst(w, e.x + e.facing * stats.halfWidth, 80, -e.facing, rng, 26, DUST)
+      floater(w, e.x, e.y + stats.labelHeight, 'STUNNED!', '#ffd27a', 24)
+    } else if (e.stateTime >= boss.chargeTime) {
+      e.state = 'recover'
+      e.stateTime = 0
+    }
+    return
+  }
+  if (boss && e.move === 'roar') {
+    if (e.stateTime >= 0.12) {
+      e.state = 'recover'
+      e.stateTime = 0
     }
     return
   }
@@ -754,6 +863,20 @@ function keepApart(w: World) {
   }
 }
 
+/* -- Feedback -------------------------------------------------------------- */
+
+/** A number or word that floats up from where something happened. */
+function floater(w: World, x: number, y: number, text: string, color: string, size = 18) {
+  w.floaters.push({ x, y, text, color, size, life: 0.95, maxLife: 0.95 })
+  if (w.floaters.length > 30) w.floaters.splice(0, w.floaters.length - 30)
+}
+
+/** A ring and slash mark where a blow landed. */
+function impact(w: World, x: number, y: number, dir: 1 | -1, size: number, color: string) {
+  w.impacts.push({ x, y, size, color, dir, life: 0.24, maxLife: 0.24 })
+  if (w.impacts.length > 12) w.impacts.splice(0, w.impacts.length - 12)
+}
+
 /* -- Particles ------------------------------------------------------------- */
 
 function burst(w: World, x: number, y: number, dir: number, rng: Rng, count: number, colors: string[]) {
@@ -774,6 +897,13 @@ function burst(w: World, x: number, y: number, dir: number, rng: Rng, count: num
 }
 
 function stepParticles(w: World, dt: number) {
+  for (const f of w.floaters) {
+    f.life -= dt
+    f.y += 58 * dt
+  }
+  w.floaters = w.floaters.filter((f) => f.life > 0)
+  for (const i of w.impacts) i.life -= dt
+  w.impacts = w.impacts.filter((i) => i.life > 0)
   for (const q of w.particles) {
     q.life -= dt
     q.vy -= 1500 * dt

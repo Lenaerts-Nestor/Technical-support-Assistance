@@ -102,10 +102,25 @@ export const VULNERABLE_BONUS = 1.3
 /** Poise damage wears off if an enemy is left alone this long. */
 export const POISE_RESET = 2
 
-export type EnemyKind = 'goblin' | 'orc' | 'ogre'
+export type EnemyKind = 'goblin' | 'orc' | 'ogre' | 'warlord'
 
 /** A wave of rock the ogre's slam sends along the ground; jump or dash it. */
 export type WaveStats = { speed: number; life: number; damage: number; height: number; halfWidth: number; blockCost: number }
+
+/** What the boss can do besides the ogre's slam: a charge across the arena, and a roar that calls goblins. */
+export type BossStats = {
+  chargeWindup: number
+  chargeSpeed: number
+  /** The longest a charge lasts if it meets no wall. */
+  chargeTime: number
+  chargeDamage: number
+  chargeBlockCost: number
+  /** How many goblins a roar calls in. */
+  summon: number
+  roarWindup: number
+  /** Below this share of health it is enraged: faster, and its slam throws a wave both ways. */
+  enrageAt: number
+}
 
 export type EnemyStats = {
   hp: number
@@ -128,7 +143,7 @@ export type EnemyStats = {
   /** What a blocked hit from it costs the player in stamina. */
   blockCost: number
   /** The way it attacks: a leap at the player, a sideways chop, or an overhead slam. */
-  style: 'leap' | 'swing' | 'slam'
+  style: 'leap' | 'swing' | 'slam' | 'boss'
   /** It starts an attack once the player is this close. */
   attackRange: number
   windup: number
@@ -142,6 +157,7 @@ export type EnemyStats = {
   leapSpeed: number
   leapLift: number
   wave?: WaveStats
+  boss?: BossStats
 }
 
 export const ENEMIES: Record<EnemyKind, EnemyStats> = {
@@ -221,16 +237,45 @@ export const ENEMIES: Record<EnemyKind, EnemyStats> = {
     leapLift: 0,
     wave: { speed: 340, life: 0.85, damage: 14, height: 34, halfWidth: 22, blockCost: 15 },
   },
+  warlord: {
+    hp: 540,
+    halfWidth: 72,
+    height: 270,
+    labelHeight: 305,
+    speed: 58,
+    damage: 30,
+    score: 500,
+    heavy: true,
+    knockScale: 0.1,
+    hurtTime: 0.4,
+    poise: 220,
+    staggerTime: 1.8,
+    blockCost: 50,
+    style: 'boss',
+    attackRange: 195,
+    windup: 0.85,
+    active: 0.17,
+    recover: 1.15,
+    attackCooldown: 1.35,
+    reach: 195,
+    hitHeight: 250,
+    leapSpeed: 0,
+    leapLift: 0,
+    wave: { speed: 370, life: 0.95, damage: 16, height: 38, halfWidth: 24, blockCost: 16 },
+    boss: { chargeWindup: 0.8, chargeSpeed: 640, chargeTime: 1.2, chargeDamage: 34, chargeBlockCost: 60, summon: 2, roarWindup: 0.7, enrageAt: 0.5 },
+  },
 }
 
 /** What each kind of enemy costs out of a round's budget. */
-export const COST: Record<EnemyKind, number> = { goblin: 1, orc: 3, ogre: 8 }
+export const COST: Record<EnemyKind, number> = { goblin: 1, orc: 3, ogre: 8, warlord: 30 }
 
 export const ROUNDS = {
   firstDelay: 1,
   /** Round one gets goblins only; tougher kinds appear from these rounds on. */
   orcFromRound: 2,
   ogreFromRound: 4,
+  /** Every this many rounds the round is a boss fight. */
+  bossEvery: 5,
   /** How long the "Round cleared" banner shows before the menu opens. */
   clearedTime: 1.7,
   /** The share of maximum health given back when a round is cleared. */

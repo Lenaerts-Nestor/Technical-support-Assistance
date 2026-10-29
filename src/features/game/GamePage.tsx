@@ -4,9 +4,13 @@ import { BreakScreen } from './BreakScreen'
 import { ARENA } from './config'
 import { GameEngine } from './engine'
 import { isGameKey } from './input'
+import { DEFAULT_LOOK, reviveLook } from './appearance'
+import type { Appearance } from './appearance'
+import { KnightPreview, LookPicker } from './LookPicker'
 import { LoadoutPicker } from './LoadoutPicker'
 import type { UpgradeId } from './upgrades'
 import type { WeaponId } from './weapons'
+import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { CARD, GHOST_BTN_MD, PAGE_SUBTITLE, PAGE_TITLE, PRIMARY_BTN, SECTION_LABEL } from '../../shared/ui/styles'
 
 type Phase = 'idle' | 'playing' | 'paused' | 'break' | 'over'
@@ -41,6 +45,9 @@ export function GamePage() {
   const [picked, setPicked] = useState<UpgradeId | null>(null)
   /** The two weapons carried. The engine keeps them between runs; this mirrors them for the menus. */
   const [loadout, setLoadout] = useState<readonly [WeaponId, WeaponId]>(() => engine.loadout)
+  /** How the hero looks. Remembered in this browser, since it is a choice and not a score. */
+  const [look, setLook] = usePersistentState<Appearance>(storageKey('game', 'look'), () => ({ ...DEFAULT_LOOK }), reviveLook)
+  useEffect(() => engine.setLook(look), [engine, look])
   /** Finished runs of this visit. Kept in memory only: a reload starts the list again. */
   const [runs, setRuns] = useState<Run[]>([])
   const frameRef = useRef<HTMLDivElement>(null)
@@ -210,15 +217,23 @@ export function GamePage() {
           {phase !== 'playing' && phase !== 'break' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-black/50 px-6 py-3 text-center backdrop-blur-[2px]">
               {phase === 'idle' && (
-                <>
-                  <p className="text-3xl font-extrabold tracking-tight text-white">Last Stand</p>
-                  <p className="max-w-md text-sm text-white/75">Goblins, orcs and ogres pour in from both sides, round after round. Parry, dodge and cut them down.</p>
-                  <div className="w-full max-w-3xl">
-                    <p className="mb-1.5 text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Choose two weapons</p>
-                    <LoadoutPicker loadout={loadout} onAssign={assign} />
+                <div className="w-full max-w-4xl space-y-2">
+                  <div>
+                    <p className="text-3xl font-extrabold tracking-tight text-white">Last Stand</p>
+                    <p className="mx-auto max-w-lg text-xs text-white/75">Goblins, orcs and ogres pour in from both sides, round after round, with a boss every fifth. Parry, dodge and cut them down.</p>
+                  </div>
+                  <div className="grid items-start gap-3 text-left md:grid-cols-[250px_1fr]">
+                    <KnightPreview look={look} weapon={loadout[0]} />
+                    <div className="space-y-2.5">
+                      <LookPicker look={look} onChange={setLook} />
+                      <div>
+                        <p className="mb-1 text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Weapons</p>
+                        <LoadoutPicker loadout={loadout} onAssign={assign} compact />
+                      </div>
+                    </div>
                   </div>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to start</p>
-                </>
+                </div>
               )}
               {phase === 'paused' && (
                 <>
@@ -253,6 +268,9 @@ export function GamePage() {
                     <LoadoutPicker loadout={loadout} onAssign={assign} compact />
                   </div>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to try again</p>
+                  <button type="button" onClick={() => setPhase('idle')} className="text-xs font-semibold text-white/70 underline underline-offset-2 hover:text-white">
+                    Change look and weapons
+                  </button>
                 </>
               )}
             </div>

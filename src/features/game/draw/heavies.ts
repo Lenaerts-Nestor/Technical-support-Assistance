@@ -7,7 +7,8 @@ export function drawWarning(ctx: CanvasRenderingContext2D, e: Enemy, lift: numbe
   const y = ARENA.groundY - e.y - ENEMIES[e.kind].labelHeight - lift
   ctx.save()
   ctx.translate(e.x, y)
-  ctx.fillStyle = e.kind === 'goblin' ? '#f5a93a' : '#ff7a5c'
+  // Amber for a goblin, red for the heavy hitters, and the boss's moves each have a colour of their own.
+  ctx.fillStyle = e.kind === 'goblin' ? '#f5a93a' : e.move === 'roar' ? '#c9a3ff' : e.move === 'charge' ? '#ff4d4d' : '#ff7a5c'
   ctx.beginPath()
   ctx.moveTo(0, -12)
   ctx.lineTo(12, 10)

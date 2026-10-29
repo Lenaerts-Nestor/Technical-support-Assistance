@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { COST, ENEMIES, ROUNDS, SCORE } from './config'
-import { enemyHealthScale, enemyPower, maxAlive, roundBudget } from './pacing'
+import { enemyHealthScale, enemyPower, isBossRound, maxAlive, maxOf, roundBudget } from './pacing'
 import { awardKill, nextRound, pickUpgrade, streakMultiplier } from './rounds'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
 import { NO_INPUT } from './types'
@@ -42,8 +42,15 @@ const toBreak = (w: World, rng: () => number) => {
 }
 
 describe('pacing', () => {
-  it('gives every round more to fight than the last', () => {
-    for (let r = 1; r < 20; r++) expect(roundBudget(r + 1)).toBeGreaterThan(roundBudget(r))
+  it('gives every round more to fight than the last ordinary one', () => {
+    const ordinary = Array.from({ length: 30 }, (_, i) => i + 1).filter((r) => !isBossRound(r))
+    for (let i = 1; i < ordinary.length; i++) expect(roundBudget(ordinary[i])).toBeGreaterThan(roundBudget(ordinary[i - 1]))
+  })
+
+  it('makes every fifth round a boss round, with the boss counted in its budget', () => {
+    expect([1, 4, 5, 6, 10, 15].map(isBossRound)).toEqual([false, false, true, false, true, true])
+    expect(roundBudget(5)).toBeGreaterThanOrEqual(COST.warlord)
+    expect(maxAlive(5)).toBeLessThanOrEqual(5)
   })
 
   it('makes enemies tougher from round five, and not before', () => {
@@ -118,11 +125,11 @@ describe('a round', () => {
     expect(w.offer).toHaveLength(0)
   })
 
-  it('brings in orcs from round two and ogres from round four, within the limits', () => {
+  it('brings in orcs from round two, ogres from round four and the boss on round five, within the limits', () => {
     const w = createWorld()
     const rng = rngFrom(5)
     const everSeen = new Set<EnemyKind>()
-    for (let round = 1; round <= 5; round++) {
+    for (let round = 1; round <= 9; round++) {
       let peakOgres = 0
       const seen = new Map<number, EnemyKind>()
       for (let t = 0; t < 600 && w.stage === 'fight'; t += DT) {
@@ -138,11 +145,12 @@ describe('a round', () => {
       kinds.forEach((k) => everSeen.add(k))
       if (round < ROUNDS.orcFromRound) expect(kinds.has('orc')).toBe(false)
       if (round < ROUNDS.ogreFromRound) expect(kinds.has('ogre')).toBe(false)
-      expect(peakOgres).toBeLessThanOrEqual(1)
+      expect(kinds.has('warlord')).toBe(isBossRound(round))
+      expect(peakOgres).toBeLessThanOrEqual(maxOf('ogre', round))
       toBreak(w, rng)
       nextRound(w)
     }
-    expect([...everSeen].sort()).toEqual(['goblin', 'ogre', 'orc'])
+    expect([...everSeen].sort()).toEqual(['goblin', 'ogre', 'orc', 'warlord'])
   })
 
   it('does not clear while the player is dead', () => {

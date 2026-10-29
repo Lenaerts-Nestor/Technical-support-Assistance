@@ -2,6 +2,8 @@ import { ARENA } from './config'
 import { InputState } from './input'
 import { nextRound, pickUpgrade } from './rounds'
 import { createWorld, stepWorld } from './sim'
+import { DEFAULT_LOOK } from './appearance'
+import type { Appearance } from './appearance'
 import type { UpgradeId } from './upgrades'
 import { DEFAULT_LOADOUT } from './weapons'
 import type { WeaponId } from './weapons'
@@ -17,12 +19,15 @@ const MAX_STEP = 1 / 100
 export class GameEngine {
   /** The two weapons carried; kept between runs so a retry starts as the last one did. */
   loadout: [WeaponId, WeaponId] = [DEFAULT_LOADOUT[0], DEFAULT_LOADOUT[1]]
-  world: World = createWorld(this.loadout)
+  /** How the hero looks; kept between runs too. */
+  look: Appearance = { ...DEFAULT_LOOK }
+  world: World = createWorld(this.loadout, this.look)
+  private lastDraw = 0
   readonly input = new InputState()
 
   /** Start over with a fresh world. */
   reset() {
-    this.world = createWorld(this.loadout)
+    this.world = createWorld(this.loadout, this.look)
     this.input.clear()
   }
 
@@ -61,9 +66,20 @@ export class GameEngine {
     for (let i = 0; i < steps; i++) stepWorld(this.world, i === 0 ? first : rest, dt / steps, Math.random)
   }
 
-  draw(ctx: CanvasRenderingContext2D, pixelWidth: number) {
+  /** Change how the hero looks, in the world already made too. */
+  setLook(look: Appearance) {
+    this.look = { ...look }
+    this.world.look = { ...look }
+  }
+
+  /** `seconds` overrides the measured time since the last frame (a test stepping one frame at a time). */
+  draw(ctx: CanvasRenderingContext2D, pixelWidth: number, seconds?: number) {
     const scale = pixelWidth / ARENA.width
     ctx.setTransform(scale, 0, 0, scale, 0, 0)
-    renderWorld(ctx, this.world)
+    // The animation blends over real time, however long a frame took (but not across a long pause).
+    const now = performance.now()
+    const dt = seconds ?? Math.min(0.05, Math.max(0, (now - this.lastDraw) / 1000))
+    this.lastDraw = now
+    renderWorld(ctx, this.world, dt)
   }
 }
