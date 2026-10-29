@@ -54,9 +54,12 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      {/* Folder, guides, links and snippets live above every page so the Sync page can reach them. */}
-      <AppDataProvider>
-        <SharedShiftProvider>
+      {/*
+        Folder, guides, links and snippets live above every page so the Sync page can reach them. The shared
+        shift sits above them because the calendar is kept in the database for whoever is picked under "I am".
+      */}
+      <SharedShiftProvider>
+        <AppDataProvider>
           <NavigationContext.Provider value={setPage}>
             <div className="bg-canvas text-ink flex h-full">
               <Sidebar
@@ -92,8 +95,8 @@ export default function App() {
               </main>
             </div>
           </NavigationContext.Provider>
-        </SharedShiftProvider>
-      </AppDataProvider>
+        </AppDataProvider>
+      </SharedShiftProvider>
     </ErrorBoundary>
   )
 }

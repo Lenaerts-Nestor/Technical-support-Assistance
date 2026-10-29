@@ -44,6 +44,15 @@ grid. The calendar follows today's date by itself. Entries are plain JSON
 in `calendar.json` in your own linked folder. It has no Sync card of its own, so it is never
 part of a Links or Snippets export — only your full backup carries it.
 
+Pick your name under **I am** in the sidebar and the calendar is also kept in the database
+(Supabase, the same project as the lunch shift), one calendar per person, so it follows you to
+another computer. The header of the page says whether it is saved there. What the database holds
+for your name wins over the local file whenever you pick your name and whenever the window comes
+back; a name with nothing saved yet gets the days on screen. Without a name picked, nothing is
+sent. Run `supabase/calendar.sql` once in the Supabase SQL editor to switch this on. There are
+no accounts, so anyone with the project key who knows a name can read or replace that person's
+days — keep it to days away.
+
 ## Lunch Planner
 
 Keep the agent table (name, languages, chat agent, early shift, available today, yesterday's

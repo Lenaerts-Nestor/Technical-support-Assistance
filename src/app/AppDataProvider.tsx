@@ -5,6 +5,7 @@ import { useGuidesLibrary } from '../features/guides/useGuidesLibrary'
 import { useLinks } from '../features/links/useLinks'
 import { useSnippets } from '../features/cases/useSnippets'
 import { useCalendar } from '../features/calendar/useCalendar'
+import { useSharedShift } from '../features/shift/sharedShiftContext'
 import { useNvx } from '../features/nvx/useNvx'
 import { useAppUpdate } from '../features/sync/useAppUpdate'
 import {
@@ -24,7 +25,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const guides = useGuidesLibrary(folder)
   const links = useLinks(folder)
   const snippets = useSnippets(folder)
-  const calendar = useCalendar(folder)
+  // The calendar is kept in the database for whoever is picked under "I am" in the sidebar.
+  const { me } = useSharedShift()
+  const calendar = useCalendar(folder, me)
   const nvx = useNvx(folder)
   const appUpdate = useAppUpdate()
   const [editing, setEditing] = useState(false)

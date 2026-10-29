@@ -6,10 +6,10 @@ export type Backend = { url: string; key: string }
 /** Keeps what is sent within what the database accepts (names 40 characters, notes 160). */
 const fit = (list: string[], max: number) => list.map((s) => s.trim().slice(0, max)).filter(Boolean)
 
-const headers = (backend: Backend) => ({ apikey: backend.key, 'Content-Type': 'application/json' })
+export const headers = (backend: Backend) => ({ apikey: backend.key, 'Content-Type': 'application/json' })
 
 /** What the server said, in a few words: its own message when it sent one. */
-async function failure(res: Response): Promise<Error> {
+export async function failure(res: Response): Promise<Error> {
   try {
     const body: unknown = await res.json()
     const message = typeof body === 'object' && body !== null ? (body as { message?: unknown }).message : null
