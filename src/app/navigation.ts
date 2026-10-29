@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 
-export type PageId = 'voiceCall' | 'rma' | 'cases' | 'guides' | 'links' | 'nvx' | 'terminal' | 'calendar' | 'lunch' | 'sync'
+export type PageId = 'voiceCall' | 'rma' | 'cases' | 'guides' | 'links' | 'nvx' | 'terminal' | 'calendar' | 'lunch' | 'game' | 'sync'
 
 /**
  * `hidden` pages stay mounted and reachable in code but get no sidebar entry.
@@ -17,6 +17,7 @@ export const NAV_ITEMS: { id: PageId; label: string; hidden?: boolean; placement
   { id: 'terminal', label: 'Terminal' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'lunch', label: 'Lunch Planner' },
+  { id: 'game', label: 'Game' },
   { id: 'sync', label: 'Sync', placement: 'bottom' },
 ]
 
