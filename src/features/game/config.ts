@@ -6,14 +6,9 @@
 
 export const ARENA = { width: 960, height: 480, groundY: 412 } as const
 
-/** Drawn size of every character relative to the artwork's own units. */
-export const ART_SCALE = 0.8
-
+/** Numbers every hero shares. What differs (health, speed, size, moves) is in `heroes.ts`. */
 export const PLAYER = {
   maxHp: 100,
-  halfWidth: 16,
-  height: 120,
-  speed: 250,
   groundAccel: 3200,
   airAccel: 2200,
   jumpSpeed: 760,
@@ -56,9 +51,12 @@ export const SHIELD = {
   knock: 170,
 } as const
 
+/** The attack animations a character has. Each hero's moves are timed to these frames. */
+export type AttackClip = 'attack01' | 'attack02' | 'attack03'
+
 export type AttackStep = {
   duration: number
-  /** The blade is dangerous between these two moments. */
+  /** The blow is dangerous between these two moments, and the strike frames of the animation play then. */
   hitStart: number
   hitEnd: number
   /** From here on the next hit of the combo (or a dash or jump) may interrupt the recovery. */
@@ -73,28 +71,21 @@ export type AttackStep = {
   lunge: number
   hitStop: number
   shake: number
-  /** Weapon arm angle in radians, relative to resting: negative is raised, positive is swung down. */
-  swing: { from: number; to: number }
-  /** A cut that reaches behind as well as in front (a spin). */
-  bothSides?: boolean
-  /** How the body moves: `spin` turns right round, `thrust` drives the weapon straight out, `kick` is a boot. */
-  motion?: 'spin' | 'thrust' | 'kick'
-  /** Fires an arrow at `hitStart` instead of cutting. */
-  projectile?: { speed: number; pierce: number; life: number }
-  /** Holds the weapon drawn while the button stays down, between `min` and `max` seconds, and fires on release. */
-  charge?: { min: number; max: number; minPower: number }
+  /** Which animation to play. The wind-up frames run until `hitStart`, the strike frames until `hitEnd`. */
+  clip: AttackClip
+  /** An upward leap given at `hitStart` (the pounce). */
+  hop?: number
+  /** Cannot be hurt while the blow is out (a rush). */
+  rush?: boolean
   /** Sends a wave of rock along the ground at `hitStart`. */
   wave?: { speed: number; life: number; damage: number; height: number; halfWidth: number; poise: number; knockback: number }
 }
 
-/** `light` and `heavy` are the two buttons; `close` is what a weapon does instead of `light` with an enemy at point-blank. */
-export type ComboKind = 'light' | 'heavy' | 'close'
+/** `light` and `heavy` are the two attack buttons. */
+export type ComboKind = 'light' | 'heavy'
 
 /** After a combo hit the next press continues the chain for this long; after that it starts over. */
 export const COMBO_WINDOW = 0.32
-
-/** Swapping weapons with Q: how long the new one takes to come up, and how soon you can swap again. */
-export const SWAP = { time: 0.28, cooldown: 0.7 } as const
 
 /** An enemy that is staggered or recovering from its own attack takes this much more damage. */
 export const VULNERABLE_BONUS = 1.3
@@ -156,6 +147,8 @@ export type EnemyStats = {
   hitHeight: number
   leapSpeed: number
   leapLift: number
+  /** Whether it hops up to a ledge to get at a player standing on one. */
+  canJump: boolean
   wave?: WaveStats
   boss?: BossStats
 }
@@ -163,9 +156,9 @@ export type EnemyStats = {
 export const ENEMIES: Record<EnemyKind, EnemyStats> = {
   goblin: {
     hp: 20,
-    halfWidth: 18,
-    height: 72,
-    labelHeight: 88,
+    halfWidth: 22,
+    height: 75,
+    labelHeight: 96,
     speed: 165,
     damage: 7,
     score: 10,
@@ -185,12 +178,13 @@ export const ENEMIES: Record<EnemyKind, EnemyStats> = {
     hitHeight: 0,
     leapSpeed: 360,
     leapLift: 440,
+    canJump: true,
   },
   orc: {
     hp: 70,
-    halfWidth: 30,
-    height: 165,
-    labelHeight: 195,
+    halfWidth: 34,
+    height: 145,
+    labelHeight: 168,
     speed: 92,
     damage: 16,
     score: 25,
@@ -207,15 +201,16 @@ export const ENEMIES: Record<EnemyKind, EnemyStats> = {
     recover: 0.6,
     attackCooldown: 1,
     reach: 118,
-    hitHeight: 140,
+    hitHeight: 100,
     leapSpeed: 0,
     leapLift: 0,
+    canJump: true,
   },
   ogre: {
     hp: 190,
-    halfWidth: 56,
-    height: 225,
-    labelHeight: 252,
+    halfWidth: 62,
+    height: 140,
+    labelHeight: 164,
     speed: 48,
     damage: 30,
     score: 60,
@@ -232,16 +227,17 @@ export const ENEMIES: Record<EnemyKind, EnemyStats> = {
     recover: 1.1,
     attackCooldown: 1.5,
     reach: 170,
-    hitHeight: 210,
+    hitHeight: 100,
     leapSpeed: 0,
     leapLift: 0,
     wave: { speed: 340, life: 0.85, damage: 14, height: 34, halfWidth: 22, blockCost: 15 },
+    canJump: false,
   },
   warlord: {
     hp: 540,
     halfWidth: 72,
-    height: 270,
-    labelHeight: 305,
+    height: 200,
+    labelHeight: 236,
     speed: 58,
     damage: 30,
     score: 500,
@@ -258,11 +254,12 @@ export const ENEMIES: Record<EnemyKind, EnemyStats> = {
     recover: 1.15,
     attackCooldown: 1.35,
     reach: 195,
-    hitHeight: 250,
+    hitHeight: 130,
     leapSpeed: 0,
     leapLift: 0,
     wave: { speed: 370, life: 0.95, damage: 16, height: 38, halfWidth: 24, blockCost: 16 },
     boss: { chargeWindup: 0.8, chargeSpeed: 640, chargeTime: 1.2, chargeDamage: 34, chargeBlockCost: 60, summon: 2, roarWindup: 0.7, enrageAt: 0.5 },
+    canJump: false,
   },
 }
 

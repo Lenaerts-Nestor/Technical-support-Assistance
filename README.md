@@ -124,59 +124,71 @@ there); `components/rosterColumns.tsx` lists the table's columns.
 
 ## Game (Last Stand)
 
-A side-view sword fight for the break between calls: goblins, orcs and ogres pour in from both sides of a
-keep and you hold them off. **Enter** starts and **Esc** pauses. The game only runs while the page is open
-and has the keyboard, and scores last until the page is reloaded.
+A side-view brawler for the break between calls: pick one of four heroes and hold a cave against goblins,
+orcs and ogres pouring in from both sides. **Enter** starts and **Esc** pauses. The game only runs while the
+page is open and has the keyboard, and scores last until the page is reloaded. Your hero is remembered in this
+browser.
 
 | Key | Does |
 |---|---|
 | **A / D** | walk |
 | **W / Space** | jump (hold for height) |
+| **S / ↓** | drop down through a ledge you stand on |
 | **Shift** | dash: you cannot be hit for a moment; costs stamina |
-| **J** | light combo: tap three times |
-| **K** | heavy combo: tap twice; slow, costs stamina, breaks poise. Can follow a light hit. With the bow, hold to draw and let go to shoot |
-| **L** (hold) | shield (sword & shield only): guards the way you face and costs stamina per hit. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
-| **Q** | swap to your other weapon |
+| **J** | light attack: tap again to chain |
+| **K** | heavy attack: slow, costs stamina, breaks poise. Can follow a light hit |
+| **L** (hold) | shield (**Soldier** only): guards the way you face and costs stamina per hit. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
+
+**Heroes.** Each is one of the characters of the sprite packs and plays with that character's own animations:
+
+| Hero | Light (J) | Heavy (K) | Notes |
+|---|---|---|---|
+| Soldier | sword sweep, rising slash, thrust | piercing thrust | the only one with a shield and parry |
+| Orc | axe chop, then overhead slam | slam that sends a shockwave along the ground | most health, slowest |
+| Demon | lunging thrust, then a sweep | rush through enemies you cannot be hit during | fastest, longest reach, cheap dashes |
+| Blood Monster | claw swipe, then a pounce | long leaping pounce | low and wide, so a small target |
 
 Goblins leap, orcs chop and ogres slam the ground, which sends a wave of rock along it that you can jump or
 dash. Orcs and ogres shrug off light hits until their **poise** (the bar under their health) breaks; then
 they stagger, with stars over their head, and take extra damage. Every attack shows a warning marker first.
+The enemies are the same four characters at other sizes (goblin or imp, raider or fiend, crawler or brute); an
+enemy that shares its body with the hero you picked is recoloured so the two cannot be mixed up.
+
+**Places and ledges.** The fight moves every fifth round, in turn: **The Hollow** (cave), **The Thicket**
+(jungle) and **The Overgrowth**, each with its own light, plants and ledges. The ledges are real: jump up onto
+one (open from below), stand on it, drop off with **S**. Goblins and orcs hop up to reach you on one and walk
+off the edge to reach you below; ogres and bosses stay on the ground.
 
 **Rounds.** Each round is a budget of enemies that arrive one by one (a goblin costs 1, an orc 3, an ogre 8).
 Orcs join from round 2 and ogres from round 4; from round 5 on every enemy also has more health and hits
 harder. Clear a round and you are patched up (a third of your health, full stamina), get a clear bonus and a
 **flawless** bonus if nothing touched you, then **pick 1 of 3 upgrades** (press 1, 2 or 3, then Enter). Upgrades
-last for the run. Kills in quick succession build a **streak** that multiplies their points, and a hit on you
-ends it. The game is endless; the list of this session's runs is on the "You fell" screen and is not saved.
+last for the run (shield upgrades are only offered to the Soldier). Kills in quick succession build a
+**streak** that multiplies their points, and a hit on you ends it. The game is endless; the list of this
+session's runs is on the "You fell" screen and is not saved.
 
-**Weapons.** You carry two, chosen on the start screen and again in every break (and on the game-over screen):
-
-| Weapon | Light (J) | Heavy (K) | Notes |
-|---|---|---|---|
-| Sword & Shield | quick 3-hit combo | overhead chop, then a rising cut | the only one that can shield and parry |
-| Long Sword | longer reach, 3 hits | **spin** that cuts both sides, then a long thrust | no shield |
-| Spiked Mace | slow, hard 3 hits | **slam** that sends a shockwave along the ground, then a crushing swing | staggers orcs and ogres fast |
-| Bow | arrows from a distance (a kick if an enemy is right there) | hold to draw, let go for a shot that pierces everything in line | no shield |
-
-**Your hero.** On the start screen (and from "Change look and weapons" after a run) pick a helmet (great helm,
-open face, horned), armour (plate, chainmail, leather) and a colour. It is cosmetic only and is remembered in
-this browser.
-
-**Bosses.** Every fifth round is a boss: the **Ogre Warlord**, an armoured ogre with its own health bar. It
-slams the ground (and, once enraged below half health, sends waves both ways), **charges** across the arena
-(dash through it or take it on the shield; if it hits the wall it is stunned and open) and **roars** to call
-goblins. Every attack shows a red danger zone on the ground before it lands.
+**Bosses.** Every fifth round is a boss with its own health bar and a different look in each place: the
+**Demon Lord**, the **Blood Colossus** and the **Orc Warchief**. It slams the ground (and, once enraged below
+half health, sends waves both ways), **charges** across the arena (dash through it or take it on the shield; if
+it hits the wall it is stunned and open) and **roars** to call goblins. Every attack shows a red danger zone
+on the ground before it lands.
 
 **Feedback.** Damage numbers float up from every hit, with PARRY!, BLOCK and STAGGER! called out; enemies
-shove back and flash white when hit, glow red as an attack is about to land, and the screen edge flashes
-red when you are hit. Motion is smoothed (poses blend, capes and ears ride springs, landings squash) so
-nothing snaps from one pose to the next.
+flash white when hit, glow red as an attack is about to land, and the screen edge flashes red when you are hit.
 
-It is built in stages and this was the last: movement, the four weapons and the swap, shield and parry,
-stamina, enemies and the boss, rounds, scoring and upgrades, and customization. The rules are in
-`src/features/game/sim.ts` and `rounds.ts` (tests next to them), the weapons in `weapons.ts`, the upgrade list
-in `upgrades.ts`, every tuning number in `config.ts` and `pacing.ts`, and the characters are vector shapes
-in `art/` that `draw/` poses and animates (`draw/anim.ts` is the smoothing).
+**Where things are.** The rules are in `src/features/game/sim.ts` and `rounds.ts` (tests next to them), the
+heroes in `heroes.ts` (their moves are timed to the frames of their animations in `spriteData.ts`), the
+places in `biomes.ts`, the enemy looks in `enemyLooks.ts`, the upgrade list in `upgrades.ts`, and every tuning
+number in `config.ts` and `pacing.ts`. Drawing is in `draw/` (`sprites.ts` loads and recolours the sheets,
+`characters.ts` picks the frame to show, `biome.ts` paints the places). The pictures in `src/features/game/sprites/`
+are made from the original packs by `tools/game-assets/prepare.py` (character sheets are copied as they are;
+the scenery is shrunk to a chunky pixel look and baked). To rebuild them, download the packs and run
+`python3 -I tools/game-assets/prepare.py --rpg1 … --rpg2 … --plants … --cave … --out src/features/game/sprites`.
+
+**Art credits.** Characters: *Tiny RPG Character Asset Pack* (Soldier & Orc) and *Tiny RPG Character Asset Pack
+02* (Demon and Blood Monster) by Zerie (zerie.itch.io). Scenery: *Plants Animated* and *Cave Assets* by Maaot
+(itch.io). Check each pack's licence on its itch.io page before shipping the app outside the team: the terms
+were not checked when the pictures were added.
 
 ## Updates
 

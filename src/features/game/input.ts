@@ -1,6 +1,6 @@
 import type { FrameInput } from './types'
 
-type Action = 'left' | 'right' | 'jump' | 'dash' | 'light' | 'heavy' | 'block' | 'swap'
+type Action = 'left' | 'right' | 'jump' | 'dash' | 'light' | 'heavy' | 'block' | 'down'
 
 /** Which keys do what. `KeyboardEvent.code` is layout-independent, so WASD stays put on AZERTY. */
 const KEY_ACTIONS: Record<string, Action> = {
@@ -16,7 +16,8 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyJ: 'light',
   KeyK: 'heavy',
   KeyL: 'block',
-  KeyQ: 'swap',
+  KeyS: 'down',
+  ArrowDown: 'down',
 }
 
 /** Is this key one the game uses (so the page must not scroll or type with it)? */
@@ -55,9 +56,8 @@ export class InputState {
       dashPressed: this.pressed.has('dash'),
       lightPressed: this.pressed.has('light'),
       heavyPressed: this.pressed.has('heavy'),
-      heavyHeld: this.held.has('heavy'),
+      downHeld: this.held.has('down'),
       blockHeld: this.held.has('block'),
-      swapPressed: this.pressed.has('swap'),
     }
     this.pressed.clear()
     return input

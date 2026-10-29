@@ -30,15 +30,22 @@ describe('InputState', () => {
     expect(input.frame().jumpPressed).toBe(true)
   })
 
-  it('reports a held heavy button and a swap press', () => {
+  it('reports the drop-down key as held', () => {
+    const input = new InputState()
+    input.keyDown('KeyS')
+    expect(input.frame()).toMatchObject({ downHeld: true })
+    input.keyUp('KeyS')
+    input.keyDown('ArrowDown')
+    expect(input.frame().downHeld).toBe(true)
+    input.keyUp('ArrowDown')
+    expect(input.frame().downHeld).toBe(false)
+  })
+
+  it('hands out a heavy press once', () => {
     const input = new InputState()
     input.keyDown('KeyK')
-    input.keyDown('KeyQ')
-    const first = input.frame()
-    expect(first).toMatchObject({ heavyPressed: true, heavyHeld: true, swapPressed: true })
-    expect(input.frame()).toMatchObject({ heavyPressed: false, heavyHeld: true, swapPressed: false })
-    input.keyUp('KeyK')
-    expect(input.frame().heavyHeld).toBe(false)
+    expect(input.frame()).toMatchObject({ heavyPressed: true })
+    expect(input.frame()).toMatchObject({ heavyPressed: false })
   })
 
   it('forgets everything on clear and ignores unrelated keys', () => {
@@ -53,9 +60,8 @@ describe('InputState', () => {
       dashPressed: false,
       lightPressed: false,
       heavyPressed: false,
-      heavyHeld: false,
       blockHeld: false,
-      swapPressed: false,
+      downHeld: false,
     })
     input.keyDown('KeyZ')
     expect(isGameKey('KeyZ')).toBe(false)

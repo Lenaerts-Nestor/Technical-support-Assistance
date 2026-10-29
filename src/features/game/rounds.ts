@@ -9,6 +9,9 @@ import { computeMods, offerUpgrades } from './upgrades'
 import type { UpgradeId } from './upgrades'
 import type { World } from './types'
 import { isBossRound, maxAlive, maxOf, roundBudget, spawnInterval } from './pacing'
+import { BIOMES, biomeForRound } from './biomes'
+import { bossVariantFor } from './enemyLooks'
+import { HEROES } from './heroes'
 import { spawnEnemy } from './world'
 
 type Rng = () => number
@@ -52,7 +55,7 @@ export function stepRound(w: World, dt: number, rng: Rng) {
     if (w.spawnTimer <= 0 && alive(w).length < maxAlive(w.round)) {
       const kind = pickKind(w, rng)
       const edge = ENEMIES[kind].halfWidth + ROUNDS.margin
-      spawnEnemy(w, kind, rng() < 0.5 ? -edge : ARENA.width + edge)
+      spawnEnemy(w, kind, rng() < 0.5 ? -edge : ARENA.width + edge, kind === 'warlord' ? bossVariantFor(w.round) : undefined)
       w.budget -= COST[kind]
       // The boss walks in alone; its crowd follows after a moment.
       if (kind === 'warlord') w.bossSpawned = true
@@ -73,7 +76,7 @@ function clearRound(w: World, rng: Rng) {
   p.stamina = p.maxStamina
   w.score += clearBonus + flawlessBonus
   w.summary = { round: w.round, kills: w.roundKills, parries: w.roundParries, clearBonus, flawlessBonus, healed: p.hp - before }
-  w.offer = offerUpgrades(w.upgrades, rng)
+  w.offer = offerUpgrades(w.upgrades, rng, 3, HEROES[w.hero].canBlock)
   w.picked = null
   w.stage = 'cleared'
   w.stageTime = 0
@@ -99,6 +102,9 @@ export function pickUpgrade(w: World, id: UpgradeId) {
 export function nextRound(w: World) {
   if (w.stage !== 'break') return false
   w.round += 1
+  // A new place after every boss: the ledges change with it.
+  w.biome = biomeForRound(w.round)
+  w.platforms = [...BIOMES[w.biome].platforms]
   w.stage = 'fight'
   w.stageTime = 0
   w.budget = w.roundBudget = roundBudget(w.round)

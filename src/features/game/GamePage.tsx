@@ -4,12 +4,12 @@ import { BreakScreen } from './BreakScreen'
 import { ARENA } from './config'
 import { GameEngine } from './engine'
 import { isGameKey } from './input'
-import { DEFAULT_LOOK, reviveLook } from './appearance'
-import type { Appearance } from './appearance'
-import { KnightPreview, LookPicker } from './LookPicker'
-import { LoadoutPicker } from './LoadoutPicker'
+import { loadSprites } from './draw/sprites'
+import type { Sprites } from './draw/sprites'
+import { DEFAULT_HERO, HEROES, HERO_LIST, isHeroId } from './heroes'
+import type { HeroId } from './heroes'
+import { HeroPicker } from './HeroPicker'
 import type { UpgradeId } from './upgrades'
-import type { WeaponId } from './weapons'
 import { storageKey, usePersistentState } from '../../shared/storage/usePersistentState'
 import { CARD, GHOST_BTN_MD, PAGE_SUBTITLE, PAGE_TITLE, PRIMARY_BTN, SECTION_LABEL } from '../../shared/ui/styles'
 
@@ -20,16 +20,25 @@ type Run = { score: number; kills: number; round: number }
 /** How long the fallen knight stays on screen before the results appear. */
 const DEATH_LINGER = 1.1
 
+/** What the keys do; the attack buttons and the shield depend on the hero, so they are added to this. */
 const CONTROLS: [string, string][] = [
   ['A / D', 'walk'],
   ['W / Space', 'jump (hold for height)'],
+  ['S (on a ledge)', 'drop through it'],
   ['Shift', 'dash — you cannot be hit for a moment (uses stamina)'],
-  ['J', 'attack — tap three times for the combo'],
-  ['K', 'heavy attack — tap twice; costs stamina, breaks poise. Bow: hold to draw, let go to shoot'],
-  ['L (hold)', 'shield — sword & shield only. Raise it just before a hit to parry'],
-  ['Q', 'swap to your other weapon'],
   ['Esc', 'pause'],
 ]
+
+const controlsFor = (hero: HeroId): [string, string][] => {
+  const def = HEROES[hero]
+  return [
+    ...CONTROLS.slice(0, 4),
+    ['J', `attack — ${def.moves.light}. Tap again to chain`],
+    ['K', `heavy attack — ${def.moves.heavy}. Costs stamina, breaks poise`],
+    ...(def.canBlock ? ([['L (hold)', 'shield — raise it just before a hit to parry']] as [string, string][]) : []),
+    CONTROLS[4],
+  ]
+}
 
 /**
  * Last Stand: a side-view sword fight against goblins pouring in from both sides. The rules
@@ -43,11 +52,22 @@ export function GamePage() {
   const [onScreen, setOnScreen] = useState(true)
   /** The upgrade taken in the current break, if any. */
   const [picked, setPicked] = useState<UpgradeId | null>(null)
-  /** The two weapons carried. The engine keeps them between runs; this mirrors them for the menus. */
-  const [loadout, setLoadout] = useState<readonly [WeaponId, WeaponId]>(() => engine.loadout)
-  /** How the hero looks. Remembered in this browser, since it is a choice and not a score. */
-  const [look, setLook] = usePersistentState<Appearance>(storageKey('game', 'look'), () => ({ ...DEFAULT_LOOK }), reviveLook)
-  useEffect(() => engine.setLook(look), [engine, look])
+  /** Who is played. Remembered in this browser, since it is a choice and not a score. */
+  const [hero, setHero] = usePersistentState<HeroId>(storageKey('game', 'hero'), () => DEFAULT_HERO, (raw) => (isHeroId(raw) ? raw : null))
+  useEffect(() => engine.setHero(hero), [engine, hero])
+  /** The pictures; the game is not drawn (or started) before they have loaded. */
+  const [sprites, setSprites] = useState<Sprites | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+  useEffect(() => {
+    let live = true
+    loadSprites().then(
+      (loaded) => live && setSprites(loaded),
+      () => live && setLoadFailed(true),
+    )
+    return () => {
+      live = false
+    }
+  }, [])
   /** Finished runs of this visit. Kept in memory only: a reload starts the list again. */
   const [runs, setRuns] = useState<Run[]>([])
   const frameRef = useRef<HTMLDivElement>(null)
@@ -58,6 +78,10 @@ export function GamePage() {
     const ctx = canvas?.getContext('2d')
     if (canvas && ctx) engine.draw(ctx, canvas.width)
   }, [engine])
+  // The first picture of the arena as soon as the pictures are there.
+  useEffect(() => {
+    if (sprites) draw()
+  }, [sprites, draw])
 
   // Keep the canvas sharp at whatever size the page gives it, and note when it is not visible.
   useEffect(() => {
@@ -86,7 +110,7 @@ export function GamePage() {
     }
   }, [draw, engine])
 
-  const running = phase === 'playing' && onScreen
+  const running = phase === 'playing' && onScreen && sprites !== null
   useEffect(() => {
     if (!running) {
       draw()
@@ -116,6 +140,7 @@ export function GamePage() {
   }, [running, engine, draw])
 
   const begin = () => {
+    if (!sprites) return
     if (phase === 'break') {
       if (!picked) return
       engine.nextRound()
@@ -127,9 +152,9 @@ export function GamePage() {
     frameRef.current?.focus()
   }
 
-  const assign = (slot: 0 | 1, weapon: WeaponId, fromMouse: boolean) => {
-    engine.setWeapon(slot, weapon)
-    setLoadout(engine.loadout)
+  const choose = (id: HeroId, fromMouse: boolean) => {
+    setHero(id)
+    engine.setHero(id)
     // After a click the keyboard goes back to the game, so Enter then starts it.
     if (fromMouse) frameRef.current?.focus()
   }
@@ -150,6 +175,11 @@ export function GamePage() {
       if (index >= 0 && engine.world.offer[index]) pick(engine.world.offer[index])
       // On a focused button Enter already clicks it; handling it here as well would act twice.
       else if (event.code === 'Enter' && !(event.target instanceof HTMLButtonElement)) begin()
+      return
+    }
+    if ((phase === 'idle' || phase === 'over') && /^Digit[1-9]$/.test(event.code)) {
+      const chosen = HERO_LIST[Number(event.code.slice(5)) - 1]
+      if (chosen) choose(chosen.id, false)
       return
     }
     if (isGameKey(event.code)) {
@@ -182,7 +212,7 @@ export function GamePage() {
         <div>
           <h2 className={PAGE_TITLE}>Last Stand</h2>
           <p className={PAGE_SUBTITLE}>
-            Hold the keep against goblins, orcs and ogres coming from both sides.
+            Pick a hero and hold the cave against goblins, orcs and ogres coming from both sides.
             <span className="text-ink-faint"> · scores last until you reload the page</span>
           </p>
         </div>
@@ -192,7 +222,7 @@ export function GamePage() {
               Pause
             </button>
           )}
-          <button type="button" onClick={begin} className={PRIMARY_BTN}>
+          <button type="button" onClick={begin} disabled={!sprites} className={PRIMARY_BTN}>
             {phase === 'idle' ? 'Start' : phase === 'paused' ? 'Resume' : 'New game'}
           </button>
         </div>
@@ -208,31 +238,26 @@ export function GamePage() {
           onClick={() => {
             if (phase === 'paused') begin()
           }}
-          aria-label="Game screen. Press Enter to start, then A and D to walk, W to jump, Shift to dash, J and K to attack and hold L for the shield."
+          aria-label="Game screen. Press Enter to start, then A and D to walk, W to jump, S to drop off a ledge, Shift to dash and J and K to attack. The soldier holds L for the shield."
           style={{ aspectRatio: `${ARENA.width} / ${ARENA.height}` }}
           className="border-line-strong focus-visible:outline-brand relative mx-auto w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
-          {phase === 'break' && <BreakScreen world={engine.world} picked={picked} loadout={loadout} onPick={pick} onAssign={assign} onContinue={begin} />}
+          {phase === 'break' && <BreakScreen world={engine.world} picked={picked} onPick={pick} onContinue={begin} />}
           {phase !== 'playing' && phase !== 'break' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 overflow-y-auto bg-black/50 px-6 py-3 text-center backdrop-blur-[2px]">
               {phase === 'idle' && (
                 <div className="w-full max-w-4xl space-y-2">
                   <div>
                     <p className="text-3xl font-extrabold tracking-tight text-white">Last Stand</p>
-                    <p className="mx-auto max-w-lg text-xs text-white/75">Goblins, orcs and ogres pour in from both sides, round after round, with a boss every fifth. Parry, dodge and cut them down.</p>
+                    <p className="mx-auto max-w-lg text-xs text-white/75">
+                      Goblins, orcs and ogres pour in from both sides, round after round, with a boss every fifth. Each fifth round also moves the fight somewhere new.
+                    </p>
                   </div>
-                  <div className="grid items-start gap-3 text-left md:grid-cols-[250px_1fr]">
-                    <KnightPreview look={look} weapon={loadout[0]} />
-                    <div className="space-y-2.5">
-                      <LookPicker look={look} onChange={setLook} />
-                      <div>
-                        <p className="mb-1 text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Weapons</p>
-                        <LoadoutPicker loadout={loadout} onAssign={assign} compact />
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-sm font-bold text-[#ffd27a]">Press Enter to start</p>
+                  <HeroPicker hero={hero} sprites={sprites} onChange={choose} />
+                  <p className="text-sm font-bold text-[#ffd27a]">
+                    {loadFailed ? 'The pictures could not be loaded. Reload the page.' : sprites ? 'Press Enter to start' : 'Loading…'}
+                  </p>
                 </div>
               )}
               {phase === 'paused' && (
@@ -264,12 +289,12 @@ export function GamePage() {
                       )
                     })}
                   </ol>
-                  <div className="w-full max-w-2xl">
-                    <LoadoutPicker loadout={loadout} onAssign={assign} compact />
+                  <div className="w-full max-w-4xl">
+                    <HeroPicker hero={hero} sprites={sprites} onChange={choose} />
                   </div>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to try again</p>
                   <button type="button" onClick={() => setPhase('idle')} className="text-xs font-semibold text-white/70 underline underline-offset-2 hover:text-white">
-                    Change look and weapons
+                    Back to the title
                   </button>
                 </>
               )}
@@ -278,7 +303,7 @@ export function GamePage() {
         </div>
 
         <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-1 px-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
-          {CONTROLS.map(([keys, what]) => (
+          {controlsFor(hero).map(([keys, what]) => (
             <div key={keys} className="flex items-baseline gap-2">
               <dt className={`${SECTION_LABEL} shrink-0`}>{keys}</dt>
               <dd className="text-ink-muted">{what}</dd>
