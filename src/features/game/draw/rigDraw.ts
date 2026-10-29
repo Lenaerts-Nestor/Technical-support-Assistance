@@ -32,7 +32,9 @@ export function drawPart(ctx: CanvasRenderingContext2D, part: Part, pose: PartPo
       ctx.lineWidth = piece.width ?? 2
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
+      ctx.setLineDash(piece.dash ? [...piece.dash] : [])
       ctx.stroke(p)
+      ctx.setLineDash([])
     }
   }
   ctx.restore()

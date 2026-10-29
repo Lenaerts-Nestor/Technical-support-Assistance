@@ -1,4 +1,4 @@
-import { ARENA, DASH, ENEMIES } from '../config'
+import { ARENA, ENEMIES, PLAYER } from '../config'
 import type { Enemy, World } from '../types'
 
 const { width: W, height: H, groundY } = ARENA
@@ -155,13 +155,15 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World) {
   ctx.textAlign = 'left'
   ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, 32, 30)
 
-  // Dash: fills back up while it cools down.
-  const ready = p.dashCooldown <= 0
+  // Stamina: spent by the dash, heavy swings and blocking; it flashes red when you asked for more than you had.
+  const stamina = p.stamina / PLAYER.maxStamina
   ctx.fillStyle = 'rgba(10,10,14,.65)'
-  roundRect(ctx, 20, 46, 120, 10, 5)
+  roundRect(ctx, 20, 46, 164, 12, 5)
+  ctx.fillStyle = 'rgba(10,10,14,.65)'
   ctx.fill()
-  ctx.fillStyle = ready ? '#f5a93a' : '#8d6a35'
-  roundRect(ctx, 22, 48, 116 * (ready ? 1 : 1 - p.dashCooldown / DASH.cooldown), 6, 3)
+  const short = p.lowStamina > 0 && Math.floor(p.lowStamina * 12) % 2 === 0
+  ctx.fillStyle = short ? '#ff6b6b' : stamina < 0.2 ? '#c9a24a' : '#5fd1a0'
+  roundRect(ctx, 22, 48, 160 * stamina, 8, 4)
   ctx.fill()
 
   // Score.
@@ -178,4 +180,27 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   const radius = Math.min(r, w / 2, h / 2)
   ctx.beginPath()
   ctx.roundRect(x, y, Math.max(0, w), h, radius)
+}
+
+/** Rock racing along the ground ahead of an ogre's slam. */
+export function drawWaves(ctx: CanvasRenderingContext2D, w: World) {
+  for (const wave of w.waves) {
+    const dir = Math.sign(wave.vx)
+    const fade = Math.min(1, (wave.life / wave.maxLife) * 3)
+    ctx.save()
+    ctx.globalAlpha = fade
+    ctx.translate(wave.x, groundY + 2)
+    for (let i = 0; i < 4; i++) {
+      const x = (i - 1.5) * wave.halfWidth * 0.55 * -dir
+      const h = wave.height * (1 - i * 0.16) * (0.85 + 0.15 * Math.sin(w.time * 30 + i))
+      ctx.fillStyle = i % 2 ? '#8a7a62' : '#6b5a44'
+      ctx.beginPath()
+      ctx.moveTo(x - 11, 0)
+      ctx.lineTo(x + dir * 2, -h)
+      ctx.lineTo(x + 11, 0)
+      ctx.closePath()
+      ctx.fill()
+    }
+    ctx.restore()
+  }
 }

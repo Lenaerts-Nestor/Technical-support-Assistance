@@ -15,8 +15,10 @@ const DEATH_LINGER = 1.1
 const CONTROLS: [string, string][] = [
   ['A / D', 'walk'],
   ['W / Space', 'jump (hold for height)'],
-  ['Shift', 'dash — you cannot be hit for a moment'],
+  ['Shift', 'dash — you cannot be hit for a moment (uses stamina)'],
   ['J', 'attack — tap three times for the combo'],
+  ['K', 'heavy attack — tap twice; costs stamina, breaks poise'],
+  ['L (hold)', 'shield — only guards the way you face. Raise it just before a hit to parry'],
   ['Esc', 'pause'],
 ]
 
@@ -133,7 +135,7 @@ export function GamePage() {
         <div>
           <h2 className={PAGE_TITLE}>Last Stand</h2>
           <p className={PAGE_SUBTITLE}>
-            Hold the keep against goblins coming from both sides.
+            Hold the keep against goblins, orcs and ogres coming from both sides.
             <span className="text-ink-faint"> · scores last until you reload the page</span>
           </p>
         </div>
@@ -159,7 +161,7 @@ export function GamePage() {
           onClick={() => {
             if (phase === 'paused') begin()
           }}
-          aria-label="Game screen. Press Enter to start, then A and D to walk, W to jump, Shift to dash and J to attack."
+          aria-label="Game screen. Press Enter to start, then A and D to walk, W to jump, Shift to dash, J and K to attack and hold L for the shield."
           style={{ aspectRatio: `${ARENA.width} / ${ARENA.height}` }}
           className="border-line-strong focus-visible:outline-brand relative mx-auto w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
         >
@@ -169,7 +171,7 @@ export function GamePage() {
               {phase === 'idle' && (
                 <>
                   <p className="text-3xl font-extrabold tracking-tight text-white">Last Stand</p>
-                  <p className="max-w-md text-sm text-white/75">Goblins pour in from both sides. Cut them down before they cut you.</p>
+                  <p className="max-w-md text-sm text-white/75">Goblins, orcs and ogres pour in from both sides. Parry, dodge and cut them down.</p>
                   <p className="text-sm font-bold text-[#ffd27a]">Press Enter to start</p>
                 </>
               )}

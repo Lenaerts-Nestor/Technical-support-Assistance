@@ -35,7 +35,7 @@ describe('InputState', () => {
     input.keyDown('KeyD')
     input.keyDown('ShiftLeft')
     input.clear()
-    expect(input.frame()).toEqual({ move: 0, jumpHeld: false, jumpPressed: false, dashPressed: false, lightPressed: false })
+    expect(input.frame()).toEqual({ move: 0, jumpHeld: false, jumpPressed: false, dashPressed: false, lightPressed: false, heavyPressed: false, blockHeld: false })
     input.keyDown('KeyZ')
     expect(isGameKey('KeyZ')).toBe(false)
     expect(isGameKey('KeyW')).toBe(true)

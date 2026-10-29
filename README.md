@@ -124,14 +124,26 @@ there); `components/rosterColumns.tsx` lists the table's columns.
 
 ## Game (Last Stand)
 
-A side-view sword fight for the break between calls: goblins pour in from both sides of a keep and you
-hold them off. **Enter** starts, **A / D** walk, **W / Space** jump (hold for height), **Shift** dashes
-(you cannot be hit for a moment), **J** attacks (tap three times for the combo), **Esc** pauses. The game
-only runs while the page is open and has the keyboard, and scores last until the page is reloaded.
+A side-view sword fight for the break between calls: goblins, orcs and ogres pour in from both sides of a
+keep and you hold them off. **Enter** starts and **Esc** pauses. The game only runs while the page is open
+and has the keyboard, and scores last until the page is reloaded.
 
-It is built in stages. So far: walking, jumping, dashing, the three-hit light combo and goblins. Still to
-come: orcs and ogres, a heavy attack and shield, rounds with upgrades, the other weapons, and character
-customization. The rules are in `src/features/game/sim.ts`, every tuning number in `config.ts`, and the
+| Key | Does |
+|---|---|
+| **A / D** | walk |
+| **W / Space** | jump (hold for height) |
+| **Shift** | dash: you cannot be hit for a moment; costs stamina |
+| **J** | light combo: tap three times |
+| **K** | heavy combo: tap twice; slow, costs stamina, breaks poise. Can follow a light hit |
+| **L** (hold) | shield: guards the way you face and costs stamina per hit. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
+
+Goblins leap, orcs chop and ogres slam the ground, which sends a wave of rock along it that you can jump or
+dash. Orcs and ogres shrug off light hits until their **poise** (the bar under their health) breaks; then
+they stagger, with stars over their head, and take extra damage. Every attack shows a warning marker first.
+
+It is built in stages. So far: movement, light and heavy combos, shield and parry, stamina, and the three
+enemy types. Still to come: rounds with upgrades, the other weapons, a boss, and character customization.
+The rules are in `src/features/game/sim.ts` (tests next to it), every tuning number in `config.ts`, and the
 characters are vector shapes in `art/` that `draw/` poses and animates.
 
 ## Updates

@@ -1,6 +1,7 @@
 import { ARENA, ART_SCALE, ENEMIES } from '../config'
 import type { Enemy } from '../types'
 import { GOBLIN } from '../art/goblin'
+import { drawWarning } from './heavies'
 import { clamp, drawPart, easeOut } from './rigDraw'
 
 type GoblinPose = {
@@ -44,7 +45,7 @@ function goblinPose(e: Enemy): GoblinPose {
       pose.head = -0.15 * k
       break
     }
-    case 'leap':
+    case 'attack':
       pose.lean = 0.5
       pose.arm = 0.1
       pose.front = -0.9
@@ -59,6 +60,7 @@ function goblinPose(e: Enemy): GoblinPose {
       pose.ears = -0.1
       break
     case 'hurt':
+    case 'stagger':
       pose.lean = -0.5
       pose.arm = -0.7
       pose.backArm = 0.6
@@ -106,20 +108,5 @@ export function drawGoblin(ctx: CanvasRenderingContext2D, e: Enemy) {
   })
   ctx.restore()
 
-  // The "!" above a goblin that is about to leap: a fair warning to jump, dash or cut it down first.
-  if (e.state === 'windup') {
-    ctx.save()
-    ctx.translate(e.x, ARENA.groundY - e.y - ENEMIES[e.kind].height - 26)
-    ctx.fillStyle = '#f5a93a'
-    ctx.beginPath()
-    ctx.moveTo(0, -12)
-    ctx.lineTo(12, 10)
-    ctx.lineTo(-12, 10)
-    ctx.closePath()
-    ctx.fill()
-    ctx.fillStyle = '#16171b'
-    ctx.fillRect(-1.6, -4, 3.2, 8)
-    ctx.fillRect(-1.6, 6, 3.2, 2.4)
-    ctx.restore()
-  }
+  if (e.state === 'windup') drawWarning(ctx, e, 18)
 }

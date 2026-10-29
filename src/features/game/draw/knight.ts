@@ -1,9 +1,9 @@
-import { ARENA, ART_SCALE, DASH, LIGHT_COMBO, PLAYER } from '../config'
+import { ARENA, ART_SCALE, COMBOS, DASH, PLAYER, SHIELD } from '../config'
 import type { World } from '../types'
 import { KNIGHT, SWORD_PIVOT, SWORD_REST_ANGLE } from '../art/knight'
 import { clamp, drawPart, easeInOut, easeOut, lerp } from './rigDraw'
 
-type Slash = { from: number; to: number; alpha: number }
+type Slash = { from: number; to: number; alpha: number; heavy: boolean }
 
 type KnightPose = {
   dx: number
@@ -13,6 +13,8 @@ type KnightPose = {
   back: number
   sword: number
   shield: number
+  /** How far the shield is pushed out in front of the body. */
+  guard: number
   cape: number
   plume: number
   /** Whole-body rotation about the feet, for falling over. */
@@ -25,7 +27,7 @@ function knightPose(w: World): KnightPose {
   const p = w.player
   const t = w.time
   const forward = (p.vx * p.facing) / PLAYER.speed
-  const pose: KnightPose = { dx: 0, dy: 0, lean: 0, front: 0, back: 0, sword: 0, shield: 0, cape: 0, plume: 0, fall: 0, slash: null }
+  const pose: KnightPose = { dx: 0, dy: 0, lean: 0, front: 0, back: 0, sword: 0, shield: 0, guard: 0, cape: 0, plume: 0, fall: 0, slash: null }
 
   const breath = Math.sin(t * 3)
   pose.plume = Math.sin(t * 5) * 0.06
@@ -63,8 +65,21 @@ function knightPose(w: World): KnightPose {
       pose.plume = 0.5
       pose.dy = 0
       break
+    case 'block': {
+      // Shield up and out in front, blade held back and ready.
+      const open = 1 - Math.min(1, p.guardDelay / SHIELD.turnDelay)
+      pose.guard = 16 * open
+      pose.shield = -0.06
+      pose.sword = -0.95
+      pose.front = -0.22 + (p.grounded && Math.abs(p.vx) > 15 ? Math.sin(p.x * 0.09 * p.facing) * 0.3 : 0)
+      pose.back = 0.2
+      pose.lean = -0.05
+      pose.cape = 0.06
+      break
+    }
     case 'attack': {
-      const step = LIGHT_COMBO[p.attackIndex]
+      const step = COMBOS[p.attackKind][p.attackIndex]
+      const heavy = p.attackKind === 'heavy'
       const u = p.stateTime
       let angle: number
       if (u < step.hitStart) angle = lerp(0, step.swing.from, easeOut(u / step.hitStart))
@@ -75,14 +90,20 @@ function knightPose(w: World): KnightPose {
       pose.back = 0.35
       pose.shield = -0.12
       const strike = clamp((u - step.hitStart) / (step.hitEnd - step.hitStart), 0, 1)
+      const windup = clamp(u / step.hitStart, 0, 1)
       pose.lean = 0.05 + 0.22 * strike * (1 - clamp((u - step.hitEnd) / 0.2, 0, 1))
+      // A heavy swing coils back and down before it comes round.
+      if (heavy) {
+        pose.lean -= 0.22 * windup * (1 - strike)
+        pose.dy += 4 * windup * (1 - strike)
+      }
       pose.dx = 5 * strike
       pose.cape = 0.3 * strike
       pose.plume = 0.4 * strike
-      const fade = 1 - clamp((u - step.hitEnd) / 0.12, 0, 1)
+      const fade = 1 - clamp((u - step.hitEnd) / 0.14, 0, 1)
       if (u >= step.hitStart - 0.01 && fade > 0) {
         const current = u <= step.hitEnd ? angle : step.swing.to
-        pose.slash = { from: step.swing.from, to: current, alpha: fade }
+        pose.slash = { from: step.swing.from, to: current, alpha: fade, heavy }
       }
       break
     }
@@ -120,7 +141,7 @@ function drawFigure(ctx: CanvasRenderingContext2D, pose: KnightPose) {
   inBody(() => {
     drawPart(ctx, KNIGHT.body)
     drawPart(ctx, KNIGHT.plume, { rot: pose.plume })
-    drawPart(ctx, KNIGHT.shield, { rot: pose.shield })
+    drawPart(ctx, KNIGHT.shield, { rot: pose.shield, dx: pose.guard, dy: -pose.guard * 0.25 })
     if (pose.slash) drawSlash(ctx, pose.slash)
     drawPart(ctx, KNIGHT.swordArm, { rot: pose.sword })
   })
@@ -135,12 +156,18 @@ function drawSlash(ctx: CanvasRenderingContext2D, slash: Slash) {
   ctx.save()
   ctx.translate(px, py)
   ctx.lineCap = 'round'
-  for (const [radius, width, alpha] of [
-    [96, 26, 0.28],
-    [104, 12, 0.7],
-  ] as const) {
+  const rings = slash.heavy
+    ? ([
+        [96, 36, 0.3],
+        [106, 16, 0.8],
+      ] as const)
+    : ([
+        [96, 26, 0.28],
+        [104, 12, 0.7],
+      ] as const)
+  for (const [radius, width, alpha] of rings) {
     ctx.globalAlpha = alpha * slash.alpha
-    ctx.strokeStyle = '#fff4d6'
+    ctx.strokeStyle = slash.heavy ? '#ffd27a' : '#fff4d6'
     ctx.lineWidth = width
     ctx.beginPath()
     ctx.arc(0, 0, radius, a0, a1, a1 < a0)
@@ -170,5 +197,28 @@ export function drawKnight(ctx: CanvasRenderingContext2D, w: World) {
   }
   if (blink) ctx.globalAlpha = 0.45
   drawFigure(ctx, pose)
+  ctx.restore()
+  if (p.parryFlash > 0) drawParryFlash(ctx, p.x + p.facing * 40 * ART_SCALE, ARENA.groundY - p.y - 80 * ART_SCALE, p.parryFlash / 0.35)
+}
+
+/** A bright ring and cross-flash at the shield for the moment after a parry. */
+function drawParryFlash(ctx: CanvasRenderingContext2D, x: number, y: number, left: number) {
+  const grow = 1 - left
+  ctx.save()
+  ctx.globalAlpha = left
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 4 * left + 1
+  ctx.beginPath()
+  ctx.arc(x, y, 14 + 40 * grow, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.strokeStyle = '#ffd27a'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2 + Math.PI / 4
+    ctx.moveTo(x + Math.cos(a) * 10, y + Math.sin(a) * 10)
+    ctx.lineTo(x + Math.cos(a) * (28 + 30 * grow), y + Math.sin(a) * (28 + 30 * grow))
+  }
+  ctx.stroke()
   ctx.restore()
 }

@@ -25,7 +25,7 @@ export class GameEngine {
     const steps = Math.max(1, Math.ceil(dt / MAX_STEP))
     // Button presses belong to the first slice only; held keys apply to all of them.
     const first = this.input.frame()
-    const rest = { ...first, jumpPressed: false, dashPressed: false, lightPressed: false }
+    const rest = { ...first, jumpPressed: false, dashPressed: false, lightPressed: false, heavyPressed: false }
     for (let i = 0; i < steps; i++) stepWorld(this.world, i === 0 ? first : rest, dt / steps, Math.random)
   }
 
