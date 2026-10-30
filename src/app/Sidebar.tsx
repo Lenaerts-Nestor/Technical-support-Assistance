@@ -1,5 +1,5 @@
 import type { PageId } from './navigation'
-import { NAV_ITEMS } from './navigation'
+import { NAV_ITEMS, isDesktopApp } from './navigation'
 import { useAppUpdateData, useFolder } from './appDataContext'
 import { hasPendingUpdate } from '../features/sync/appUpdate'
 import { useGuidesToOrganize } from '../features/sync/useGuidesToOrganize'
@@ -10,8 +10,10 @@ import { ThemeSwitcher } from '../shared/theme/ThemeSwitcher'
 import { SidebarClock } from './SidebarClock'
 import { SidebarShift } from './SidebarShift'
 import { SidebarIdentity } from './SidebarIdentity'
+import { SidebarTimers } from './SidebarTimers'
 
 const ICONS: Record<PageId, React.ReactElement> = {
+  dashboard: <path d="M3 3h8v10H3V3Zm10 0h8v6h-8V3ZM3 15h8v6H3v-6Zm10-4h8v10h-8V11Z" />,
   voiceCall: (
     <path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.25 1L6.6 10.8Z" />
   ),
@@ -134,7 +136,8 @@ export function Sidebar({
     : toOrganize > 0 && ['ready', 'saving', 'saved'].includes(folder.status)
       ? { tone: 'bg-amber-400', label: 'Folder linked — guides can be organized into their own folders' }
       : FOLDER_DOT[folder.status]
-  const visible = NAV_ITEMS.filter((item) => !item.hidden)
+  const desktop = isDesktopApp()
+  const visible = NAV_ITEMS.filter((item) => !item.hidden && (desktop || !item.desktopOnly))
   const main = visible.filter((item) => item.placement !== 'bottom')
   const bottom = visible.filter((item) => item.placement === 'bottom')
 
@@ -186,6 +189,7 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto flex flex-col gap-4">
+        <SidebarTimers compact={compact} />
         <SidebarIdentity compact={compact} />
         <ThemeSwitcher compact={compact} />
         {bottom.length > 0 && (

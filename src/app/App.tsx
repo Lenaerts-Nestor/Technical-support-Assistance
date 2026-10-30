@@ -4,9 +4,10 @@ import { ErrorBoundary } from './ErrorBoundary'
 import { AppDataProvider } from './AppDataProvider'
 import { SharedShiftProvider } from '../features/shift/SharedShiftProvider'
 import { FocusModeContext } from './focusMode'
-import { NAV_ITEMS, NavigationContext } from './navigation'
+import { NAV_ITEMS, NavigationContext, isDesktopApp, isPageAvailable } from './navigation'
 import { storageKey, usePersistentState } from '../shared/storage/usePersistentState'
 import type { PageId } from './navigation'
+import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { VoiceCallPage } from '../features/voiceCall/VoiceCallPage'
 import { RmaPage } from '../features/rma/RmaPage'
 import { CasesPage } from '../features/cases/CasesPage'
@@ -20,6 +21,7 @@ import { GamePage } from '../features/game/GamePage'
 import { SyncPage } from '../features/sync/SyncPage'
 
 const PAGES: Record<PageId, () => React.ReactElement> = {
+  dashboard: DashboardPage,
   voiceCall: VoiceCallPage,
   rma: RmaPage,
   cases: CasesPage,
@@ -33,8 +35,35 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
   sync: SyncPage,
 }
 
+const LAST_PAGE_KEY = storageKey('app', 'lastPage')
+
+/**
+ * The desktop app always opens on the Dashboard. The website returns to the page the user was last on
+ * (so a refresh keeps their place); a first visit, or a page that is no longer available, lands on the Dashboard.
+ */
+function initialPage(): PageId {
+  if (isDesktopApp()) return 'dashboard'
+  try {
+    const saved = window.localStorage.getItem(LAST_PAGE_KEY)
+    const id = saved === null ? undefined : (JSON.parse(saved) as PageId)
+    if (id && isPageAvailable(id)) return id
+  } catch {
+    // Storage blocked or unreadable: start on the Dashboard.
+  }
+  return 'dashboard'
+}
+
 export default function App() {
-  const [page, setPage] = useState<PageId>('voiceCall')
+  const [page, setPageState] = useState<PageId>(initialPage)
+  const setPage = useCallback((id: PageId) => {
+    setPageState(id)
+    if (isDesktopApp()) return
+    try {
+      window.localStorage.setItem(LAST_PAGE_KEY, JSON.stringify(id))
+    } catch {
+      // Storage blocked: the page still changes, it just is not remembered.
+    }
+  }, [])
   // The user's own choice: shrink the sidebar to icons. Remembered across reloads.
   const [collapsed, setCollapsed] = usePersistentState<boolean>(
     storageKey('app', 'sidebarCollapsed'),
