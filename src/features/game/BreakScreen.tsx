@@ -38,25 +38,27 @@ export function BreakScreen({ world, picked, onPick, onContinue }: BreakScreenPr
         </header>
 
         <div>
-          <p className="mb-1.5 text-center text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">Choose an upgrade</p>
+          <p className="mb-1.5 text-center text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">
+            {picked === null ? 'Choose an upgrade' : 'Choose an upgrade · you can change your mind until the round starts'}
+          </p>
           <div className="grid gap-2 sm:grid-cols-3">
             {world.offer.map((id, index) => {
               const upgrade = upgradeById(id)
-              const level = world.upgrades[id] ?? 0
               const taken = picked === id
+              // The level before this break's pick, which is already counted in once taken.
+              const level = (world.upgrades[id] ?? 0) - (taken ? 1 : 0)
               const chosenOther = picked !== null && !taken
               return (
                 <button
                   key={id}
                   type="button"
-                  disabled={picked !== null}
                   aria-pressed={taken}
                   onClick={() => onPick(id)}
                   className={`flex flex-col gap-1.5 rounded-lg border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffd27a] ${
                     taken
                       ? 'border-[#ffd27a] bg-[#ffd27a]/15 ring-2 ring-[#ffd27a]/60'
                       : chosenOther
-                        ? 'border-white/10 bg-white/5 opacity-40'
+                        ? 'border-white/10 bg-white/5 opacity-55 hover:border-[#ffd27a]/70 hover:opacity-100'
                         : 'border-white/20 bg-white/10 hover:border-[#ffd27a]/70 hover:bg-white/15'
                   }`}
                 >

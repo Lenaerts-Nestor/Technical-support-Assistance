@@ -158,6 +158,16 @@ export function GamePage() {
     frameRef.current?.focus()
   }
 
+  /** Abandon the run in progress and go back to the title, where the hero is chosen. */
+  const newGame = () => {
+    engine.reset()
+    engine.input.clear()
+    setPicked(null)
+    setPhase('idle')
+    draw()
+    frameRef.current?.focus()
+  }
+
   const choose = (id: HeroId, fromMouse: boolean) => {
     setHero(id)
     engine.setHero(id)
@@ -223,14 +233,23 @@ export function GamePage() {
           </p>
         </div>
         <div className="flex gap-2">
-          {phase === 'playing' && (
+          {/* Fixed places: clicking one takes the keyboard from the game, which pauses it, and nothing may move under the pointer then. */}
+          {phase !== 'idle' && (
+            <button type="button" onClick={newGame} className={GHOST_BTN_MD}>
+              New game
+            </button>
+          )}
+          {phase === 'playing' ? (
             <button type="button" onClick={pause} className={GHOST_BTN_MD}>
               Pause
             </button>
+          ) : (
+            (phase === 'idle' || phase === 'paused') && (
+              <button type="button" onClick={begin} disabled={!sprites} className={PRIMARY_BTN}>
+                {phase === 'idle' ? 'Start' : 'Resume'}
+              </button>
+            )
           )}
-          <button type="button" onClick={begin} disabled={!sprites} className={PRIMARY_BTN}>
-            {phase === 'idle' ? 'Start' : phase === 'paused' ? 'Resume' : 'New game'}
-          </button>
         </div>
       </header>
 

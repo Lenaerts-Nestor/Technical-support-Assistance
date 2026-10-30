@@ -219,14 +219,31 @@ describe('upgrade picks', () => {
     return w
   }
 
-  it('takes one upgrade from the offer, once', () => {
+  it('takes one upgrade from the offer, and swaps it for another until the round starts', () => {
     const w = readyForBreak()
     const [first, second] = w.offer
     expect(pickUpgrade(w, first)).toBe(true)
     expect(w.picked).toBe(first)
     expect(w.upgrades[first]).toBe(1)
-    expect(pickUpgrade(w, second)).toBe(false)
-    expect(w.upgrades[second]).toBeUndefined()
+    expect(pickUpgrade(w, second)).toBe(true)
+    expect(w.picked).toBe(second)
+    expect(w.upgrades[first]).toBeUndefined()
+    expect(w.upgrades[second]).toBe(1)
+    nextRound(w)
+    expect(pickUpgrade(w, first)).toBe(false)
+  })
+
+  it('hands back the extra health of an upgrade swapped away', () => {
+    const w = readyForBreak()
+    w.offer = ['hardened', 'lungs', 'whetstone']
+    const maxHp = w.player.maxHp
+    w.player.hp = 50
+    pickUpgrade(w, 'hardened')
+    expect(w.player.maxHp).toBe(maxHp + 20)
+    pickUpgrade(w, 'whetstone')
+    expect(w.player.maxHp).toBe(maxHp)
+    expect(w.player.hp).toBe(50)
+    expect(w.mods.damage).toBeGreaterThan(1)
   })
 
   it('refuses an upgrade that is not on offer, or outside the break', () => {
