@@ -82,7 +82,7 @@ export function drawHero(ctx: CanvasRenderingContext2D, w: World, sprites: Sprit
   const sheet = sprites.characters[hero.id][pose.clip]
   if (!sheet) return
   const y = groundY - p.y
-  const at = (source: CanvasImageSource, x = p.x) => drawFrame(ctx, source, pose.frame, x, y, hero.scale, p.facing, hero.id)
+  const at = (source: CanvasImageSource, x = p.x) => drawFrame(ctx, source, pose.frame, x, y, hero.scale, p.facing, hero.id, pose.clip)
 
   ctx.save()
   // The dash leaves a trail of fading copies behind it.
@@ -94,11 +94,43 @@ export function drawHero(ctx: CanvasRenderingContext2D, w: World, sprites: Sprit
   }
   // Blinking while nothing can touch the hero after a hit.
   const blink = p.invuln > 0 && p.state !== 'dash' && p.state !== 'dead' && p.state !== 'attack' && Math.floor(w.time * 14) % 2 === 0
-  ctx.globalAlpha = blink ? 0.45 : p.state === 'dead' && !has(hero.id, 'death') ? Math.max(0, 1 - p.stateTime) : 1
+  const alpha = blink ? 0.45 : p.state === 'dead' && !has(hero.id, 'death') ? Math.max(0, 1 - p.stateTime) : 1
+  if (p.state !== 'dead') drawHeroGlow(ctx, w, sheet, at, y, alpha)
+  ctx.globalAlpha = alpha
   at(sheet)
   wash(ctx, sheet, '#ffffff', p.hitTime > 0.24 ? 0.9 : 0, at)
   wash(ctx, sheet, '#ffd27a', p.parryFlash / 0.35, at)
   ctx.restore()
+}
+
+/** The hero's colour: warm gold, so it never reads as an elite enemy's pale outline. */
+const HERO_GLOW = '#ffe39a'
+
+/**
+ * A soft warm halo behind the hero and a thin bright outline round the body, so the eye finds
+ * the hero at once among dark sprites on a dark level. It breathes gently.
+ */
+function drawHeroGlow(ctx: CanvasRenderingContext2D, w: World, sheet: HTMLImageElement, at: (source: CanvasImageSource, x?: number) => void, footY: number, alpha: number) {
+  const p = w.player
+  const pulse = 0.85 + 0.15 * Math.sin(w.time * 3)
+  const cy = footY - p.height * 0.5
+  const radius = p.height * 0.95
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  const halo = ctx.createRadialGradient(p.x, cy, 2, p.x, cy, radius)
+  halo.addColorStop(0, `rgba(255,227,154,${0.2 * pulse * alpha})`)
+  halo.addColorStop(1, 'rgba(255,227,154,0)')
+  ctx.fillStyle = halo
+  ctx.fillRect(p.x - radius, cy - radius, radius * 2, radius * 2)
+  ctx.restore()
+  const rim = silhouette(sheet, HERO_GLOW)
+  ctx.globalAlpha = 0.5 * pulse * alpha
+  for (const [dx, dy] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) {
+    ctx.save()
+    ctx.translate(dx, dy)
+    at(rim)
+    ctx.restore()
+  }
 }
 
 /* -- Enemies ----------------------------------------------------------------- */
@@ -151,7 +183,7 @@ export function drawEnemy(ctx: CanvasRenderingContext2D, w: World, e: Enemy, spr
   const shake = e.state === 'windup' && stats.heavy ? (Math.random() - 0.5) * 3 : 0
   const x = e.x + shake
   const y = groundY - e.y
-  const at = (src: CanvasImageSource, dx = 0, dy = 0) => drawFrame(ctx, src, pose.frame, x + dx, y + dy, look.scale, e.facing, look.sprite)
+  const at = (src: CanvasImageSource, dx = 0, dy = 0) => drawFrame(ctx, src, pose.frame, x + dx, y + dy, look.scale, e.facing, look.sprite, pose.clip)
 
   ctx.save()
   const fade = e.state === 'dying' ? Math.max(0, 1 - Math.max(0, e.stateTime - 0.4) / 0.3) : 1

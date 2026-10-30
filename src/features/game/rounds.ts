@@ -169,20 +169,34 @@ function banish(e: Enemy) {
   e.vx = 0
 }
 
-/** Take one of the upgrades on offer. Only works during the break, and only once. */
+/**
+ * Take one of the upgrades on offer. Only works during the break. Picking another one before the
+ * next round starts swaps it for the one taken: the first is handed back.
+ */
 export function pickUpgrade(w: World, id: UpgradeId) {
-  if (w.stage !== 'break' || w.picked || !w.offer.includes(id)) return false
-  const p = w.player
+  if (w.stage !== 'break' || !w.offer.includes(id) || w.picked === id) return false
+  if (w.picked) {
+    const back = w.picked
+    w.upgrades[back] = (w.upgrades[back] ?? 1) - 1
+    if (w.upgrades[back] === 0) delete w.upgrades[back]
+  }
   w.upgrades[id] = (w.upgrades[id] ?? 0) + 1
-  const before = w.mods
-  w.mods = computeMods(w.upgrades)
-  // Extra capacity arrives full, so the upgrade is felt at once.
-  p.maxHp += w.mods.maxHp - before.maxHp
-  p.hp = Math.min(p.maxHp, p.hp + (w.mods.maxHp - before.maxHp))
-  p.maxStamina += w.mods.maxStamina - before.maxStamina
-  p.stamina = Math.min(p.maxStamina, p.stamina + (w.mods.maxStamina - before.maxStamina))
+  applyMods(w)
   w.picked = id
   return true
+}
+
+/** Work the upgrades out again. Capacity gained arrives full, so it is felt at once; capacity handed back goes with what it gave. */
+function applyMods(w: World) {
+  const p = w.player
+  const before = w.mods
+  w.mods = computeMods(w.upgrades)
+  const hp = w.mods.maxHp - before.maxHp
+  const stamina = w.mods.maxStamina - before.maxStamina
+  p.maxHp += hp
+  p.hp = Math.max(1, Math.min(p.maxHp, p.hp + hp))
+  p.maxStamina += stamina
+  p.stamina = Math.max(0, Math.min(p.maxStamina, p.stamina + stamina))
 }
 
 /** Leave the break and start the next round, with its own objective. */

@@ -37,6 +37,12 @@ export type SpriteInfo = {
   moves: Record<string, Phases>
   /** A held frame for the guard (only the Warden has one). */
   guard?: { clip: ClipId; frame: number }
+  /**
+   * For clips whose artist moved the body forward inside the frame (a dash drawn as travel), how
+   * far forward it is in each frame, in art pixels. The game moves the character itself, so the
+   * drawing takes this back out; otherwise the body would run ahead and snap back when the clip ends.
+   */
+  shift?: Partial<Record<ClipId, readonly number[]>>
   /** The row of the frame the feet stand on, and the column of the middle of the body. */
   footY: number
   centerX: number
@@ -74,6 +80,7 @@ export const SPRITES: Record<SpriteId, SpriteInfo> = {
       rising: { clip: 'airUp', windup: [0, 0], strike: [1, 2], recover: [3, 3] },
       plunge: { clip: 'airDown', windup: [0, 0], strike: [1, 2], recover: [3, 3] },
     },
+    shift: { attack03: [0, 0, 78, 78, 80], dashAttack: [0, 78, 78] },
     footY: 79,
     centerX: 118,
     bodyHeight: 38,

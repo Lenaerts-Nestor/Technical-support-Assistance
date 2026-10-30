@@ -94,8 +94,20 @@ export const filtered = (img: HTMLImageElement, filter: string) =>
   })
 
 /** A pixel-sharp copy of `frame` of a character's strip, standing on (`x`, `footY`) with the body centred on `x`. */
-export function drawFrame(ctx: CanvasRenderingContext2D, source: CanvasImageSource, frame: number, x: number, footY: number, scale: number, facing: 1 | -1, sprite: SpriteId) {
-  const { frameW, frameH, centerX, footY: foot } = SPRITES[sprite]
+export function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  frame: number,
+  x: number,
+  footY: number,
+  scale: number,
+  facing: 1 | -1,
+  sprite: SpriteId,
+  clip?: ClipId,
+) {
+  const { frameW, frameH, footY: foot } = SPRITES[sprite]
+  // A body drawn ahead in its frame is pulled back to where the character is.
+  const centerX = SPRITES[sprite].centerX + (clip ? (SPRITES[sprite].shift?.[clip]?.[frame] ?? 0) : 0)
   ctx.save()
   ctx.translate(x, footY)
   ctx.scale(facing, 1)

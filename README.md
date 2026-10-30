@@ -126,7 +126,7 @@ there); `components/rosterColumns.tsx` lists the table's columns.
 
 A side-view brawler for the break between calls, in the dark style of the SHADOW Series art: pick one of
 three heroes and hold a level of ledges against demons and shades coming through the gates on both sides.
-**Enter** starts and **Esc** pauses. The game only runs while the page is open and has the keyboard, and scores
+**Enter** starts, **Esc** pauses and **New game** abandons the run and goes back to choosing a hero. The hero has a soft gold glow so you can find them at a glance. The game only runs while the page is open and has the keyboard, and scores
 last until the page is reloaded. Your hero is remembered in this browser.
 
 | Key | Does |
@@ -174,7 +174,7 @@ Wetlands**, **The Hollow** and **The Abyssal Gate**, each with its own ledges an
 away), shards again, then a boss. In shard and shrine rounds the enemies keep coming until the objective is
 done, then the rest go back to the dark. Clear a round and you are patched up (a third of your health, full
 stamina), get a clear bonus and a **flawless** bonus if nothing touched you, then **pick 1 of 3 upgrades**
-(press 1, 2 or 3, then Enter). Upgrades last for the run (guard upgrades are only offered to the Warden). Kills
+(press 1, 2 or 3, then Enter; until the next round starts you can change your pick). Upgrades last for the run (guard upgrades are only offered to the Warden). Kills
 in quick succession build a **streak** that multiplies their points, and a hit on you ends it. The game is
 endless; the list of this session's runs is on the "You fell" screen and is not saved.
 
