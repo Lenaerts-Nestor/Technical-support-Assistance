@@ -17,13 +17,13 @@ type Phase = 'idle' | 'playing' | 'paused' | 'break' | 'over'
 
 type Run = { score: number; kills: number; round: number }
 
-/** How long the fallen knight stays on screen before the results appear. */
+/** How long the fallen hero stays on screen before the results appear. */
 const DEATH_LINGER = 1.1
 
 /** What the keys do; the attack buttons and the shield depend on the hero, so they are added to this. */
 const CONTROLS: [string, string][] = [
-  ['A / D', 'walk'],
-  ['W / Space', 'jump (hold for height)'],
+  ['A / D', 'run'],
+  ['W / Space', 'jump (hold for height) — climb the ledges'],
   ['S (on a ledge)', 'drop through it'],
   ['Shift', 'dash — you cannot be hit for a moment (uses stamina)'],
   ['Esc', 'pause'],
@@ -31,17 +31,23 @@ const CONTROLS: [string, string][] = [
 
 const controlsFor = (hero: HeroId): [string, string][] => {
   const def = HEROES[hero]
+  const extra: [string, string][] = []
+  if (def.airJumps > 0) extra.push(['W in the air', 'jump again'])
+  if (def.moves.air) extra.push(['J in the air', def.moves.air])
+  if (def.moves.dash) extra.push(['J while dashing', def.moves.dash])
+  if (def.canBlock) extra.push(['L (hold)', 'guard — curl up just before a hit to parry'])
   return [
     ...CONTROLS.slice(0, 4),
     ['J', `attack — ${def.moves.light}. Tap again to chain`],
     ['K', `heavy attack — ${def.moves.heavy}. Costs stamina, breaks poise`],
-    ...(def.canBlock ? ([['L (hold)', 'shield — raise it just before a hit to parry']] as [string, string][]) : []),
+    ...extra,
     CONTROLS[4],
   ]
 }
 
 /**
- * Last Stand: a side-view sword fight against goblins pouring in from both sides. The rules
+ * Last Stand: a side-view fight against demons and shades coming through the gates on both
+ * sides, over a level of ledges three tiers high. The rules
  * live in `sim.ts` and the drawing in `draw/`; this page owns the canvas, the keyboard focus
  * and the clock. The game only runs while the page is on screen and has the keyboard, so it
  * never keeps going behind a call.
@@ -212,7 +218,7 @@ export function GamePage() {
         <div>
           <h2 className={PAGE_TITLE}>Last Stand</h2>
           <p className={PAGE_SUBTITLE}>
-            Pick a hero and hold the cave against goblins, orcs and ogres coming from both sides.
+            Pick a shadow and hold the ledges against demons, lancers, archers and brutes coming through the gates.
             <span className="text-ink-faint"> · scores last until you reload the page</span>
           </p>
         </div>
@@ -238,7 +244,7 @@ export function GamePage() {
           onClick={() => {
             if (phase === 'paused') begin()
           }}
-          aria-label="Game screen. Press Enter to start, then A and D to walk, W to jump, S to drop off a ledge, Shift to dash and J and K to attack. The soldier holds L for the shield."
+          aria-label="Game screen. Press Enter to start, then A and D to run, W to jump, S to drop off a ledge, Shift to dash and J and K to attack. The Warden holds L to guard."
           style={{ aspectRatio: `${ARENA.width} / ${ARENA.height}` }}
           className="border-line-strong focus-visible:outline-brand relative mx-auto w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
         >
@@ -251,7 +257,7 @@ export function GamePage() {
                   <div>
                     <p className="text-3xl font-extrabold tracking-tight text-white">Last Stand</p>
                     <p className="mx-auto max-w-lg text-xs text-white/75">
-                      Goblins, orcs and ogres pour in from both sides, round after round, with a boss every fifth. Each fifth round also moves the fight somewhere new.
+                      Enemies come through the gates on both sides, on the ground and on the ledges. Some rounds you put them all down; in others you gather soul shards or light shrines up on the ledges while they keep coming. A boss every fifth round, and then a new place.
                     </p>
                   </div>
                   <HeroPicker hero={hero} sprites={sprites} onChange={choose} />

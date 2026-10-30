@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { ARENA, COST, ENEMIES, PLAYER, ROUNDS } from './config'
 import { enemyHealthScale, roundBudget } from './pacing'
+import { createObjective } from './objectives'
 import { awardKill, nextRound } from './rounds'
 import { createWorld, isEnraged, spawnEnemy, stepWorld, windupTime } from './sim'
 import { NO_INPUT } from './types'
+import { HEROES } from './heroes'
 import type { BossMove, Enemy, FrameInput, World } from './types'
 
 const DT = 1 / 120
+/** The Warden plays these tests: it is the hero with a guard. */
+const MAX_HP = HEROES.warden.hp
 const first = () => 0.9
 const boss = ENEMIES.warlord.boss!
 
 function quiet(round = 1): World {
-  const w = createWorld()
+  const w = createWorld('warden')
   w.round = round
   w.spawnTimer = 1e9
+  w.platforms = []
   return w
 }
 
@@ -37,8 +42,9 @@ function warlord(w: World, x: number, move: BossMove): Enemy {
 
 describe('the boss round', () => {
   it('brings the boss first, alone, then its small crowd', () => {
-    const w = createWorld()
+    const w = createWorld('warden')
     w.round = 5
+    w.objective = createObjective(5, w.platforms, first)
     w.budget = w.roundBudget = roundBudget(5)
     w.spawnTimer = 0.2
     until(w, () => w.enemies.length > 0)
@@ -48,21 +54,22 @@ describe('the boss round', () => {
     run(w, 3.5)
     expect(w.enemies.filter((e) => e.kind === 'warlord')).toHaveLength(1)
     expect(w.enemies.length).toBeGreaterThan(1)
-    expect(w.enemies.every((e) => e.kind === 'warlord' || e.kind === 'goblin' || e.kind === 'orc')).toBe(true)
+    expect(w.enemies.every((e) => ['warlord', 'imp', 'demon', 'archer'].includes(e.kind))).toBe(true)
   })
 
-  it('is stronger than an ogre, and grows stronger with the round', () => {
+  it('is stronger than a brute, and grows stronger with the round', () => {
     const w = quiet(5)
     const b = spawnEnemy(w, 'warlord', 0)
     expect(b.maxHp).toBe(Math.round(ENEMIES.warlord.hp * enemyHealthScale(5)))
-    expect(ENEMIES.warlord.hp).toBeGreaterThan(ENEMIES.ogre.hp * 2.5)
+    expect(ENEMIES.warlord.hp).toBeGreaterThan(ENEMIES.brute.hp * 2.5)
     const later = quiet(15)
     expect(spawnEnemy(later, 'warlord', 0).maxHp).toBeGreaterThan(b.maxHp)
   })
 
   it('is not won until the boss is down, and the next round is ordinary', () => {
-    const w = createWorld()
+    const w = createWorld('warden')
     w.round = 5
+    w.objective = createObjective(5, w.platforms, first)
     w.budget = w.roundBudget = roundBudget(5)
     w.spawnTimer = 0.1
     until(w, () => w.bossSpawned)
@@ -105,8 +112,8 @@ describe('the boss moves', () => {
     const b = warlord(w, 800, 'charge')
     until(w, () => b.state === 'attack')
     expect(Math.abs(b.vx)).toBeGreaterThan(boss.chargeSpeed * 0.9)
-    until(w, () => w.player.hp < PLAYER.maxHp)
-    expect(w.player.hp).toBe(PLAYER.maxHp - Math.round(boss.chargeDamage * b.power))
+    until(w, () => w.player.hp < MAX_HP)
+    expect(w.player.hp).toBe(MAX_HP - Math.round(boss.chargeDamage * b.power))
   })
 
   it('charge: a dash through it takes no damage', () => {
@@ -116,7 +123,7 @@ describe('the boss moves', () => {
     until(w, () => b.state === 'attack' && b.x < 440)
     stepWorld(w, { ...NO_INPUT, dashPressed: true, move: 1 }, DT, first)
     run(w, 0.6)
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
   })
 
   it('charge: a shield takes it, at a heavy price in stamina', () => {
@@ -126,7 +133,7 @@ describe('the boss moves', () => {
     const b = warlord(w, 800, 'charge')
     until(w, () => b.state === 'attack' && b.x < 520, { blockHeld: true })
     run(w, 0.5, { blockHeld: true })
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
     expect(w.player.stamina).toBeLessThan(PLAYER.maxStamina - 40)
   })
 
@@ -144,12 +151,12 @@ describe('the boss moves', () => {
     expect(w.shake).toBeGreaterThan(5)
   })
 
-  it('roar: calls goblins in from the edges', () => {
+  it('roar: calls imps in from the edges', () => {
     const w = quiet(5)
     w.player.x = 300
     warlord(w, 600, 'roar')
-    until(w, () => w.enemies.filter((e) => e.kind === 'goblin').length >= boss.summon)
-    expect(w.enemies.filter((e) => e.kind === 'goblin')).toHaveLength(boss.summon)
+    until(w, () => w.enemies.filter((e) => e.kind === 'imp').length >= boss.summon)
+    expect(w.enemies.filter((e) => e.kind === 'imp')).toHaveLength(boss.summon)
   })
 })
 
@@ -162,7 +169,7 @@ describe('enrage', () => {
     b.hp = b.maxHp * 0.49
     expect(isEnraged(b)).toBe(true)
     expect(windupTime(b)).toBeLessThan(calm)
-    expect(isEnraged(spawnEnemy(w, 'ogre', 0))).toBe(false)
+    expect(isEnraged(spawnEnemy(w, 'brute', 0))).toBe(false)
   })
 
   it('charges have their own, longer wind-up and the roar a shorter one', () => {
@@ -184,7 +191,7 @@ describe('feedback you can see', () => {
 
   it('a hit floats its damage over the enemy and leaves an impact mark', () => {
     const w = quiet()
-    const g = spawnEnemy(w, 'goblin', w.player.x + 70)
+    const g = spawnEnemy(w, 'imp', w.player.x + 70)
     g.cooldown = 1e9
     swing(w)
     expect(w.floaters.some((f) => /^\d+$/.test(f.text))).toBe(true)
@@ -198,27 +205,27 @@ describe('feedback you can see', () => {
 
   it('a staggered enemy says so', () => {
     const w = quiet()
-    const orc = spawnEnemy(w, 'orc', w.player.x + 80)
-    orc.cooldown = 1e9
+    const demon = spawnEnemy(w, 'demon', w.player.x + 80)
+    demon.cooldown = 1e9
     stepWorld(w, { ...NO_INPUT, heavyPressed: true }, DT, first)
     run(w, 0.6)
-    expect(w.floaters.some((f) => f.text === 'STAGGER!') || orc.state === 'stagger').toBe(true)
+    expect(w.floaters.some((f) => f.text === 'STAGGER!') || demon.state === 'stagger').toBe(true)
   })
 
   it('a hit on the hero shows what it cost and flashes the hero', () => {
     const w = quiet()
-    const g = spawnEnemy(w, 'goblin', w.player.x + 100)
+    const g = spawnEnemy(w, 'imp', w.player.x + 100)
     g.cooldown = 0
-    until(w, () => w.player.hp < PLAYER.maxHp)
-    expect(w.floaters.some((f) => f.text === `-${PLAYER.maxHp - w.player.hp}`)).toBe(true)
+    until(w, () => w.player.hp < MAX_HP)
+    expect(w.floaters.some((f) => f.text === `-${MAX_HP - w.player.hp}`)).toBe(true)
     expect(w.player.hitTime).toBeGreaterThan(0)
   })
 
   it('blocking and parrying are called out', () => {
     const w = quiet()
-    const orc = spawnEnemy(w, 'orc', w.player.x + 90)
-    orc.cooldown = 0
-    until(w, () => orc.state === 'windup' && orc.stateTime >= ENEMIES.orc.windup - 0.04)
+    const demon = spawnEnemy(w, 'demon', w.player.x + 90)
+    demon.cooldown = 0
+    until(w, () => demon.state === 'windup' && demon.stateTime >= ENEMIES.demon.windup - 0.04)
     run(w, 0.2, { blockHeld: true })
     expect(w.floaters.some((f) => f.text === 'PARRY!')).toBe(true)
   })

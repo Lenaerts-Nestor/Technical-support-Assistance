@@ -1,4 +1,4 @@
-/** Shared bits for the big enemies (orc and ogre): the telegraph, health bars and the dizzy stars. */
+/** Shared bits for the enemies that take more than a hit or two: the telegraph, health bars and the dizzy stars. */
 import { ARENA, ENEMIES } from '../config'
 import type { Enemy } from '../types'
 
@@ -7,8 +7,8 @@ export function drawWarning(ctx: CanvasRenderingContext2D, e: Enemy, lift: numbe
   const y = ARENA.groundY - e.y - ENEMIES[e.kind].labelHeight - lift
   ctx.save()
   ctx.translate(e.x, y)
-  // Amber for a goblin, red for the heavy hitters, and the boss's moves each have a colour of their own.
-  ctx.fillStyle = e.kind === 'goblin' ? '#f5a93a' : e.move === 'roar' ? '#c9a3ff' : e.move === 'charge' ? '#ff4d4d' : '#ff7a5c'
+  // Amber for the light hitters, red for the heavy ones, and the boss's moves each have a colour of their own.
+  ctx.fillStyle = e.kind === 'archer' ? '#f5a93a' : e.move === 'roar' ? '#c9a3ff' : e.move === 'charge' || e.kind === 'lancer' ? '#ff4d4d' : '#ff7a5c'
   ctx.beginPath()
   ctx.moveTo(0, -12)
   ctx.lineTo(12, 10)
@@ -30,7 +30,7 @@ export function drawBars(ctx: CanvasRenderingContext2D, e: Enemy) {
   ctx.save()
   ctx.fillStyle = 'rgba(10,10,14,.72)'
   ctx.fillRect(x - 1.5, y - 1.5, width + 3, 9)
-  ctx.fillStyle = '#d6525c'
+  ctx.fillStyle = e.elite ? '#b9f3ff' : '#d6525c'
   ctx.fillRect(x, y, width * Math.max(0, e.hp / e.maxHp), 6)
   if (stats.poise > 0 && e.poiseHit > 0 && e.state !== 'stagger') {
     ctx.fillStyle = 'rgba(10,10,14,.72)'

@@ -5,39 +5,59 @@ Turn the free sprite packs into the small files the game ships with.
     python3 -I tools/game-assets/prepare.py \
         --rpg1 Tiny_RPG_Character_Asset_Pack_01..._SoldierOrc.zip \
         --rpg2 Tiny_RPG_Character_Asset_Pack_02..._Demon_ABlood_Monster_A.zip \
-        --plants PlantsAnimated.zip --cave CaveAssetsMaaot.zip \
+        --shadow SHADOW_Series_-_The_Free_Assets.rar \
+        --tiles Multi_Platformer_Tileset_Free.zip \
         --out src/features/game/sprites
 
-Characters are copied as they are (the sheets without shadows: the game draws its own). The
-cave rocks and animated plants are painted at high resolution, so they are shrunk to a grid of
-PIXEL art-pixels, given a small palette and hard edges, so they sit next to the 100x100
-character sprites. Needs Pillow and numpy. Run it only on archives you trust.
+The three heroes and the Shadeflit come from the SHADOW Series pack; the other enemies from the
+Tiny RPG packs. Sheets are copied as they are, renamed to the clip names the game uses. Two are
+put together: the Wetlands Warden's three-part roll becomes one `attack03`, and the Shadeflit,
+which has no attack of its own, gets an `attack01` of a held stance followed by its run.
+
+The scenery is the SHADOW tile map, cut into its separate pieces, the Abyssal Gate, and the
+Grassland pack's backdrop layers and props (the game draws those as dark silhouettes).
+A `.rar` is opened with `bsdtar`. Needs Pillow and numpy. Run it only on archives you trust.
 """
-import argparse, collections, json, os, shutil, sys, tempfile, zipfile
+import argparse, collections, json, os, shutil, subprocess, sys, tempfile, zipfile
 import numpy as np
 from PIL import Image
 
-PIXEL = 5  # one art pixel of the environment is this many arena pixels
-
-CHARACTERS = {
-    'soldier': ('rpg1', 'Soldier', 'Soldier'),
-    'orc': ('rpg1', 'Orc', 'Orc'),
-    'demon': ('rpg2', 'Demon_A', 'Demon_A'),
-    'monster': ('rpg2', 'Blood Monster_A', 'Blood Monster_A'),
+# Where each character's sheets are, and which file becomes which clip.
+SHADOW = {
+    'huntress': ('The Blind Huntress/Sprite Sheet', {
+        'idle': '1 - Idle', 'walk': '2 - Run', 'jump': '3 - jump', 'fall': '5 - fall', 'dash': '6 - dash',
+        'airUp': '7 - jump-up-attack', 'airDown': '8 - jump-down-attack', 'attack01': '10 - attack 1',
+        'attack02': '11 - attack 3', 'dashAttack': '12 - dash attack', 'attack03': '13 - spetial dash',
+        'hurt': '14 - hit', 'death': '15 - death',
+    }),
+    'hallokin': ('Hallokin (free)/png (free)', {
+        'idle': 'idle', 'walk': 'run', 'jump': 'jump', 'fall': 'fall', 'hurt': 'hit',
+        'attack01': 'attack-2', 'attack02': 'attack up', 'airForward': 'jump - attack forwared',
+    }),
+    'warden': ('The Shadowed Wetlands Boss v1.1/Sprite Sheet', {
+        'idle': 'idle', 'walk': 'walk', 'attack01': 'Attack 1', 'attack02': 'Attack 2',
+        'hurt': 'new/hit', 'death': 'new/death',
+    }),
+    'flit': ('Shadeflit (Free)', {'idle': 'idle', 'walk': 'run', 'hurt': 'run-turn'}),
 }
-ANIMS = ['Idle', 'Walk', 'Attack01', 'Attack02', 'Attack03', 'Hurt', 'Death']
+TINY = {
+    'soldier': ('rpg1', 'Soldier'),
+    'orc': ('rpg1', 'Orc'),
+    'demon': ('rpg2', 'Demon_A'),
+    'monster': ('rpg2', 'Blood Monster_A'),
+}
+TINY_ANIMS = ['Idle', 'Walk', 'Attack01', 'Attack02', 'Attack03', 'Hurt', 'Death']
 
 
-def components(path, step=4, minsize=15):
-    """Bounding boxes of the separate pieces on a sheet, found on a shrunken copy of its alpha."""
-    a = np.array(Image.open(path).convert('RGBA'))[:, :, 3]
-    small = a[::step, ::step] > 20
-    h, w = small.shape
-    seen = np.zeros((h, w), bool)
+def components(im, minsize=30):
+    """Bounding boxes of the separate pieces on a sheet, largest first."""
+    a = np.array(im)[:, :, 3] > 0
+    h, w = a.shape
+    seen = np.zeros_like(a)
     boxes = []
     for y in range(h):
         for x in range(w):
-            if small[y, x] and not seen[y, x]:
+            if a[y, x] and not seen[y, x]:
                 q = collections.deque([(y, x)])
                 seen[y, x] = True
                 n, y0, y1, x0, x1 = 0, y, y, x, x
@@ -48,120 +68,132 @@ def components(path, step=4, minsize=15):
                     for dy in (-1, 0, 1):
                         for dx in (-1, 0, 1):
                             ny, nx = cy + dy, cx + dx
-                            if 0 <= ny < h and 0 <= nx < w and small[ny, nx] and not seen[ny, nx]:
+                            if 0 <= ny < h and 0 <= nx < w and a[ny, nx] and not seen[ny, nx]:
                                 seen[ny, nx] = True
                                 q.append((ny, nx))
                 if n >= minsize:
-                    boxes.append((x0 * step, y0 * step, (x1 + 1) * step, (y1 + 1) * step))
-    boxes.sort(key=lambda b: (b[1], b[0]))
+                    boxes.append((x0, y0, x1 + 1, y1 + 1))
     return boxes
 
 
-def pixelate(im, logical_w=None, logical_h=None, colors=26, flip=False):
-    """Shrink to a grid of art pixels, with a small palette and hard edges."""
-    if logical_w:
-        w = max(1, round(logical_w / PIXEL))
-        h = max(1, round(im.height * w / im.width))
+def frames_of(im, fw):
+    return [im.crop((i * fw, 0, (i + 1) * fw, im.height)) for i in range(im.width // fw)]
+
+
+def strip(frames):
+    out = Image.new('RGBA', (sum(f.width for f in frames), frames[0].height))
+    x = 0
+    for f in frames:
+        out.paste(f, (x, 0))
+        x += f.width
+    return out
+
+
+def unpack(path, dest):
+    os.makedirs(dest)
+    if os.path.isdir(path):
+        shutil.copytree(path, dest, dirs_exist_ok=True)
+    elif path.lower().endswith('.rar'):
+        subprocess.run(['bsdtar', '-xf', path, '-C', dest], check=True)
     else:
-        h = max(1, round(logical_h / PIXEL))
-        w = max(1, round(im.width * h / im.height))
-    small = im.convert('RGBa').resize((w, h), Image.LANCZOS).convert('RGBA')
-    alpha = small.getchannel('A').point(lambda v: 255 if v > 110 else 0)
-    rgb = small.convert('RGB').quantize(colors=colors, method=Image.MEDIANCUT, dither=Image.NONE).convert('RGB')
-    out = Image.merge('RGBA', (*rgb.split(), alpha))
-    return out.transpose(Image.FLIP_TOP_BOTTOM) if flip else out
+        zipfile.ZipFile(path).extractall(dest)
+
+
+def find_dir(root, suffix):
+    """The folder whose path ends in `suffix` (the first one found, outermost first)."""
+    found = []
+    for dirpath, _dirs, _files in os.walk(root):
+        if dirpath.replace(os.sep, '/').endswith(suffix):
+            found.append(dirpath)
+    if not found:
+        raise SystemExit(f'not found: {suffix}')
+    return min(found, key=len)
+
+
+def find_file(root, name):
+    for dirpath, _dirs, files in os.walk(root):
+        if name in files:
+            return os.path.join(dirpath, name)
+    raise SystemExit(f'not found: {name}')
 
 
 def main():
     ap = argparse.ArgumentParser()
-    for name in ('rpg1', 'rpg2', 'plants', 'cave'):
+    for name in ('rpg1', 'rpg2', 'shadow', 'tiles'):
         ap.add_argument(f'--{name}', required=True)
     ap.add_argument('--out', required=True)
     args = ap.parse_args()
     out = os.path.abspath(args.out)
     tmp = tempfile.mkdtemp(prefix='game-assets-')
     roots = {}
-    for key in ('rpg1', 'rpg2', 'plants', 'cave'):
+    for key in ('rpg1', 'rpg2', 'shadow', 'tiles'):
         roots[key] = os.path.join(tmp, key)
-        zipfile.ZipFile(getattr(args, key)).extractall(roots[key])
-
-    def find(root, *parts):
-        for dirpath, _dirs, files in os.walk(root):
-            if os.path.basename(dirpath) == parts[0] and all(os.path.exists(os.path.join(dirpath, p)) for p in parts[1:]):
-                return dirpath
-        raise SystemExit(f'not found: {parts}')
+        unpack(getattr(args, key), roots[key])
 
     shutil.rmtree(out, ignore_errors=True)
-    # --- characters -----------------------------------------------------------
-    for cid, (pack, folder, prefix) in CHARACTERS.items():
-        # The folder that holds `<prefix>_Idle.png` directly is the shadowless set.
+    chars = os.path.join(out, 'characters')
+
+    # --- SHADOW characters --------------------------------------------------------
+    for cid, (folder, clips) in SHADOW.items():
+        src = find_dir(roots['shadow'], 'SHADOW Series - ' + folder)
+        dst = os.path.join(chars, cid)
+        os.makedirs(dst)
+        for clip, name in clips.items():
+            shutil.copy(os.path.join(src, name + '.png'), os.path.join(dst, clip + '.png'))
+        if cid == 'warden':
+            # The roll: curl up, spin along the ground, burst out in a crescent.
+            parts = [Image.open(os.path.join(src, f'new/{p}-Attack 3.png')).convert('RGBA') for p in ('Pre', 'mid', 'end')]
+            strip([f for p in parts for f in frames_of(p, 247)]).save(os.path.join(dst, 'attack03.png'), optimize=True)
+        if cid == 'flit':
+            idle = frames_of(Image.open(os.path.join(src, 'idle.png')).convert('RGBA'), 277)
+            run = frames_of(Image.open(os.path.join(src, 'run.png')).convert('RGBA'), 277)
+            strip([idle[0], idle[0], *run]).save(os.path.join(dst, 'attack01.png'), optimize=True)
+
+    # --- Tiny RPG characters (the sheets without shadows: the game draws its own) -------
+    for cid, (pack, folder) in TINY.items():
         src = None
         for dirpath, _d, files in os.walk(roots[pack]):
-            if f'{prefix}_Idle.png' in files and 'with shadows' not in dirpath and os.path.basename(os.path.dirname(dirpath)) == folder:
+            if f'{folder}_Idle.png' in files and 'with shadows' not in dirpath and os.path.basename(os.path.dirname(dirpath)) == folder:
                 src = dirpath
         if not src:
             raise SystemExit(f'sheets for {cid} not found')
-        dst = os.path.join(out, 'characters', cid)
+        dst = os.path.join(chars, cid)
         os.makedirs(dst)
-        for anim in ANIMS:
-            f = os.path.join(src, f'{prefix}_{anim}.png')
+        for anim in TINY_ANIMS:
+            f = os.path.join(src, f'{folder}_{anim}.png')
             if os.path.exists(f):
                 shutil.copy(f, os.path.join(dst, anim.lower() + '.png'))
+    shutil.copy(find_file(roots['rpg1'], 'Arrow01(32x32).png'), os.path.join(out, 'arrow.png'))
 
-    # --- environment ------------------------------------------------------------
+    # --- scenery ------------------------------------------------------------------
     env = os.path.join(out, 'environment')
     os.makedirs(env)
-    manifest = {'pixel': PIXEL, 'images': {}, 'strips': {}}
-    cave = find(roots['cave'], 'Assets 1024 Cave')
+    manifest = {}
 
-    def save(name, im, **extra):
+    def save(name, im):
         im.save(os.path.join(env, name + '.png'), optimize=True)
-        manifest['images'][name] = {'w': im.width, 'h': im.height, **extra}
+        manifest[name] = {'w': im.width, 'h': im.height}
 
-    floor = Image.open(os.path.join(cave, 'Cave - Floor.png')).convert('RGBA')
-    fb = components(os.path.join(cave, 'Cave - Floor.png'), step=6, minsize=30)
-    fb.sort(key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))
-    save('hill', pixelate(floor.crop(fb[0]), logical_w=1100))
-    for name, box, width in (('plat_a', fb[2], 340), ('plat_b', fb[6], 300), ('plat_c', fb[4], 260), ('plat_d', fb[5], 280)):
-        save(name, pixelate(floor.crop(box), logical_w=width))
+    tiles = Image.open(find_file(roots['shadow'], 'tile map.png')).convert('RGBA')
+    # The left half of the map; the right half repeats it.
+    pieces = [b for b in components(tiles) if b[0] < tiles.width // 2]
+    pieces.sort(key=lambda b: (b[1], b[0]))
+    for name, box in zip(('block_a', 'block_b', 'block_c', 'slab', 'pillar', 'ledge', 'frame'), pieces):
+        save(name, tiles.crop(box))
+    gate = Image.open(find_file(roots['shadow'], 'SHADOW Series - Abyssal Gate.png')).convert('RGBA')
+    save('gate', gate.crop(gate.getbbox()))
 
-    rocks = Image.open(os.path.join(cave, 'Cave - BigRocks1.png')).convert('RGBA')
-    rb = components(os.path.join(cave, 'Cave - BigRocks1.png'), step=6, minsize=30)
-    rb.sort(key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))
-    for name, box, width in (('rock_a', rb[0], 480), ('rock_b', rb[1], 420), ('rock_c', rb[2], 380), ('rock_d', rb[3], 170), ('rock_e', rb[4], 210)):
-        save(name, pixelate(rocks.crop(box), logical_w=width))
-
-    small = Image.open(os.path.join(cave, 'Cave - SmallRocks.png')).convert('RGBA')
-    sb = components(os.path.join(cave, 'Cave - SmallRocks.png'), step=4, minsize=15)
-    # The pointed rocks are the very tall, narrow pieces; the rounder ones are boulders.
-    tall = [b for b in sb if (b[3] - b[1]) / (b[2] - b[0]) > 1.9 and (b[3] - b[1]) > 300]
-    for i, box in enumerate(tall[:4]):
-        height = (200, 190, 260, 190)[i]
-        # The same spike drawn point-up for the floor and point-down for the ceiling.
-        save(f'spike_up_{i}', pixelate(small.crop(box), logical_h=height))
-        save(f'spike_down_{i}', pixelate(small.crop(box), logical_h=height, flip=True))
-
-    veg = find(roots['plants'], 'Vegetation')
-    for name, folder, height, every in (
-        ('grass2', 'Grass2', 110, 2), ('grass3', 'Grass3', 170, 2), ('grass4', 'Grass4', 150, 2),
-        ('curl', 'Comp 1', 120, 2), ('leaves', 'Group Plant', 150, 3), ('bigleaf', 'Grass5', 190, 2),
+    grass = find_dir(roots['tiles'], 'GrassLand')
+    for name, rel in (
+        ('bg_ridge', 'Background/GrassLand_Background_2.png'), ('bg_hills', 'Background/GrassLand_Background_3.png'),
+        ('bg_meadow', 'Background/GrassLand_Background_4.png'), ('bg_reeds', 'Background/GrassLand_Background_5.png'),
+        ('cloud_1', 'Background/GrassLand_Cloud_1.png'), ('cloud_2', 'Background/GrassLand_Cloud_2.png'), ('cloud_3', 'Background/GrassLand_Cloud_3.png'),
+        ('tree', 'Props/GrassLand_Tree.png'), ('bush', 'Props/GrassLand_Bush.png'), ('stump', 'Props/GrassLand_ChoppedTree.png'),
+        ('stone_1', 'Props/GrassLand_Stone_1.png'), ('stone_3', 'Props/GrassLand_Stone_3.png'),
+        ('tall_grass_1', 'Props/GrassLand_TallGrass_1.png'), ('tall_grass_2', 'Props/GrassLand_TallGrass_2.png'),
     ):
-        d = os.path.join(veg, folder)
-        files = sorted(f for f in os.listdir(d) if f.lower().endswith('.png'))[::every]
-        frames = [Image.open(os.path.join(d, f)).convert('RGBA') for f in files]
-        # One crop for every frame, so the plant does not jump about as it sways.
-        union = None
-        for f in frames:
-            b = f.getbbox()
-            if b:
-                union = b if union is None else (min(union[0], b[0]), min(union[1], b[1]), max(union[2], b[2]), max(union[3], b[3]))
-        done = [pixelate(f.crop(union), logical_h=height, colors=22) for f in frames]
-        fw, fh = done[0].size
-        strip = Image.new('RGBA', (fw * len(done), fh))
-        for i, f in enumerate(done):
-            strip.paste(f, (i * fw, 0))
-        strip.save(os.path.join(env, name + '.png'), optimize=True)
-        manifest['strips'][name] = {'frameW': fw, 'frameH': fh, 'frames': len(done), 'fps': 10}
+        im = Image.open(os.path.join(grass, rel)).convert('RGBA')
+        save(name, im.crop(im.getbbox()))
 
     with open(os.path.join(env, 'manifest.json'), 'w') as f:
         json.dump(manifest, f, indent=1)

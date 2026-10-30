@@ -124,71 +124,81 @@ there); `components/rosterColumns.tsx` lists the table's columns.
 
 ## Game (Last Stand)
 
-A side-view brawler for the break between calls: pick one of four heroes and hold a cave against goblins,
-orcs and ogres pouring in from both sides. **Enter** starts and **Esc** pauses. The game only runs while the
-page is open and has the keyboard, and scores last until the page is reloaded. Your hero is remembered in this
-browser.
+A side-view brawler for the break between calls, in the dark style of the SHADOW Series art: pick one of
+three heroes and hold a level of ledges against demons and shades coming through the gates on both sides.
+**Enter** starts and **Esc** pauses. The game only runs while the page is open and has the keyboard, and scores
+last until the page is reloaded. Your hero is remembered in this browser.
 
 | Key | Does |
 |---|---|
-| **A / D** | walk |
-| **W / Space** | jump (hold for height) |
-| **S / ↓** | drop down through a ledge you stand on |
+| **A / D** | run |
+| **W / Space** | jump (hold for height): a held jump reaches the next tier of ledges |
+| **S / ↓** | drop down through a ledge you stand on; with **J** in the air, the Huntress's dive |
 | **Shift** | dash: you cannot be hit for a moment; costs stamina |
-| **J** | light attack: tap again to chain |
+| **J** | light attack: tap again to chain. In the air or out of a dash, some heroes have blows of their own |
 | **K** | heavy attack: slow, costs stamina, breaks poise. Can follow a light hit |
-| **L** (hold) | shield (**Soldier** only): guards the way you face and costs stamina per hit. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
+| **L** (hold) | guard (**Warden** only): curls up and takes hits from the front for stamina. Raised just before a hit it **parries**: no damage, stamina back, and the attacker is left open |
 
-**Heroes.** Each is one of the characters of the sprite packs and plays with that character's own animations:
+**Heroes.** The three characters of the SHADOW Series pack, each with its own animations:
 
-| Hero | Light (J) | Heavy (K) | Notes |
+| Hero | Light (J) | Heavy (K) | Also |
 |---|---|---|---|
-| Soldier | sword sweep, rising slash, thrust | piercing thrust | the only one with a shield and parry |
-| Orc | axe chop, then overhead slam | slam that sends a shockwave along the ground | most health, slowest |
-| Demon | lunging thrust, then a sweep | rush through enemies you cannot be hit during | fastest, longest reach, cheap dashes |
-| Blood Monster | claw swipe, then a pounce | long leaping pounce | low and wide, so a small target |
+| Blind Huntress | quick cut, then a reaping slash | phantom dash: cuts through, cannot be hit | cut out of a dash; rising cut in the air; hold S for a dive that bounces off enemies |
+| Hallokin | ember slash, twice | flame pillar straight up, reaching the ledge above | double jump; comet strike in the air; small target |
+| Wetlands Warden | wide sweep, uppercut, tail whip behind it | roll through enemies and burst | most health; the only one with a guard and parry |
 
-Goblins leap, orcs chop and ogres slam the ground, which sends a wave of rock along it that you can jump or
-dash. Orcs and ogres shrug off light hits until their **poise** (the bar under their health) breaks; then
-they stagger, with stars over their head, and take extra damage. Every attack shows a warning marker first.
-The enemies are the same four characters at other sizes (goblin or imp, raider or fiend, crawler or brute); an
-enemy that shares its body with the hero you picked is recoloured so the two cannot be mixed up.
+**Enemies.** Few at a time, but varied: the challenge grows with what comes, not how many.
 
-**Places and ledges.** The fight moves every fifth round, in turn: **The Hollow** (cave), **The Thicket**
-(jungle) and **The Overgrowth**, each with its own light, plants and ledges. The ledges are real: jump up onto
-one (open from below), stand on it, drop off with **S**. Goblins and orcs hop up to reach you on one and walk
-off the edge to reach you below; ogres and bosses stay on the ground.
+| Enemy | Look | What it does |
+|---|---|---|
+| Imp | small demon or bloodling | leaps at you; climbs ledges quickly |
+| Demon | demon (or ash demon) | the main crowd: a cut with poise, climbs and drops between tiers |
+| Lancer | Shadeflit (SHADOW Series) | sets its spear from far off and runs the length of the ledge: jump or dash it |
+| Archer | deserter soldier | keeps its distance and shoots arrows that fly level; a cut knocks them out of the air |
+| Brute | orc brute or blood hulk | slams the ground and sends a wave of rock along it; stays on the ground |
 
-**Rounds.** Each round is a budget of enemies that arrive one by one (a goblin costs 1, an orc 3, an ogre 8).
-Orcs join from round 2 and ogres from round 4; from round 5 on every enemy also has more health and hits
-harder. Clear a round and you are patched up (a third of your health, full stamina), get a clear bonus and a
-**flawless** bonus if nothing touched you, then **pick 1 of 3 upgrades** (press 1, 2 or 3, then Enter). Upgrades
-last for the run (shield upgrades are only offered to the Soldier). Kills in quick succession build a
-**streak** that multiplies their points, and a hit on you ends it. The game is endless; the list of this
-session's runs is on the "You fell" screen and is not saved.
+Demons join from round 1, lancers from 2, archers from 3 and brutes from 4. Every round enemies get more
+health and hit a little harder, and from round 6 some come as **elites** (a shadowy outline): more health,
+harder hits, quicker, worth double. Enemies walk in through the gates on the ground and on ledges that meet
+a side, climb tier by tier to reach you, and drop off ledges to reach you below. Heavier ones shrug off light
+hits until their **poise** (the bar under their health) breaks; then they stagger and take extra damage.
+Every attack shows a warning marker and a danger zone first.
+
+**The level.** The view is wider than before and the characters smaller in it. Above the ground are three
+tiers of ledges (open from below: jump up through, stand on, drop off with **S**), and the camera rises with
+you as you climb and comes back down when you do. The place changes every fifth round, in turn: **The Drowned
+Wetlands**, **The Hollow** and **The Abyssal Gate**, each with its own ledges and colours.
+
+**Rounds and objectives.** Rounds cycle: **defeat every enemy** (a budget of them), **gather the soul shards**
+(spread over all three tiers), **light the shrines** (stand by each until it is lit; it cools while you are
+away), shards again, then a boss. In shard and shrine rounds the enemies keep coming until the objective is
+done, then the rest go back to the dark. Clear a round and you are patched up (a third of your health, full
+stamina), get a clear bonus and a **flawless** bonus if nothing touched you, then **pick 1 of 3 upgrades**
+(press 1, 2 or 3, then Enter). Upgrades last for the run (guard upgrades are only offered to the Warden). Kills
+in quick succession build a **streak** that multiplies their points, and a hit on you ends it. The game is
+endless; the list of this session's runs is on the "You fell" screen and is not saved.
 
 **Bosses.** Every fifth round is a boss with its own health bar and a different look in each place: the
 **Demon Lord**, the **Blood Colossus** and the **Orc Warchief**. It slams the ground (and, once enraged below
-half health, sends waves both ways), **charges** across the arena (dash through it or take it on the shield; if
-it hits the wall it is stunned and open) and **roars** to call goblins. Every attack shows a red danger zone
-on the ground before it lands.
-
-**Feedback.** Damage numbers float up from every hit, with PARRY!, BLOCK and STAGGER! called out; enemies
-flash white when hit, glow red as an attack is about to land, and the screen edge flashes red when you are hit.
+half health, sends waves both ways), **charges** across the arena (dash through it or guard; if it hits the
+wall it is stunned and open) and **roars** to call imps. The round is won when it falls.
 
 **Where things are.** The rules are in `src/features/game/sim.ts` and `rounds.ts` (tests next to them), the
 heroes in `heroes.ts` (their moves are timed to the frames of their animations in `spriteData.ts`), the
-places in `biomes.ts`, the enemy looks in `enemyLooks.ts`, the upgrade list in `upgrades.ts`, and every tuning
-number in `config.ts` and `pacing.ts`. Drawing is in `draw/` (`sprites.ts` loads and recolours the sheets,
-`characters.ts` picks the frame to show, `biome.ts` paints the places). The pictures in `src/features/game/sprites/`
-are made from the original packs by `tools/game-assets/prepare.py` (character sheets are copied as they are;
-the scenery is shrunk to a chunky pixel look and baked). To rebuild them, download the packs and run
-`python3 -I tools/game-assets/prepare.py --rpg1 … --rpg2 … --plants … --cave … --out src/features/game/sprites`.
+places and ledges in `biomes.ts`, the round objectives in `objectives.ts`, the enemy looks in `enemyLooks.ts`,
+the upgrade list in `upgrades.ts`, and every tuning number in `config.ts` and `pacing.ts`. Drawing is in `draw/`
+(`sprites.ts` loads and recolours the sheets, `characters.ts` picks the frame to show, `biome.ts` paints the
+places, `scene.ts` the shards, shrines and HUD). The pictures in `src/features/game/sprites/` are made from the
+original packs by `tools/game-assets/prepare.py` (sheets are copied and renamed; the Warden's roll and the
+Shadeflit's lance are put together from its sheets; the SHADOW tile map is cut into pieces). To rebuild them,
+download the packs and run `python3 -I tools/game-assets/prepare.py --rpg1 … --rpg2 … --shadow ….rar --tiles … --out
+src/features/game/sprites` (a `.rar` needs `bsdtar`).
 
-**Art credits.** Characters: *Tiny RPG Character Asset Pack* (Soldier & Orc) and *Tiny RPG Character Asset Pack
-02* (Demon and Blood Monster) by Zerie (zerie.itch.io). Scenery: *Plants Animated* and *Cave Assets* by Maaot
-(itch.io). Check each pack's licence on its itch.io page before shipping the app outside the team: the terms
-were not checked when the pictures were added.
+**Art credits.** Heroes, the Shadeflit, the tile map and the Abyssal Gate: *SHADOW Series – The Free Assets*.
+Other enemies: *Tiny RPG Character Asset Pack* (Soldier & Orc) and *Tiny RPG Character Asset Pack 02* (Demon and
+Blood Monster) by Zerie (zerie.itch.io). Backdrop silhouettes and props: *Multi Platformer Tileset* (Grassland,
+free version) by Shackhal, CC0. Check each pack's licence on its itch.io page before shipping the app outside
+the team: the terms of the SHADOW Series and Tiny RPG packs were not checked when the pictures were added.
 
 ## Updates
 
