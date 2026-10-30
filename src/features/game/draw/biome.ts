@@ -1,58 +1,70 @@
 /**
- * The places the fight happens, built from the cave and plant pictures: a coloured dark
- * backdrop, rocks and spikes far behind, the ground, the ledges, and plants that sway.
- * Everything is laid out from a fixed seed so a place always looks the same.
+ * The places the fight happens, in the dark, muted style of the SHADOW Series: a misty sky, the
+ * Grassland pack's ridges, hills and reeds drawn as layered silhouettes that slide past at
+ * different speeds, the ground and ledges built from the SHADOW tile map, and an Abyssal Gate on
+ * each side where enemies come through. Everything is laid out from a fixed seed so a place
+ * always looks the same.
  */
-import { ARENA } from '../config'
+import { ARENA, CAMERA } from '../config'
+import { entrances, ledgeLeft } from '../biomes'
 import type { BiomeId } from '../biomes'
 import type { World } from '../types'
-import { filtered } from './sprites'
-import type { Sprites } from './sprites'
+import { filtered, silhouette } from './sprites'
+import type { EnvName, Sprites } from './sprites'
 
 const { width: W, height: H, groundY } = ARENA
 
-/** How the baked pixels map to the arena: one picture pixel is this many arena pixels. */
-const PIXEL = 5
+/** One pixel of the tile map is this many arena pixels. */
+const TILE = 2
 
 type Look = {
   sky: [string, string, string]
-  /** The glow the far distance fades into. */
-  fog: string
-  ground: [string, string, string]
-  edge: string
-  /** Colour filter for the brown rocks and the olive plants, to suit the place. */
-  rock: string
-  plant: string
+  /** The silhouettes, far to near. */
+  layers: [string, string, string, string]
+  mist: string
+  ground: string
+  /** A colour filter for the tile pieces, to suit the place. */
+  tiles: string
+  grass: string
   mote: string
+  /** The glow inside the gates, and a filter for their mossy stone. */
+  portal: string
+  gate: string
 }
 
 const LOOKS: Record<BiomeId, Look> = {
-  cave: {
-    sky: ['#0c0b12', '#191622', '#2a2230'],
-    fog: '#3a2c3a',
-    ground: ['#2d2730', '#231f27', '#17141a'],
-    edge: '#4b4050',
-    rock: 'none',
-    plant: 'saturate(0.9)',
-    mote: '#c9a3ff',
+  wetlands: {
+    sky: ['#262b25', '#363d34', '#4a5446'],
+    layers: ['#3a4238', '#2e352c', '#232921', '#191d17'],
+    mist: '#6b7766',
+    ground: '#151413',
+    tiles: 'saturate(0.5) brightness(0.92)',
+    grass: '#1f2b1d',
+    mote: '#d6efb8',
+    portal: '#9ff0c8',
+    gate: 'none',
   },
-  jungle: {
-    sky: ['#0a1612', '#16302a', '#2f5a3e'],
-    fog: '#3f7a4c',
-    ground: ['#2b3a24', '#212d1c', '#141b12'],
-    edge: '#5d8a3c',
-    rock: 'hue-rotate(75deg) saturate(1.2)',
-    plant: 'hue-rotate(40deg) saturate(2) brightness(1.15)',
-    mote: '#f3f08a',
+  hollow: {
+    sky: ['#161b24', '#252c38', '#38414f'],
+    layers: ['#2c3340', '#232934', '#1b2029', '#13161d'],
+    mist: '#5d6a80',
+    ground: '#121317',
+    tiles: 'hue-rotate(170deg) saturate(0.5) brightness(1.05)',
+    grass: '#1d2632',
+    mote: '#bcd6ff',
+    portal: '#a9c8ff',
+    gate: 'saturate(0.35) brightness(0.85)',
   },
-  overgrown: {
-    sky: ['#0d0a16', '#1a1a33', '#25455a'],
-    fog: '#2f7a7a',
-    ground: ['#262a3a', '#1d2030', '#12141f'],
-    edge: '#4fb39a',
-    rock: 'hue-rotate(150deg) saturate(0.9)',
-    plant: 'hue-rotate(115deg) saturate(2.2) brightness(1.2)',
-    mote: '#8af3e0',
+  abyss: {
+    sky: ['#120b18', '#20152c', '#33243f'],
+    layers: ['#2b1f38', '#22182d', '#1a1223', '#120c19'],
+    mist: '#6a4f86',
+    ground: '#110c14',
+    tiles: 'hue-rotate(250deg) saturate(1.3)',
+    grass: '#2a1c38',
+    mote: '#9ff0ff',
+    portal: '#c49bff',
+    gate: 'hue-rotate(140deg) saturate(0.8) brightness(0.9)',
   },
 }
 
@@ -65,212 +77,186 @@ function seeded(seed: number) {
   }
 }
 
-type Prop = { name: string; x: number; y: number; scale: number; flip: boolean }
-type Plant = { name: string; x: number; scale: number; offset: number }
-type Layout = { far: Prop[]; mid: Prop[]; ceiling: Prop[]; back: Plant[]; front: Plant[]; motes: { x: number; y: number; phase: number; speed: number }[] }
+type Tuft = { name: EnvName; x: number; scale: number; flip: boolean }
+type Layout = { trees: { x: number; scale: number }[]; clouds: { name: EnvName; x: number; y: number; speed: number }[]; tufts: Tuft[]; motes: { x: number; y: number; phase: number; speed: number }[] }
 
 const layouts = new Map<BiomeId, Layout>()
 
 function layoutFor(id: BiomeId): Layout {
   let layout = layouts.get(id)
   if (layout) return layout
-  const rng = seeded(id.length * 7919 + id.charCodeAt(0))
-  const pick = <T,>(list: T[]) => list[Math.floor(rng() * list.length)]
-  const far: Prop[] = []
-  for (let x = -40; x < W + 40; x += 150 + rng() * 120) far.push({ name: pick(['rock_a', 'rock_b', 'rock_c', 'rock_d', 'rock_e']), x, y: groundY + 6, scale: 2 + Math.floor(rng() * 2), flip: rng() < 0.5 })
-  const mid: Prop[] = []
-  for (let x = 30; x < W; x += 210 + rng() * 160) mid.push({ name: pick(['rock_b', 'rock_c', 'rock_e']), x, y: groundY + 12, scale: 3 + Math.floor(rng() * 2), flip: rng() < 0.5 })
-  const ceiling: Prop[] = []
-  for (let x = -10; x < W + 20; x += 60 + rng() * 90) ceiling.push({ name: `spike_down_${Math.floor(rng() * 4)}`, x, y: -10 - rng() * 30, scale: 2 + Math.floor(rng() * 3), flip: false })
-  const names = ['grass2', 'grass3', 'grass4', 'curl', 'leaves', 'bigleaf']
-  const back: Plant[] = []
-  for (let x = 20; x < W; x += 70 + rng() * 110) back.push({ name: pick(names), x, scale: 2 + Math.floor(rng() * 2), offset: Math.floor(rng() * 20) })
-  const front: Plant[] = [
-    { name: pick(names), x: 18, scale: 3, offset: 3 },
-    { name: pick(names), x: 64, scale: 2, offset: 9 },
-    { name: pick(names), x: W - 20, scale: 3, offset: 6 },
-    { name: pick(names), x: W - 70, scale: 2, offset: 12 },
-  ]
-  const motes = Array.from({ length: 18 }, () => ({ x: rng() * W, y: rng() * groundY, phase: rng() * 10, speed: 4 + rng() * 8 }))
-  layout = { far, mid, ceiling, back, front, motes }
+  const rng = seeded(id.length * 7919 + id.charCodeAt(0) * 31)
+  const pick = <T,>(list: readonly T[]) => list[Math.floor(rng() * list.length)]
+  const trees = Array.from({ length: 6 }, (_, i) => ({ x: (i + rng() * 0.7) * (W / 5) - 80, scale: 2 + rng() * 1.2 }))
+  const clouds = Array.from({ length: 7 }, () => ({ name: pick(['cloud_1', 'cloud_2', 'cloud_3'] as const), x: rng() * W, y: 40 + rng() * 180, speed: 4 + rng() * 8 }))
+  const tufts: Tuft[] = []
+  for (let x = 10; x < W; x += 30 + rng() * 70) tufts.push({ name: pick(['tall_grass_1', 'tall_grass_2', 'bush', 'tall_grass_1', 'stone_3'] as const), x, scale: 3, flip: rng() < 0.5 })
+  const motes = Array.from({ length: 26 }, () => ({ x: rng() * W, y: rng() * (groundY + CAMERA.maxRise), phase: rng() * 10, speed: 4 + rng() * 10 }))
+  layout = { trees, clouds, tufts, motes }
   layouts.set(id, layout)
   return layout
 }
 
-/** The ground band, painted once per place into its own canvas (blocky, with a lit edge). */
-const groundCache = new Map<BiomeId, HTMLCanvasElement>()
-
-function groundFor(id: BiomeId): HTMLCanvasElement {
-  let canvas = groundCache.get(id)
-  if (canvas) return canvas
-  const look = LOOKS[id]
-  canvas = document.createElement('canvas')
-  canvas.width = W
-  canvas.height = H - groundY
-  const c = canvas.getContext('2d')
-  if (c) {
-    const rng = seeded(id.charCodeAt(1) * 31)
-    const cell = PIXEL
-    for (let y = 0; y < canvas.height; y += cell) {
-      for (let x = 0; x < W; x += cell) {
-        const depth = y / canvas.height
-        c.fillStyle = look.ground[depth < 0.25 ? 0 : depth < 0.6 ? 1 : 2]
-        c.fillRect(x, y, cell, cell)
-        if (rng() < 0.12) {
-          c.fillStyle = 'rgba(255,255,255,.05)'
-          c.fillRect(x, y, cell, cell)
-        } else if (rng() < 0.1) {
-          c.fillStyle = 'rgba(0,0,0,.18)'
-          c.fillRect(x, y, cell, cell)
-        }
-      }
-    }
-    // The lit top edge, ragged by a cell here and there.
-    for (let x = 0; x < W; x += cell) {
-      c.fillStyle = look.edge
-      c.fillRect(x, 0, cell, cell)
-      if (rng() < 0.35) c.fillRect(x, cell, cell, cell)
-      c.fillStyle = 'rgba(0,0,0,.25)'
-      c.fillRect(x, cell * 2, cell, cell)
-    }
-  }
-  groundCache.set(id, canvas)
-  return canvas
+/** A picture repeated across the view, standing on `bottom`, with the area below filled in its colour. */
+function band(ctx: CanvasRenderingContext2D, img: CanvasImageSource & { width: number; height: number }, scale: number, bottom: number, offset: number, fill: string) {
+  const w = img.width * scale
+  const h = img.height * scale
+  const start = -(((offset % w) + w) % w)
+  for (let x = start; x < W; x += w) ctx.drawImage(img, Math.round(x), Math.round(bottom - h), Math.ceil(w) + 1, Math.ceil(h))
+  ctx.fillStyle = fill
+  ctx.fillRect(0, Math.round(bottom) - 1, W, H - bottom + 2)
 }
 
-function prop(ctx: CanvasRenderingContext2D, sprites: Sprites, filter: string, p: Prop, shiftX: number, baseline: 'ground' | 'top') {
-  const img = sprites.env[p.name]
-  if (!img) return
-  const source = filter === 'none' ? img : filtered(img, filter)
-  const w = img.width * p.scale
-  const h = img.height * p.scale
-  const x = p.x + shiftX
-  ctx.save()
-  ctx.translate(x, baseline === 'ground' ? p.y - h : p.y)
-  if (p.flip) {
-    ctx.translate(w / 2, 0)
-    ctx.scale(-1, 1)
-    ctx.translate(-w / 2, 0)
-  }
-  ctx.drawImage(source, 0, 0, w, h)
-  ctx.restore()
-}
-
-/** The backdrop: sky, far and near rocks and spikes, the ground, and the ledges. Everything that sits behind the fighters. */
+/**
+ * The sky and the silhouettes behind the arena, in screen space: they rise more slowly than the
+ * world when the camera climbs, and slide a little against the hero's movement, for depth.
+ */
 export function drawBackdrop(ctx: CanvasRenderingContext2D, w: World, sprites: Sprites) {
-  const id = w.biome
-  const look = LOOKS[id]
-  const layout = layoutFor(id)
-  const shift = (w.player.x - W / 2) / W
+  const look = LOOKS[w.biome]
+  const layout = layoutFor(w.biome)
+  const shift = w.player.x - W / 2
+  const cam = w.camY
 
-  const sky = ctx.createLinearGradient(0, 0, 0, groundY)
+  const sky = ctx.createLinearGradient(0, 0, 0, H)
   sky.addColorStop(0, look.sky[0])
-  sky.addColorStop(0.6, look.sky[1])
+  sky.addColorStop(0.55, look.sky[1])
   sky.addColorStop(1, look.sky[2])
   ctx.fillStyle = sky
   ctx.fillRect(0, 0, W, H)
 
-  // Far rocks sit in the fog, near ones are darker and slide faster against the player for depth.
-  ctx.globalAlpha = 0.55
-  for (const p of layout.far) prop(ctx, sprites, look.rock, p, -shift * 14, 'ground')
-  ctx.globalAlpha = 1
-  const fog = ctx.createLinearGradient(0, groundY - 220, 0, groundY)
-  fog.addColorStop(0, 'rgba(0,0,0,0)')
-  fog.addColorStop(1, look.fog)
-  ctx.globalAlpha = 0.5
-  ctx.fillStyle = fog
-  ctx.fillRect(0, groundY - 220, W, 220)
-  ctx.globalAlpha = 1
-  ctx.globalAlpha = 0.85
-  for (const p of layout.mid) prop(ctx, sprites, look.rock, p, -shift * 30, 'ground')
+  // Mist drifting high up.
+  ctx.globalAlpha = 0.18
+  for (const c of layout.clouds) {
+    const img = sprites.env[c.name]
+    const x = ((c.x + w.time * c.speed - shift * 0.03) % (W + 300)) - 150
+    ctx.drawImage(silhouette(img, look.mist), x, c.y + cam * 0.1, img.width * 4, img.height * 4)
+  }
   ctx.globalAlpha = 1
 
-  // Spikes hanging from the ceiling.
-  for (const p of layout.ceiling) prop(ctx, sprites, look.rock, p, -shift * 44, 'top')
-  if (id !== 'cave') drawVines(ctx, id, w.time, shift)
+  const env = sprites.env
+  band(ctx, silhouette(env.bg_ridge, look.layers[0]), 3, groundY - 70 + cam * 0.3, shift * 0.05, look.layers[0])
+  band(ctx, silhouette(env.bg_hills, look.layers[1]), 3, groundY - 30 + cam * 0.45, shift * 0.1 + 200, look.layers[1])
+  // Dead trees on the far bank.
+  for (const t of layout.trees) {
+    const img = silhouette(env.tree, look.layers[2])
+    const tw = img.width * t.scale
+    const th = img.height * t.scale
+    ctx.drawImage(img, Math.round(t.x - shift * 0.15), Math.round(groundY - 10 + cam * 0.6 - th), tw, th)
+  }
+  band(ctx, silhouette(env.bg_meadow, look.layers[2]), 3, groundY + 10 + cam * 0.6, shift * 0.15 + 90, look.layers[2])
+  band(ctx, silhouette(env.bg_reeds, look.layers[3]), 2.5, groundY + 34 + cam * 0.8, shift * 0.22 + 40, look.layers[3])
 
-  // The ground, and a few rocks to stand against.
-  ctx.drawImage(groundFor(id), 0, groundY)
+  // A veil of mist low down, so the far layers fade into it.
+  const veil = ctx.createLinearGradient(0, groundY - 220 + cam * 0.5, 0, groundY + cam * 0.6)
+  veil.addColorStop(0, 'rgba(0,0,0,0)')
+  veil.addColorStop(1, look.mist)
+  ctx.globalAlpha = 0.22
+  ctx.fillStyle = veil
+  ctx.fillRect(0, 0, W, H)
+  ctx.globalAlpha = 1
+}
 
-  // Ledges: the platform picture with a shadow under it.
-  for (const ledge of w.platforms) {
-    const img = sprites.env[ledge.sprite]
-    if (!img) continue
-    const width = img.width * PIXEL
-    const height = img.height * PIXEL
-    const left = ledge.cx - width / 2
-    const top = groundY - ledge.y - 3
-    ctx.fillStyle = 'rgba(0,0,0,.25)'
-    ctx.fillRect(left + 24, top + height - 2, width - 48, 10)
-    ctx.drawImage(look.rock === 'none' ? img : filtered(img, look.rock), left, top, width, height)
-    // A lit rim along the top, so the surface you can stand on reads at a glance.
-    ctx.globalAlpha = 0.6
-    ctx.fillStyle = look.edge
-    ctx.fillRect(left + PIXEL * 4, top + PIXEL * 0.6, width - PIXEL * 8, 3)
-    ctx.globalAlpha = 1
-    // Roots and moss hang off a ledge in the green places.
-    if (id !== 'cave') {
-      ctx.fillStyle = look.edge
-      for (let i = 0; i < 6; i++) {
-        const x = left + 30 + i * ((width - 60) / 5)
-        ctx.fillRect(Math.round(x / PIXEL) * PIXEL, top + height - 3, PIXEL, PIXEL * (1 + ((i * 7) % 3)))
-      }
-    }
+/** A tile piece in the colours of the place. */
+const tile = (sprites: Sprites, name: EnvName, look: Look) => (look.tiles === 'none' ? sprites.env[name] : filtered(sprites.env[name], look.tiles))
+
+/** An Abyssal Gate at a side of the arena, standing on `floor`, glowing while the round is on. */
+function drawGate(ctx: CanvasRenderingContext2D, w: World, sprites: Sprites, side: -1 | 1, floor: number, scale: number) {
+  const look = LOOKS[w.biome]
+  const img = sprites.env.gate
+  const gw = img.width * scale
+  const gh = img.height * scale
+  const cx = side < 0 ? 18 : W - 18
+  const bottom = groundY - floor + 8
+  // The dark mouth of the arch, lit from within.
+  const glow = ctx.createRadialGradient(cx, bottom - gh * 0.25, 2, cx, bottom - gh * 0.25, gh * 0.55)
+  const pulse = 0.35 + 0.15 * Math.sin(w.time * 2.4 + side)
+  glow.addColorStop(0, look.portal)
+  glow.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.save()
+  ctx.translate(cx, 0)
+  ctx.scale(side < 0 ? 1 : -1, 1)
+  ctx.drawImage(look.gate === 'none' ? img : filtered(img, look.gate), -gw / 2, bottom - gh, gw, gh)
+  ctx.restore()
+  ctx.save()
+  ctx.globalAlpha = pulse
+  ctx.globalCompositeOperation = 'lighter'
+  ctx.fillStyle = glow
+  ctx.fillRect(cx - gh, bottom - gh, gh * 2, gh)
+  ctx.restore()
+}
+
+/** Grass and stones on a surface: silhouettes in the place's colour. */
+function drawTufts(ctx: CanvasRenderingContext2D, sprites: Sprites, look: Look, tufts: readonly Tuft[], from: number, to: number, surface: number) {
+  for (const t of tufts) {
+    if (t.x < from || t.x > to) continue
+    const img = silhouette(sprites.env[t.name], look.grass)
+    const w = img.width * t.scale
+    const h = img.height * t.scale
+    ctx.save()
+    ctx.translate(t.x, surface + 3)
+    if (t.flip) ctx.scale(-1, 1)
+    ctx.drawImage(img, -w / 2, -h, w, h)
+    ctx.restore()
   }
 }
 
-/** Pixel vines hanging from the top of the screen and swaying a little. */
-function drawVines(ctx: CanvasRenderingContext2D, id: BiomeId, time: number, shift: number) {
-  const look = LOOKS[id]
-  const rng = seeded(id.length * 101)
-  ctx.fillStyle = look.edge
-  for (let i = 0; i < 9; i++) {
-    const x0 = rng() * W
-    const length = 70 + rng() * 150
-    const phase = rng() * 6
-    ctx.globalAlpha = 0.75
-    for (let y = 0; y < length; y += PIXEL) {
-      const sway = Math.sin(time * 1.2 + phase + y * 0.03) * (y / length) * 10
-      ctx.fillRect(Math.round((x0 - shift * 40 + sway) / PIXEL) * PIXEL, y, PIXEL, PIXEL)
-    }
-  }
-  ctx.globalAlpha = 1
-}
-
-/** One frame of an animated plant strip, standing on the ground (or `base`). */
-function drawPlant(ctx: CanvasRenderingContext2D, sprites: Sprites, id: BiomeId, p: Plant, time: number, base = groundY + 8) {
-  const img = sprites.env[p.name]
-  const strip = sprites.strips[p.name]
-  if (!img || !strip) return
-  const frame = (Math.floor(time * strip.fps) + p.offset) % strip.frames
-  const w = strip.frameW * p.scale
-  const h = strip.frameH * p.scale
-  const source = filtered(img, LOOKS[id].plant)
-  ctx.drawImage(source, frame * strip.frameW, 0, strip.frameW, strip.frameH, p.x - w / 2, base - h, w, h)
-}
-
-/** Plants growing behind the fighters. */
-export function drawPlantsBehind(ctx: CanvasRenderingContext2D, w: World, sprites: Sprites) {
+/** The arena itself, in world space: the ground, the gates and the ledges. */
+export function drawArena(ctx: CanvasRenderingContext2D, w: World, sprites: Sprites) {
+  const look = LOOKS[w.biome]
   const layout = layoutFor(w.biome)
-  for (const p of layout.back) drawPlant(ctx, sprites, w.biome, p, w.time)
-  // And on the ledges.
+
+  // Gates on the ground and wherever a ledge meets a side.
+  const ways = entrances(w.platforms)
+  for (const y of ways.left) drawGate(ctx, w, sprites, -1, y, y === 0 ? 1.6 : 0.9)
+  for (const y of ways.right) drawGate(ctx, w, sprites, 1, y, y === 0 ? 1.6 : 0.9)
+
+  // The ground: earth below, a ragged edge of tile slabs along the top.
+  ctx.fillStyle = look.ground
+  ctx.fillRect(0, groundY + 10, W, H + CAMERA.maxRise)
+  const slab = tile(sprites, 'slab', look)
+  const sw = slab.width * TILE
+  const sh = slab.height * TILE
+  for (let i = 0, x = -60; x < W + 60; i++, x += sw - 34) {
+    ctx.save()
+    ctx.translate(x + sw / 2, groundY - 6)
+    if (i % 2) ctx.scale(-1, 1)
+    ctx.drawImage(slab, -sw / 2, 0, sw, sh)
+    ctx.restore()
+  }
+  drawTufts(ctx, sprites, look, layout.tufts, 0, W, groundY)
+
+  // Ledges: the long thin tile piece, repeated along the ledge, its drips hanging below.
+  const piece = tile(sprites, 'ledge', look)
+  const pw = piece.width * TILE
+  const ph = piece.height * TILE
   w.platforms.forEach((ledge, i) => {
-    for (let k = 0; k < 3; k++) {
-      const x = ledge.cx - ledge.width / 2 + 40 + ((k * 97 + i * 53) % Math.max(60, ledge.width - 80))
-      drawPlant(ctx, sprites, w.biome, { name: ['grass2', 'grass4', 'leaves'][(i + k) % 3], x, scale: 2, offset: k * 5 + i }, w.time, groundY - ledge.y + 4)
+    const left = ledgeLeft(ledge) - 8
+    const width = ledge.width + 16
+    const n = Math.max(1, Math.ceil((width - 20) / (pw - 30)))
+    const step = n > 1 ? (width - pw) / (n - 1) : 0
+    const top = groundY - ledge.y - 4
+    ctx.fillStyle = 'rgba(0,0,0,.28)'
+    ctx.fillRect(left + 20, top + ph, width - 40, 8)
+    for (let k = 0; k < n; k++) {
+      const x = n > 1 ? left + k * step : left + (width - pw) / 2
+      ctx.save()
+      ctx.translate(x + pw / 2, top)
+      if ((k + i) % 2) ctx.scale(-1, 1)
+      ctx.drawImage(piece, -pw / 2, 0, pw, ph)
+      ctx.restore()
     }
+    drawTufts(ctx, sprites, look, layout.tufts.map((t) => ({ ...t, x: t.x * 0.37 + i * 113 })), ledgeLeft(ledge) + 12, ledgeLeft(ledge) + ledge.width - 12, groundY - ledge.y)
   })
 }
 
-/** Plants and drifting lights in front of the fighters, at the edges, so the arena feels deep. */
-export function drawForeground(ctx: CanvasRenderingContext2D, w: World, sprites: Sprites) {
+/** Drifting lights in front of everything, so the arena feels deep. */
+export function drawForeground(ctx: CanvasRenderingContext2D, w: World) {
   const layout = layoutFor(w.biome)
-  for (const p of layout.front) drawPlant(ctx, sprites, w.biome, p, w.time, H + 6)
   ctx.fillStyle = LOOKS[w.biome].mote
   for (const m of layout.motes) {
     const x = (m.x + w.time * m.speed) % W
-    const y = m.y + Math.sin(w.time * 0.8 + m.phase) * 14
-    ctx.globalAlpha = 0.25 + 0.25 * Math.sin(w.time * 1.5 + m.phase)
+    const y = groundY - m.y + Math.sin(w.time * 0.8 + m.phase) * 14
+    ctx.globalAlpha = 0.2 + 0.2 * Math.sin(w.time * 1.5 + m.phase)
     ctx.fillRect(Math.round(x / 3) * 3, Math.round(y / 3) * 3, 3, 3)
   }
   ctx.globalAlpha = 1

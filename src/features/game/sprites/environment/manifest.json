@@ -1,115 +1,90 @@
 {
- "pixel": 5,
- "images": {
-  "hill": {
-   "w": 220,
-   "h": 40
-  },
-  "plat_a": {
-   "w": 68,
-   "h": 8
-  },
-  "plat_b": {
-   "w": 60,
-   "h": 5
-  },
-  "plat_c": {
-   "w": 52,
-   "h": 15
-  },
-  "plat_d": {
-   "w": 56,
-   "h": 13
-  },
-  "rock_a": {
-   "w": 96,
-   "h": 75
-  },
-  "rock_b": {
-   "w": 84,
-   "h": 47
-  },
-  "rock_c": {
-   "w": 76,
-   "h": 48
-  },
-  "rock_d": {
-   "w": 34,
-   "h": 110
-  },
-  "rock_e": {
-   "w": 42,
-   "h": 66
-  },
-  "spike_up_0": {
-   "w": 16,
-   "h": 40
-  },
-  "spike_down_0": {
-   "w": 16,
-   "h": 40
-  },
-  "spike_up_1": {
-   "w": 18,
-   "h": 38
-  },
-  "spike_down_1": {
-   "w": 18,
-   "h": 38
-  },
-  "spike_up_2": {
-   "w": 17,
-   "h": 52
-  },
-  "spike_down_2": {
-   "w": 17,
-   "h": 52
-  },
-  "spike_up_3": {
-   "w": 19,
-   "h": 38
-  },
-  "spike_down_3": {
-   "w": 19,
-   "h": 38
-  }
+ "block_a": {
+  "w": 79,
+  "h": 48
  },
- "strips": {
-  "grass2": {
-   "frameW": 25,
-   "frameH": 22,
-   "frames": 15,
-   "fps": 10
-  },
-  "grass3": {
-   "frameW": 27,
-   "frameH": 34,
-   "frames": 15,
-   "fps": 10
-  },
-  "grass4": {
-   "frameW": 20,
-   "frameH": 30,
-   "frames": 15,
-   "fps": 10
-  },
-  "curl": {
-   "frameW": 18,
-   "frameH": 24,
-   "frames": 15,
-   "fps": 10
-  },
-  "leaves": {
-   "frameW": 43,
-   "frameH": 30,
-   "frames": 15,
-   "fps": 10
-  },
-  "bigleaf": {
-   "frameW": 32,
-   "frameH": 38,
-   "frames": 20,
-   "fps": 10
-  }
+ "block_b": {
+  "w": 78,
+  "h": 48
+ },
+ "block_c": {
+  "w": 52,
+  "h": 41
+ },
+ "slab": {
+  "w": 127,
+  "h": 50
+ },
+ "pillar": {
+  "w": 54,
+  "h": 73
+ },
+ "ledge": {
+  "w": 112,
+  "h": 19
+ },
+ "frame": {
+  "w": 192,
+  "h": 167
+ },
+ "gate": {
+  "w": 160,
+  "h": 59
+ },
+ "bg_ridge": {
+  "w": 400,
+  "h": 118
+ },
+ "bg_hills": {
+  "w": 416,
+  "h": 91
+ },
+ "bg_meadow": {
+  "w": 448,
+  "h": 80
+ },
+ "bg_reeds": {
+  "w": 368,
+  "h": 59
+ },
+ "cloud_1": {
+  "w": 39,
+  "h": 14
+ },
+ "cloud_2": {
+  "w": 61,
+  "h": 21
+ },
+ "cloud_3": {
+  "w": 86,
+  "h": 27
+ },
+ "tree": {
+  "w": 64,
+  "h": 80
+ },
+ "bush": {
+  "w": 16,
+  "h": 15
+ },
+ "stump": {
+  "w": 22,
+  "h": 10
+ },
+ "stone_1": {
+  "w": 6,
+  "h": 4
+ },
+ "stone_3": {
+  "w": 26,
+  "h": 12
+ },
+ "tall_grass_1": {
+  "w": 16,
+  "h": 9
+ },
+ "tall_grass_2": {
+  "w": 16,
+  "h": 6
  }
 }

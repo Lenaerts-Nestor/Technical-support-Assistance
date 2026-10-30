@@ -20,7 +20,10 @@ function Portrait({ hero, sprites, active }: { hero: HeroId; sprites: Sprites; a
     const paint = () => {
       ctx.clearRect(0, 0, SIZE, SIZE)
       ctx.imageSmoothingEnabled = false
-      drawFrame(ctx, sheet, frame, SIZE / 2, SIZE - 12, 5, 1, info)
+      // Sized to the body, and centred on it (the Warden's long tail included).
+      const scale = Math.min(4, 92 / info.bodyHeight, 116 / (info.bodyRight - info.bodyLeft))
+      const middle = (info.bodyLeft + info.bodyRight) / 2
+      drawFrame(ctx, sheet, frame, SIZE / 2 - (middle - info.centerX) * scale, SIZE - 14, scale, 1, hero)
       frame = (frame + 1) % frames
     }
     paint()
@@ -36,10 +39,10 @@ type HeroPickerProps = {
   onChange: (hero: HeroId, fromMouse: boolean) => void
 }
 
-/** The four heroes side by side: who they are, what they do. */
+/** The three heroes side by side: who they are, what they do. */
 export function HeroPicker({ hero, sprites, onChange }: HeroPickerProps) {
   return (
-    <div role="radiogroup" aria-label="Choose your hero" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div role="radiogroup" aria-label="Choose your hero" className="grid gap-2 sm:grid-cols-3">
       {HERO_LIST.map((def, index) => {
         const selected = def.id === hero
         return (

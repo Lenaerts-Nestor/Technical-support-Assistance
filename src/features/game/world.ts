@@ -1,12 +1,16 @@
 import { BIOMES } from './biomes'
-import { ARENA, ENEMIES, PLAYER, ROUNDS } from './config'
+import { ARENA, ELITE, ENEMIES, PLAYER, ROUNDS } from './config'
 import type { EnemyKind } from './config'
 import { ENEMY_LOOKS } from './enemyLooks'
 import { DEFAULT_HERO, HEROES } from './heroes'
 import type { HeroId } from './heroes'
+import { createObjective } from './objectives'
 import { BASE_MODS } from './upgrades'
 import type { Enemy, Player, World } from './types'
 import { enemyHealthScale, enemyPower, roundBudget } from './pacing'
+
+/** The order the shards of the first rounds are scattered in does not matter much; a fixed one keeps a new world the same each time. */
+const fixed = () => 0.5
 
 export function createWorld(hero: HeroId = DEFAULT_HERO): World {
   const def = HEROES[hero]
@@ -35,23 +39,28 @@ export function createWorld(hero: HeroId = DEFAULT_HERO): World {
     parryFlash: 0,
     lowStamina: 0,
     dropTime: 0,
+    airJumps: def.airJumps,
     hitTime: 0,
     speed: def.speed,
     halfWidth: def.halfWidth,
     height: def.height,
   }
   const budget = roundBudget(1)
+  const platforms = [...BIOMES.wetlands.platforms]
   return {
     time: 0,
     player,
     enemies: [],
     waves: [],
+    arrows: [],
     particles: [],
     floaters: [],
     impacts: [],
     hero,
-    biome: 'cave',
-    platforms: [...BIOMES.cave.platforms],
+    biome: 'wetlands',
+    platforms,
+    objective: createObjective(1, platforms, fixed),
+    camY: 0,
     bossSpawned: false,
     nextId: 1,
     spawnTimer: ROUNDS.firstDelay,
@@ -81,20 +90,25 @@ export function createWorld(hero: HeroId = DEFAULT_HERO): World {
   }
 }
 
-/** Put an enemy in the world. `variant` picks one of the kind's looks; by default they take turns. */
-export function spawnEnemy(w: World, kind: EnemyKind, x: number, variant?: number): Enemy {
+/**
+ * Put an enemy in the world, standing at height `y` (the ground by default). `variant` picks one
+ * of the kind's looks; by default they take turns. An elite has more of everything.
+ */
+export function spawnEnemy(w: World, kind: EnemyKind, x: number, variant?: number, options: { y?: number; elite?: boolean } = {}): Enemy {
   const stats = ENEMIES[kind]
   const id = w.nextId++
+  const elite = options.elite ?? false
+  const hp = Math.round(stats.hp * enemyHealthScale(w.round) * (elite ? ELITE.hp : 1))
   const enemy: Enemy = {
     id,
     kind,
     x,
-    y: 0,
+    y: options.y ?? 0,
     vx: 0,
     vy: 0,
     facing: x < w.player.x ? 1 : -1,
-    hp: Math.round(stats.hp * enemyHealthScale(w.round)),
-    maxHp: Math.round(stats.hp * enemyHealthScale(w.round)),
+    hp,
+    maxHp: hp,
     state: 'walk',
     stateTime: 0,
     cooldown: 0.5,
@@ -102,13 +116,15 @@ export function spawnEnemy(w: World, kind: EnemyKind, x: number, variant?: numbe
     poiseHit: 0,
     poiseTimer: 0,
     flash: 0,
-    power: enemyPower(w.round),
+    power: enemyPower(w.round) * (elite ? ELITE.power : 1),
     hitTime: 0,
     move: null,
     pattern: 0,
     grounded: true,
     jumpCooldown: 0,
     variant: (variant ?? id) % ENEMY_LOOKS[kind].length,
+    dropTime: 0,
+    elite,
   }
   w.enemies.push(enemy)
   return enemy

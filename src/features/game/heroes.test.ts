@@ -1,31 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import { ENEMIES } from './config'
 import { ENEMY_LOOKS, bossVariantFor, lookOf } from './enemyLooks'
-import { DEFAULT_HERO, HERO_LIST, isHeroId } from './heroes'
-import { FRAME, SPRITES, SPRITE_IDS, attackFrame, phaseFrame } from './spriteData'
-import type { ClipId } from './spriteData'
+import { DEFAULT_HERO, HERO_LIST, isHeroId, stepsOf } from './heroes'
+import { SPRITES, SPRITE_IDS, attackFrame, phaseFrame } from './spriteData'
 
 const sheets = import.meta.glob('./sprites/characters/*/*.png', { query: '?inline', import: 'default', eager: true }) as Record<string, string>
 
-/** The width of a sheet, read from the PNG header, so the tests need no image library. */
-function pngWidth(path: string) {
+/** The size of a sheet, read from the PNG header, so the tests need no image library. */
+function pngSize(path: string) {
   const bytes = atob(sheets[path].split(',')[1].slice(0, 32))
-  return ((bytes.charCodeAt(16) << 24) | (bytes.charCodeAt(17) << 16) | (bytes.charCodeAt(18) << 8) | bytes.charCodeAt(19)) >>> 0
+  const read = (at: number) => ((bytes.charCodeAt(at) << 24) | (bytes.charCodeAt(at + 1) << 16) | (bytes.charCodeAt(at + 2) << 8) | bytes.charCodeAt(at + 3)) >>> 0
+  return { width: read(16), height: read(20) }
 }
 
 describe('sprite data', () => {
   it('matches the frames in the sheets that ship with the game', () => {
     for (const id of SPRITE_IDS) {
-      for (const [clip, frames] of Object.entries(SPRITES[id].frames)) {
-        expect(pngWidth(`./sprites/characters/${id}/${clip}.png`), `${id} ${clip}`).toBe((frames ?? 0) * FRAME)
+      const info = SPRITES[id]
+      for (const [clip, frames] of Object.entries(info.frames)) {
+        const size = pngSize(`./sprites/characters/${id}/${clip}.png`)
+        expect(size.width, `${id} ${clip}`).toBe((frames ?? 0) * info.frameW)
+        expect(size.height, `${id} ${clip}`).toBe(info.frameH)
       }
     }
   })
 
-  it('keeps every attack phase inside the frames of its clip, in order', () => {
+  it('keeps every attack inside the frames of its clip, in order', () => {
     for (const id of SPRITE_IDS) {
-      for (const [clip, phases] of Object.entries(SPRITES[id].phases)) {
-        const frames = SPRITES[id].frames[clip as ClipId] ?? 0
+      for (const [name, phases] of Object.entries(SPRITES[id].moves)) {
+        const frames = SPRITES[id].frames[phases.clip] ?? 0
+        expect(frames, `${id} ${name}`).toBeGreaterThan(0)
         for (const range of [phases.windup, phases.strike, phases.recover]) {
           expect(range[0]).toBeGreaterThanOrEqual(0)
           expect(range[1]).toBeLessThan(frames)
@@ -38,7 +42,7 @@ describe('sprite data', () => {
   })
 
   it('plays wind-up, strike and recovery frames at the moments the rules give', () => {
-    const phases = SPRITES.soldier.phases.attack01!
+    const phases = SPRITES.soldier.moves.chop
     const frames = [0, 0.05, 0.1, 0.15, 0.25, 0.4].map((t) => attackFrame(phases, t, 0.1, 0.2, 0.32))
     expect(frames[0]).toBe(phases.windup[0])
     expect(frames[1]).toBeLessThanOrEqual(phases.windup[1])
@@ -52,29 +56,32 @@ describe('sprite data', () => {
 })
 
 describe('heroes', () => {
-  it('has four, each with its own sprite, and a safe default', () => {
-    expect(HERO_LIST.map((h) => h.id)).toEqual(['soldier', 'orc', 'demon', 'monster'])
+  it('are the three SHADOW Series characters, with a safe default', () => {
+    expect(HERO_LIST.map((h) => h.id)).toEqual(['huntress', 'hallokin', 'warden'])
     expect(isHeroId(DEFAULT_HERO)).toBe(true)
-    expect(isHeroId('knight')).toBe(false)
+    expect(isHeroId('soldier')).toBe(false)
+    expect(isHeroId('monster')).toBe(false)
   })
 
-  it('has well-formed moves that use animations the sprite has', () => {
+  it('have well-formed moves that use animations the sprite has', () => {
     for (const hero of HERO_LIST) {
-      for (const kind of ['light', 'heavy'] as const) {
-        expect(hero.combos[kind].length).toBeGreaterThan(0)
-        for (const step of hero.combos[kind]) {
+      for (const kind of ['light', 'heavy', 'airUp', 'airDown', 'airForward', 'dashAttack'] as const) {
+        for (const step of stepsOf(hero, kind)) {
           expect(step.hitStart).toBeGreaterThan(0)
           expect(step.hitEnd).toBeGreaterThan(step.hitStart)
           expect(step.cancelAt).toBeGreaterThanOrEqual(step.hitEnd)
           expect(step.duration).toBeGreaterThanOrEqual(step.cancelAt)
-          expect(SPRITES[hero.id].phases[step.clip], `${hero.id} ${step.clip}`).toBeDefined()
+          expect(SPRITES[hero.id].moves[step.move], `${hero.id} ${step.move}`).toBeDefined()
         }
       }
+      expect(hero.combos.light.length).toBeGreaterThan(0)
+      expect(hero.combos.heavy.length).toBeGreaterThan(0)
     }
   })
 
-  it('lets only the soldier raise a shield', () => {
-    expect(HERO_LIST.filter((h) => h.canBlock).map((h) => h.id)).toEqual(['soldier'])
+  it('lets only the Warden guard, and only the Hallokin jump twice', () => {
+    expect(HERO_LIST.filter((h) => h.canBlock).map((h) => h.id)).toEqual(['warden'])
+    expect(HERO_LIST.filter((h) => h.airJumps > 0).map((h) => h.id)).toEqual(['hallokin'])
   })
 
   it('makes heavy attacks hit harder than the first light one and cost stamina', () => {
@@ -83,14 +90,32 @@ describe('heroes', () => {
       expect(hero.combos.heavy[0].stamina).toBeGreaterThan(0)
     }
   })
+
+  it('draws the heroes smaller than before, but still clearly visible', () => {
+    for (const hero of HERO_LIST) {
+      const drawn = SPRITES[hero.id].bodyHeight * hero.scale
+      expect(drawn, hero.id).toBeGreaterThan(60)
+      expect(drawn, hero.id).toBeLessThan(110)
+    }
+  })
 })
 
 describe('enemy looks', () => {
-  it('gives every kind at least one look on an existing sprite', () => {
+  it('gives every kind at least one look whose attack exists on its sprite', () => {
     for (const kind of Object.keys(ENEMIES) as (keyof typeof ENEMIES)[]) {
       expect(ENEMY_LOOKS[kind].length).toBeGreaterThan(0)
-      for (const look of ENEMY_LOOKS[kind]) expect(SPRITES[look.sprite].phases[look.melee], `${kind} ${look.name}`).toBeDefined()
+      for (const look of ENEMY_LOOKS[kind]) {
+        const moves = SPRITES[look.sprite].moves
+        expect(moves[look.melee], `${kind} ${look.name}`).toBeDefined()
+        if (look.boss) for (const move of [look.boss.slam, look.boss.charge, look.boss.roar]) expect(moves[move], `${look.name} ${move}`).toBeDefined()
+      }
     }
+  })
+
+  it('makes the demons the main crowd and the Shadeflit the lancer', () => {
+    expect(ENEMY_LOOKS.imp[0].sprite).toBe('demon')
+    expect(ENEMY_LOOKS.demon.every((look) => look.sprite === 'demon')).toBe(true)
+    expect(ENEMY_LOOKS.lancer[0].sprite).toBe('flit')
   })
 
   it('gives the boss a different look in each place', () => {

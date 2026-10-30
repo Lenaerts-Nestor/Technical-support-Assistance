@@ -2,6 +2,7 @@ import type { ComboKind, EnemyKind } from './config'
 import type { Mods, Picks, UpgradeId } from './upgrades'
 import type { BiomeId, Platform } from './biomes'
 import type { HeroId } from './heroes'
+import type { Objective } from './objectives'
 
 export type Facing = 1 | -1
 
@@ -41,6 +42,8 @@ export type Player = {
   lowStamina: number
   /** While this runs the hero falls through ledges instead of landing on them. */
   dropTime: number
+  /** Jumps left before landing (a hero with a double jump has one). */
+  airJumps: number
   /** Seconds left of the flash and recoil after being hit. */
   hitTime: number
   /** The hero's body, copied from its definition so the rules need not look it up. */
@@ -85,8 +88,22 @@ export type Enemy = {
   grounded: boolean
   /** An enemy that can hop up to a ledge waits this long between hops. */
   jumpCooldown: number
-  /** Which of the kind's looks it wears (a goblin may be a green goblin or a small demon). */
+  /** Which of the kind's looks it wears. */
   variant: number
+  /** While this runs it falls through ledges, on its way down to a player below. */
+  dropTime: number
+  /** Wreathed in shadow: tougher, quicker and worth more (see `ELITE`). */
+  elite: boolean
+}
+
+/** An arrow in flight. It flies level, at the height it was loosed from. */
+export type Arrow = {
+  x: number
+  y: number
+  vx: number
+  damage: number
+  blockCost: number
+  life: number
 }
 
 /** A wave of rock racing along the ground: the ogre's, or the mace's when `friendly`. */
@@ -162,6 +179,7 @@ export type World = {
   player: Player
   enemies: Enemy[]
   waves: Shockwave[]
+  arrows: Arrow[]
   particles: Particle[]
   floaters: Floater[]
   impacts: Impact[]
@@ -169,6 +187,10 @@ export type World = {
   hero: HeroId
   biome: BiomeId
   platforms: Platform[]
+  /** What this round asks of the player. */
+  objective: Objective
+  /** How far the camera has risen to follow the hero up the ledges. */
+  camY: number
   /** Whether this round's boss has come yet. */
   bossSpawned: boolean
   nextId: number

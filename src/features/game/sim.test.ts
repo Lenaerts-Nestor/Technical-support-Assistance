@@ -4,16 +4,19 @@ import { createWorld, spawnEnemy, stepWorld } from './sim'
 import { NO_INPUT } from './types'
 import { HEROES } from './heroes'
 
-const COMBOS = HEROES.soldier.combos
+const COMBOS = HEROES.warden.combos
 import type { Enemy, EnemyState, FrameInput, World } from './types'
 
 const DT = 1 / 120
+/** The Warden plays these tests: it is the hero with a guard. */
+const MAX_HP = HEROES.warden.hp
 const first = () => 0.9
 
 /** A world with no spawner, so a test controls exactly who is in it. */
 function quiet(): World {
-  const w = createWorld()
+  const w = createWorld('warden')
   w.spawnTimer = 1e9
+  w.platforms = []
   return w
 }
 
@@ -31,7 +34,7 @@ const until = (w: World, done: () => boolean, input: Partial<FrameInput> = {}, l
 }
 
 /** An enemy standing `offset` px in front of the player, with its own attacks switched off. */
-const dummy = (w: World, kind: 'goblin' | 'orc' | 'ogre', offset = 70): Enemy => {
+const dummy = (w: World, kind: 'imp' | 'demon' | 'brute', offset = 70): Enemy => {
   const e = spawnEnemy(w, kind, w.player.x + offset)
   e.cooldown = 1e9
   return e
@@ -78,7 +81,7 @@ describe('movement', () => {
     const start = w.player.x
     press(w, { dashPressed: true })
     expect(w.player.state).toBe('dash')
-    expect(w.player.stamina).toBe(PLAYER.maxStamina - DASH.stamina)
+    expect(w.player.stamina).toBeCloseTo(PLAYER.maxStamina - DASH.stamina * HEROES.warden.dashCost, 5)
     run(w, 0.2)
     expect(w.player.x - start).toBeGreaterThan(100)
     const after = w.player.x
@@ -113,67 +116,68 @@ describe('stamina', () => {
 describe('light combo', () => {
   it('hurts and nudges an enemy in front, and only once per swing', () => {
     const w = quiet()
-    const goblin = dummy(w, 'goblin')
-    const startX = goblin.x
+    const imp = dummy(w, 'imp')
     press(w, { lightPressed: true })
-    run(w, 0.3)
-    expect(goblin.hp).toBe(ENEMIES.goblin.hp - COMBOS.light[0].damage)
-    expect(goblin.x).toBeGreaterThan(startX + 5)
+    until(w, () => w.player.stateTime >= COMBOS.light[0].hitStart - DT)
+    const startX = imp.x
+    run(w, 0.2)
+    expect(imp.hp).toBe(ENEMIES.imp.hp - COMBOS.light[0].damage)
+    expect(imp.x).toBeGreaterThan(startX + 5)
   })
 
   it('does not hit an enemy behind the player', () => {
     const w = quiet()
-    const goblin = dummy(w, 'goblin', -70)
+    const imp = dummy(w, 'imp', -70)
     press(w, { lightPressed: true, move: 1 })
     run(w, 0.3, { move: 1 })
-    expect(goblin.hp).toBe(ENEMIES.goblin.hp)
+    expect(imp.hp).toBe(ENEMIES.imp.hp)
   })
 
   it('turns towards a nearby enemy when no direction is held', () => {
     const w = quiet()
-    const goblin = dummy(w, 'goblin', -70)
+    const imp = dummy(w, 'imp', -70)
     press(w, { lightPressed: true })
     expect(w.player.facing).toBe(-1)
     run(w, 0.3)
-    expect(goblin.hp).toBeLessThan(ENEMIES.goblin.hp)
+    expect(imp.hp).toBeLessThan(ENEMIES.imp.hp)
   })
 
   it('chains three presses into the finisher', () => {
     const w = quiet()
-    const goblin = dummy(w, 'goblin')
-    goblin.hp = goblin.maxHp = 500
+    const imp = dummy(w, 'imp')
+    imp.hp = imp.maxHp = 500
     const seen: number[] = []
     press(w, { lightPressed: true })
     for (let t = 0; t < 1.6; t += DT) {
       if (w.player.state === 'attack' && seen[seen.length - 1] !== w.player.attackIndex) seen.push(w.player.attackIndex)
       stepWorld(w, { ...NO_INPUT, lightPressed: Math.round(t / DT) % 20 === 0 }, DT, first)
-      goblin.x = w.player.x + 70
-      goblin.state = 'hurt'
-      goblin.stateTime = 0
+      imp.x = w.player.x + 70
+      imp.state = 'hurt'
+      imp.stateTime = 0
     }
     expect(seen.slice(0, 3)).toEqual([0, 1, 2])
   })
 
-  it('kills a goblin in two light hits and scores it', () => {
+  it('kills an imp with the chain and scores it', () => {
     const w = quiet()
-    const goblin = dummy(w, 'goblin')
-    press(w, { lightPressed: true })
-    run(w, 0.25)
-    goblin.x = w.player.x + 70
-    press(w, { lightPressed: true })
-    run(w, 0.3)
-    expect(goblin.state).toBe('dying')
+    const imp = dummy(w, 'imp')
+    const down = () => (imp.state as EnemyState) === 'dying'
+    for (let t = 0; t < 1.6 && !down(); t += DT) {
+      stepWorld(w, { ...NO_INPUT, lightPressed: Math.round(t / DT) % 20 === 0 }, DT, first)
+      if (!down()) imp.x = w.player.x + 70
+    }
+    expect(imp.state).toBe('dying')
     expect(w.kills).toBe(1)
-    expect(w.score).toBe(ENEMIES.goblin.score)
+    expect(w.score).toBe(ENEMIES.imp.score)
     run(w, 1)
     expect(w.enemies).toHaveLength(0)
   })
 
   it('freezes the world for a moment on a solid hit', () => {
     const w = quiet()
-    dummy(w, 'goblin')
+    dummy(w, 'imp')
     press(w, { lightPressed: true })
-    run(w, 0.1)
+    until(w, () => w.freeze > 0)
     expect(w.freeze).toBeGreaterThan(0)
     expect(w.shake).toBeGreaterThan(0)
   })
@@ -182,11 +186,11 @@ describe('light combo', () => {
 describe('heavy combo', () => {
   it('hits much harder than a light cut and costs stamina', () => {
     const w = quiet()
-    const orc = dummy(w, 'orc', 80)
+    const demon = dummy(w, 'demon', 80)
     press(w, { heavyPressed: true })
     expect(w.player.stamina).toBe(PLAYER.maxStamina - COMBOS.heavy[0].stamina)
     run(w, 0.5)
-    expect(orc.hp).toBe(ENEMIES.orc.hp - COMBOS.heavy[0].damage)
+    expect(demon.hp).toBe(ENEMIES.demon.hp - COMBOS.heavy[0].damage)
     expect(COMBOS.heavy[0].damage).toBeGreaterThan(COMBOS.light[0].damage * 2)
   })
 
@@ -210,64 +214,64 @@ describe('heavy combo', () => {
 })
 
 describe('poise', () => {
-  it('lets a light hit pass without interrupting an orc winding up', () => {
+  it('lets a light hit pass without interrupting an demon winding up', () => {
     const w = quiet()
-    const orc = dummy(w, 'orc', 80)
-    orc.state = 'windup'
+    const demon = dummy(w, 'demon', 80)
+    demon.state = 'windup'
     press(w, { lightPressed: true })
     run(w, 0.25)
-    expect(orc.hp).toBeLessThan(ENEMIES.orc.hp)
-    expect(orc.state).toBe('windup')
+    expect(demon.hp).toBeLessThan(ENEMIES.demon.hp)
+    expect(demon.state).toBe('windup')
   })
 
-  it('staggers an orc with a whole light combo', () => {
+  it('staggers an demon with a whole light combo', () => {
     const w = quiet()
-    const orc = dummy(w, 'orc', 80)
-    orc.hp = orc.maxHp = 500
+    const demon = dummy(w, 'demon', 80)
+    demon.hp = demon.maxHp = 500
     press(w, { lightPressed: true })
-    for (let t = 0; t < 1.6 && !stagger(orc); t += DT) {
+    for (let t = 0; t < 1.6 && !stagger(demon); t += DT) {
       stepWorld(w, { ...NO_INPUT, lightPressed: Math.round(t / DT) % 20 === 0 }, DT, first)
-      orc.x = w.player.x + 80
+      demon.x = w.player.x + 80
     }
-    expect(stagger(orc)).toBe(true)
+    expect(stagger(demon)).toBe(true)
   })
 
-  it('staggers an orc with one heavy chop, and a staggered enemy takes extra damage', () => {
+  it('staggers an demon with one heavy chop, and a staggered enemy takes extra damage', () => {
     const w = quiet()
-    const orc = dummy(w, 'orc', 80)
+    const demon = dummy(w, 'demon', 80)
     press(w, { heavyPressed: true })
-    until(w, () => stagger(orc))
+    until(w, () => stagger(demon))
     until(w, () => w.player.state === 'free')
-    const before = orc.hp
-    orc.x = w.player.x + 80
+    const before = demon.hp
+    demon.x = w.player.x + 80
     press(w, { lightPressed: true })
     run(w, 0.2)
-    expect(before - orc.hp).toBeCloseTo(COMBOS.light[0].damage * 1.3, 5)
+    expect(before - demon.hp).toBeCloseTo(COMBOS.light[0].damage * 1.3, 5)
   })
 
-  it('is not shifted far by a light hit when it is an ogre', () => {
+  it('is not shifted far by a light hit when it is an brute', () => {
     const w = quiet()
-    const ogre = dummy(w, 'ogre', 110)
+    const brute = dummy(w, 'brute', 110)
     press(w, { lightPressed: true })
     run(w, 0.3)
-    expect(ogre.hp).toBeLessThan(ENEMIES.ogre.hp)
-    expect(ogre.state).toBe('walk')
+    expect(brute.hp).toBeLessThan(ENEMIES.brute.hp)
+    expect(brute.state).toBe('walk')
   })
 
-  it('takes two heavy hits to stagger an ogre', () => {
+  it('takes two heavy hits to stagger an brute', () => {
     const w = quiet()
-    const ogre = dummy(w, 'ogre', 110)
+    const brute = dummy(w, 'brute', 110)
     press(w, { heavyPressed: true })
     run(w, COMBOS.heavy[0].duration + 0.05)
-    expect(stagger(ogre)).toBe(false)
+    expect(stagger(brute)).toBe(false)
     press(w, { heavyPressed: true })
     run(w, 0.6)
-    expect(stagger(ogre)).toBe(true)
+    expect(stagger(brute)).toBe(true)
   })
 })
 
 describe('shield', () => {
-  const swingAt = (w: World, kind: 'goblin' | 'orc' | 'ogre', offset: number) => {
+  const swingAt = (w: World, kind: 'imp' | 'demon' | 'brute', offset: number) => {
     const e = spawnEnemy(w, kind, w.player.x + offset)
     e.cooldown = 0
     return e
@@ -275,44 +279,44 @@ describe('shield', () => {
 
   it('blocks a hit from the front for stamina instead of health', () => {
     const w = quiet()
-    const orc = swingAt(w, 'orc', 90)
-    until(w, () => orc.state === 'attack' || w.player.hp < PLAYER.maxHp || w.player.stamina < PLAYER.maxStamina, { blockHeld: true })
+    const demon = swingAt(w, 'demon', 90)
+    until(w, () => demon.state === 'attack' || w.player.hp < MAX_HP || w.player.stamina < PLAYER.maxStamina, { blockHeld: true })
     // Raised long before the hit lands, so this is a block and not a parry.
     run(w, 0.3, { blockHeld: true })
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
     expect(w.player.stamina).toBeLessThan(PLAYER.maxStamina)
   })
 
   it('does not protect the back', () => {
     const w = quiet()
     w.player.facing = -1
-    const orc = swingAt(w, 'orc', 90)
-    until(w, () => w.player.hp < PLAYER.maxHp, { blockHeld: true, move: 0 })
-    expect(w.player.hp).toBe(PLAYER.maxHp - ENEMIES.orc.damage)
-    expect(orc.state).not.toBe('stagger')
+    const demon = swingAt(w, 'demon', 90)
+    until(w, () => w.player.hp < MAX_HP, { blockHeld: true, move: 0 })
+    expect(w.player.hp).toBe(MAX_HP - ENEMIES.demon.damage)
+    expect(demon.state).not.toBe('stagger')
   })
 
   it('parries a hit raised just in time: no damage, stamina refunded, attacker staggered, score', () => {
     const w = quiet()
-    const orc = swingAt(w, 'orc', 90)
-    until(w, () => orc.state === 'windup')
+    const demon = swingAt(w, 'demon', 90)
+    until(w, () => demon.state === 'windup')
     // Raise the shield only when the blow is about to land.
-    until(w, () => orc.stateTime >= ENEMIES.orc.windup - 0.04)
+    until(w, () => demon.stateTime >= ENEMIES.demon.windup - 0.04)
     run(w, 0.3, { blockHeld: true })
     expect(w.parries).toBe(1)
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
     expect(w.player.stamina).toBe(PLAYER.maxStamina)
     expect(w.score).toBe(SHIELD.parryScore)
-    expect(stagger(orc)).toBe(true)
+    expect(stagger(demon)).toBe(true)
   })
 
   it('breaks the guard when stamina runs out, letting half the blow through', () => {
     const w = quiet()
     w.player.stamina = 2
-    const orc = swingAt(w, 'orc', 90)
-    until(w, () => orc.state === 'attack', { blockHeld: true })
+    const demon = swingAt(w, 'demon', 90)
+    until(w, () => demon.state === 'attack', { blockHeld: true })
     run(w, 0.3, { blockHeld: true })
-    expect(w.player.hp).toBe(PLAYER.maxHp - Math.ceil(ENEMIES.orc.damage / 2))
+    expect(w.player.hp).toBe(MAX_HP - Math.ceil(ENEMIES.demon.damage / 2))
     expect(w.player.stamina).toBe(0)
   })
 
@@ -323,44 +327,44 @@ describe('shield', () => {
     expect(w.player.state).not.toBe('block')
   })
 
-  it('catches a goblin leap and bounces it off', () => {
+  it('catches an imp leap and bounces it off', () => {
     const w = quiet()
-    const goblin = swingAt(w, 'goblin', 110)
-    until(w, () => goblin.state === 'attack', { blockHeld: true })
+    const imp = swingAt(w, 'imp', 110)
+    until(w, () => imp.state === 'attack', { blockHeld: true })
     run(w, 0.6, { blockHeld: true })
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
   })
 })
 
-describe('orc and ogre', () => {
-  it('an orc winds up and chops a player standing still', () => {
+describe('demon and brute', () => {
+  it('a demon winds up and chops a player standing still', () => {
     const w = quiet()
-    const orc = spawnEnemy(w, 'orc', w.player.x + 90)
-    orc.cooldown = 0
+    const demon = spawnEnemy(w, 'demon', w.player.x + 90)
+    demon.cooldown = 0
     run(w, 1.4)
-    expect(w.player.hp).toBe(PLAYER.maxHp - ENEMIES.orc.damage)
+    expect(w.player.hp).toBe(MAX_HP - ENEMIES.demon.damage)
   })
 
   it('a dash through the chop avoids it', () => {
     const w = quiet()
-    const orc = spawnEnemy(w, 'orc', w.player.x + 90)
-    orc.cooldown = 0
-    until(w, () => orc.state === 'windup')
-    until(w, () => orc.stateTime >= ENEMIES.orc.windup - 0.05)
+    const demon = spawnEnemy(w, 'demon', w.player.x + 90)
+    demon.cooldown = 0
+    until(w, () => demon.state === 'windup')
+    until(w, () => demon.stateTime >= ENEMIES.demon.windup - 0.05)
     press(w, { dashPressed: true, move: -1 })
     run(w, 0.6)
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
   })
 
-  it('an ogre slam hurts, and sends a wave of rock along the ground', () => {
+  it('a brute slam hurts, and sends a wave of rock along the ground', () => {
     const w = quiet()
-    const ogre = spawnEnemy(w, 'ogre', w.player.x + 150)
-    ogre.cooldown = 0
+    const brute = spawnEnemy(w, 'brute', w.player.x + 140)
+    brute.cooldown = 0
     until(w, () => w.waves.length > 0)
-    // The ogre stands to the player's right, so the wave runs left towards them.
+    // The brute stands to the player's right, so the wave runs left towards them.
     expect(w.waves[0].vx).toBeLessThan(0)
     run(w, 0.4)
-    expect(w.player.hp).toBeLessThan(PLAYER.maxHp)
+    expect(w.player.hp).toBeLessThan(MAX_HP)
   })
 
   it('a wave hurts a player on the ground but passes under one who jumps', () => {
@@ -368,28 +372,28 @@ describe('orc and ogre', () => {
     const standing = quiet()
     standing.waves.push({ ...wave(), x: standing.player.x - 120 })
     run(standing, 0.7)
-    expect(standing.player.hp).toBe(PLAYER.maxHp - 14)
+    expect(standing.player.hp).toBe(MAX_HP - 14)
 
     const jumping = quiet()
     jumping.waves.push({ ...wave(), x: jumping.player.x - 120 })
     press(jumping, { jumpPressed: true, jumpHeld: true })
     run(jumping, 0.7, { jumpHeld: true })
-    expect(jumping.player.hp).toBe(PLAYER.maxHp)
+    expect(jumping.player.hp).toBe(MAX_HP)
   })
 
   it('a shield stops a wave', () => {
     const w = quiet()
     w.waves.push({ x: w.player.x + 160, vx: -340, life: 0.85, maxLife: 0.85, damage: 14, height: 34, halfWidth: 22, blockCost: 15, struck: false })
     run(w, 0.8, { blockHeld: true })
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
     expect(w.waves).toHaveLength(0)
   })
 
-  it('an ogre shoves the player aside, but a dash passes through it', () => {
+  it('a brute shoves the player aside, but a dash passes through it', () => {
     const w = quiet()
-    const ogre = dummy(w, 'ogre', 10)
+    const brute = dummy(w, 'brute', 10)
     run(w, 0.1)
-    expect(Math.abs(w.player.x - ogre.x)).toBeGreaterThanOrEqual(ENEMIES.ogre.halfWidth)
+    expect(Math.abs(w.player.x - brute.x)).toBeGreaterThanOrEqual(ENEMIES.brute.halfWidth)
     const x = w.player.x
     press(w, { dashPressed: true, move: 1 })
     run(w, 0.2)
@@ -397,42 +401,42 @@ describe('orc and ogre', () => {
   })
 })
 
-describe('goblins', () => {
-  it('a goblin winds up, leaps, and hurts a player standing still', () => {
+describe('imps', () => {
+  it('an imp winds up, leaps, and hurts a player standing still', () => {
     const w = quiet()
-    const goblin = spawnEnemy(w, 'goblin', w.player.x + 100)
-    goblin.cooldown = 0
+    const imp = spawnEnemy(w, 'imp', w.player.x + 100)
+    imp.cooldown = 0
     run(w, 1.2)
-    expect(w.player.hp).toBe(PLAYER.maxHp - ENEMIES.goblin.damage)
+    expect(w.player.hp).toBe(MAX_HP - ENEMIES.imp.damage)
   })
 
   it('a dash through the leap avoids the damage', () => {
     const w = quiet()
-    const goblin = spawnEnemy(w, 'goblin', w.player.x + 100)
-    goblin.cooldown = 0
+    const imp = spawnEnemy(w, 'imp', w.player.x + 100)
+    imp.cooldown = 0
     for (let t = 0; t < 1.5; t += DT) {
-      stepWorld(w, { ...NO_INPUT, dashPressed: goblin.state === 'attack' && w.player.state !== 'dash' && w.player.dashCooldown <= 0 }, DT, first)
+      stepWorld(w, { ...NO_INPUT, dashPressed: imp.state === 'attack' && w.player.state !== 'dash' && w.player.dashCooldown <= 0 }, DT, first)
     }
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
   })
 
   it('a jump clears the leap', () => {
     const w = quiet()
-    const goblin = spawnEnemy(w, 'goblin', w.player.x + 100)
-    goblin.cooldown = 0
+    const imp = spawnEnemy(w, 'imp', w.player.x + 100)
+    imp.cooldown = 0
     for (let t = 0; t < 1.5; t += DT) {
-      stepWorld(w, { ...NO_INPUT, jumpPressed: goblin.state === 'windup' && goblin.stateTime > 0.3 && w.player.grounded, jumpHeld: true }, DT, first)
+      stepWorld(w, { ...NO_INPUT, jumpPressed: imp.state === 'windup' && imp.stateTime > 0.3 && w.player.grounded, jumpHeld: true }, DT, first)
     }
-    expect(w.player.hp).toBe(PLAYER.maxHp)
+    expect(w.player.hp).toBe(MAX_HP)
   })
 })
 
 describe('death', () => {
   it('ends the run at zero health and stops new spawns', () => {
-    const w = createWorld()
+    const w = createWorld('warden')
     w.player.hp = 1
-    const goblin = spawnEnemy(w, 'goblin', w.player.x + 100)
-    goblin.cooldown = 0
+    const imp = spawnEnemy(w, 'imp', w.player.x + 100)
+    imp.cooldown = 0
     run(w, 1.5)
     expect(w.over).toBe(true)
     expect(w.player.state).toBe('dead')

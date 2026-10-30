@@ -1,15 +1,17 @@
 /**
- * The four heroes, one for each character in the sprite packs. A hero is a body (how much
- * health, how fast, how big) and two attack buttons: `light` is a short chain, `heavy` one
- * slower blow that costs stamina and breaks poise. Every blow is tied to one of the character's
- * own attack animations, and the timings are chosen so the slash effect drawn into the sprite
- * appears at the moment the blow lands.
+ * The three heroes, the characters of the SHADOW Series pack. A hero is a body (how much health,
+ * how fast, how big) and its moves: `light` is a short chain, `heavy` one slower blow that costs
+ * stamina and breaks poise, and some have blows of their own in the air or out of a dash. Every
+ * blow is tied to one of the character's own attack animations, and the timings are chosen so
+ * the slash drawn into the sprite appears at the moment the blow lands.
  */
 import type { AttackStep, ComboKind } from './config'
 import { SPRITES } from './spriteData'
-import type { SpriteId } from './spriteData'
 
-export type HeroId = SpriteId
+export type HeroId = 'huntress' | 'hallokin' | 'warden'
+
+/** The blows a hero has besides the two chains. */
+export type SpecialKind = Exclude<ComboKind, 'light' | 'heavy'>
 
 export type HeroDef = {
   id: HeroId
@@ -26,120 +28,114 @@ export type HeroDef = {
   height: number
   /** Multiplies what a dash costs in stamina. */
   dashCost: number
-  /** Only the soldier can raise a shield and parry. */
+  /** Extra jumps in the air before landing again. */
+  airJumps: number
+  /** Only the Warden can guard (curled up) and parry. */
   canBlock: boolean
   /** With no direction held, a swing turns towards an enemy this close. */
   aimRange: number
-  /** What the two attack buttons are called, for the menu and the controls list. */
-  moves: { light: string; heavy: string }
-  combos: Record<ComboKind, readonly AttackStep[]>
+  /** What the moves are called, for the menu and the controls list. */
+  moves: { light: string; heavy: string; air?: string; dash?: string }
+  combos: { light: readonly AttackStep[]; heavy: readonly AttackStep[] }
+  special: Partial<Record<SpecialKind, AttackStep>>
 }
 
 export const HEROES: Record<HeroId, HeroDef> = {
-  soldier: {
-    id: 'soldier',
-    name: 'Soldier',
-    tagline: 'Balanced and safe. The only hero with a shield: block, and parry for a free counter.',
-    traits: ['Three-hit sword chain ending in a thrust', 'Shield blocks and parries', 'Heavy: a piercing thrust'],
-    scale: 6,
-    hp: 100,
-    speed: 250,
-    halfWidth: 22,
-    height: 126,
-    dashCost: 1,
-    canBlock: true,
-    aimRange: 170,
-    moves: { light: 'sword chain: sweep, rising slash, thrust', heavy: 'piercing thrust' },
-    combos: {
-      light: [
-        { duration: 0.32, hitStart: 0.09, hitEnd: 0.19, cancelAt: 0.22, damage: 10, poise: 8, stamina: 0, reach: 116, knockback: 190, lunge: 140, hitStop: 0.045, shake: 2, clip: 'attack01' },
-        { duration: 0.32, hitStart: 0.09, hitEnd: 0.19, cancelAt: 0.22, damage: 10, poise: 8, stamina: 0, reach: 116, knockback: 190, lunge: 140, hitStop: 0.045, shake: 2, clip: 'attack02' },
-        { duration: 0.46, hitStart: 0.2, hitEnd: 0.3, cancelAt: 0.46, damage: 16, poise: 14, stamina: 0, reach: 150, knockback: 430, lunge: 280, hitStop: 0.1, shake: 6, clip: 'attack03' },
-      ],
-      heavy: [{ duration: 0.7, hitStart: 0.36, hitEnd: 0.48, cancelAt: 0.7, damage: 28, poise: 55, stamina: 22, reach: 190, knockback: 480, lunge: 360, hitStop: 0.12, shake: 8, clip: 'attack03' }],
-    },
-  },
-
-  orc: {
-    id: 'orc',
-    name: 'Orc',
-    tagline: 'A slow, heavy axe. Tougher than the rest, and its slam sends a shockwave along the ground.',
-    traits: ['The most health', 'Axe chop and overhead slam', 'Heavy: a slam with a shockwave'],
-    scale: 8,
-    hp: 130,
-    speed: 215,
-    halfWidth: 30,
-    height: 120,
-    dashCost: 1,
-    canBlock: false,
-    aimRange: 150,
-    moves: { light: 'axe chop, then overhead slam', heavy: 'slam that sends a shockwave' },
-    combos: {
-      light: [
-        { duration: 0.46, hitStart: 0.17, hitEnd: 0.3, cancelAt: 0.3, damage: 14, poise: 16, stamina: 0, reach: 112, knockback: 280, lunge: 90, hitStop: 0.07, shake: 4, clip: 'attack01' },
-        { duration: 0.52, hitStart: 0.2, hitEnd: 0.33, cancelAt: 0.52, damage: 18, poise: 22, stamina: 0, reach: 116, knockback: 360, lunge: 100, hitStop: 0.09, shake: 6, clip: 'attack02' },
-      ],
-      heavy: [
-        {
-          duration: 0.86, hitStart: 0.44, hitEnd: 0.56, cancelAt: 0.86, damage: 38, poise: 75, stamina: 28, reach: 120, knockback: 460, lunge: 100, hitStop: 0.13, shake: 11, clip: 'attack02',
-          wave: { speed: 420, life: 0.5, damage: 20, height: 44, halfWidth: 26, poise: 40, knockback: 360 },
-        },
-      ],
-    },
-  },
-
-  demon: {
-    id: 'demon',
-    name: 'Demon',
-    tagline: 'Fast, with a long blade. Lunges across the arena, and its heavy rush cannot be touched.',
-    traits: ['Quickest on its feet', 'Long-reach lunges', 'Heavy: a rush you cannot be hit during'],
-    scale: 6,
-    hp: 90,
-    speed: 280,
-    halfWidth: 24,
-    height: 120,
-    dashCost: 0.75,
+  huntress: {
+    id: 'huntress',
+    name: 'Blind Huntress',
+    tagline: 'Quick and far-reaching. Strikes out of her dash, cuts upward in a jump and dives blade-first onto what is below.',
+    traits: ['Long, fast blade', 'Dash into a cutting lunge', 'Dive attack bounces off enemies'],
+    scale: 2.25,
+    hp: 95,
+    speed: 300,
+    halfWidth: 18,
+    height: 82,
+    dashCost: 0.85,
+    airJumps: 0,
     canBlock: false,
     aimRange: 200,
-    moves: { light: 'lunging thrust, then a sweep', heavy: 'rush through enemies' },
+    moves: { light: 'cut, then a reaping slash', heavy: 'phantom dash: cuts through and cannot be hit', air: 'rising cut, or hold S to dive', dash: 'dash cut' },
     combos: {
       light: [
-        { duration: 0.34, hitStart: 0.1, hitEnd: 0.22, cancelAt: 0.22, damage: 9, poise: 8, stamina: 0, reach: 140, knockback: 170, lunge: 330, hitStop: 0.04, shake: 2, clip: 'attack01' },
-        { duration: 0.32, hitStart: 0.09, hitEnd: 0.2, cancelAt: 0.2, damage: 11, poise: 10, stamina: 0, reach: 120, knockback: 200, lunge: 160, hitStop: 0.045, shake: 2, clip: 'attack02' },
+        { duration: 0.3, hitStart: 0.05, hitEnd: 0.14, cancelAt: 0.18, damage: 11, poise: 9, stamina: 0, reach: 165, knockback: 180, lunge: 120, hitStop: 0.045, shake: 2, move: 'cut' },
+        { duration: 0.44, hitStart: 0.12, hitEnd: 0.26, cancelAt: 0.44, damage: 15, poise: 14, stamina: 0, reach: 120, back: 30, rise: 30, knockback: 360, lunge: 220, hitStop: 0.08, shake: 5, move: 'reap' },
       ],
-      heavy: [{ duration: 0.62, hitStart: 0.22, hitEnd: 0.42, cancelAt: 0.62, damage: 24, poise: 45, stamina: 22, reach: 150, knockback: 380, lunge: 700, hitStop: 0.1, shake: 7, clip: 'attack01', rush: true }],
+      heavy: [{ duration: 0.62, hitStart: 0.12, hitEnd: 0.4, cancelAt: 0.62, damage: 26, poise: 50, stamina: 24, reach: 190, knockback: 420, lunge: 760, hitStop: 0.1, shake: 7, move: 'phantom', rush: true }],
+    },
+    special: {
+      dashAttack: { duration: 0.36, hitStart: 0.04, hitEnd: 0.16, cancelAt: 0.3, damage: 14, poise: 14, stamina: 0, reach: 180, knockback: 280, lunge: 520, hitStop: 0.06, shake: 3, move: 'dashCut' },
+      airUp: { duration: 0.4, hitStart: 0.07, hitEnd: 0.22, cancelAt: 0.32, damage: 12, poise: 12, stamina: 0, reach: 70, back: 30, rise: 110, knockback: 220, lunge: 0, hitStop: 0.05, shake: 3, move: 'rising', hop: 260 },
+      airDown: { duration: 0.6, hitStart: 0.06, hitEnd: 0.6, cancelAt: 0.6, damage: 16, poise: 18, stamina: 0, reach: 40, back: 40, below: 70, knockback: 160, lunge: 0, hitStop: 0.06, shake: 4, move: 'plunge', plunge: 1100, bounce: 720 },
     },
   },
 
-  monster: {
-    id: 'monster',
-    name: 'Blood Monster',
-    tagline: 'Low and wide, so harder to hit. Claws up close and pounces on whatever is further away.',
-    traits: ['A small target', 'Claw swipe, then a pounce', 'Heavy: a long leaping pounce'],
-    scale: 7,
-    hp: 100,
-    speed: 245,
-    halfWidth: 36,
-    height: 105,
-    dashCost: 1,
+  hallokin: {
+    id: 'hallokin',
+    name: 'Hallokin',
+    tagline: 'A small, nimble ember. Jumps twice, slashes fire ahead of it and raises a pillar of flame that reaches the ledge above.',
+    traits: ['Small target, double jump', 'Fiery forward slashes', 'Heavy: a flame pillar that hits high'],
+    scale: 3.25,
+    hp: 80,
+    speed: 290,
+    halfWidth: 16,
+    height: 64,
+    dashCost: 0.75,
+    airJumps: 1,
     canBlock: false,
-    aimRange: 190,
-    moves: { light: 'claw swipe, then a pounce', heavy: 'long leaping pounce' },
+    aimRange: 170,
+    moves: { light: 'ember slash, twice', heavy: 'flame pillar straight up', air: 'comet strike ahead' },
     combos: {
       light: [
-        { duration: 0.38, hitStart: 0.14, hitEnd: 0.26, cancelAt: 0.26, damage: 10, poise: 8, stamina: 0, reach: 112, knockback: 200, lunge: 120, hitStop: 0.05, shake: 3, clip: 'attack01' },
-        { duration: 0.44, hitStart: 0.2, hitEnd: 0.32, cancelAt: 0.44, damage: 13, poise: 12, stamina: 0, reach: 124, knockback: 260, lunge: 330, hitStop: 0.06, shake: 4, clip: 'attack02', hop: 380 },
+        { duration: 0.34, hitStart: 0.1, hitEnd: 0.2, cancelAt: 0.22, damage: 9, poise: 8, stamina: 0, reach: 112, knockback: 180, lunge: 220, hitStop: 0.04, shake: 2, move: 'ember' },
+        { duration: 0.4, hitStart: 0.1, hitEnd: 0.22, cancelAt: 0.4, damage: 13, poise: 13, stamina: 0, reach: 118, knockback: 320, lunge: 320, hitStop: 0.07, shake: 4, move: 'ember' },
       ],
-      heavy: [{ duration: 0.7, hitStart: 0.3, hitEnd: 0.5, cancelAt: 0.7, damage: 30, poise: 60, stamina: 24, reach: 132, knockback: 460, lunge: 430, hitStop: 0.11, shake: 8, clip: 'attack02', hop: 560 }],
+      heavy: [{ duration: 0.6, hitStart: 0.2, hitEnd: 0.42, cancelAt: 0.6, damage: 24, poise: 45, stamina: 20, reach: 56, back: 40, rise: 130, knockback: 260, lunge: 0, hitStop: 0.1, shake: 7, move: 'pillar' }],
     },
+    special: {
+      airForward: { duration: 0.42, hitStart: 0.06, hitEnd: 0.24, cancelAt: 0.34, damage: 12, poise: 12, stamina: 0, reach: 116, below: 20, knockback: 260, lunge: 380, hitStop: 0.05, shake: 3, move: 'comet', hop: 180 },
+    },
+  },
+
+  warden: {
+    id: 'warden',
+    name: 'Wetlands Warden',
+    tagline: 'Big, slow and hard to put down. Sweeps wide, cuts up at the ledge above, whips its tail behind it, and curls up to guard and parry.',
+    traits: ['The most health, and a guard', 'Wide sweep, uppercut, tail whip', 'Heavy: a rolling charge that bursts'],
+    scale: 1.75,
+    hp: 140,
+    speed: 225,
+    halfWidth: 30,
+    height: 92,
+    dashCost: 1.1,
+    airJumps: 0,
+    canBlock: true,
+    aimRange: 190,
+    moves: { light: 'sweep, uppercut, tail whip behind', heavy: 'roll through enemies and burst' },
+    combos: {
+      light: [
+        { duration: 0.46, hitStart: 0.14, hitEnd: 0.24, cancelAt: 0.28, damage: 13, poise: 12, stamina: 0, reach: 190, knockback: 220, lunge: 120, hitStop: 0.06, shake: 3, move: 'sweep' },
+        { duration: 0.44, hitStart: 0.1, hitEnd: 0.24, cancelAt: 0.28, damage: 14, poise: 14, stamina: 0, reach: 90, rise: 150, knockback: 220, lunge: 60, hitStop: 0.06, shake: 4, move: 'uppercut' },
+        { duration: 0.56, hitStart: 0.14, hitEnd: 0.3, cancelAt: 0.56, damage: 18, poise: 22, stamina: 0, reach: 50, back: 150, knockback: 420, lunge: 0, hitStop: 0.1, shake: 6, move: 'tail' },
+      ],
+      heavy: [{ duration: 1, hitStart: 0.24, hitEnd: 0.72, cancelAt: 1, damage: 30, poise: 70, stamina: 28, reach: 120, back: 100, rise: 40, knockback: 460, lunge: 560, hitStop: 0.12, shake: 10, move: 'roll', rush: true }],
+    },
+    special: {},
   },
 }
 
-export const HERO_LIST: readonly HeroDef[] = [HEROES.soldier, HEROES.orc, HEROES.demon, HEROES.monster]
+export const HERO_LIST: readonly HeroDef[] = [HEROES.huntress, HEROES.hallokin, HEROES.warden]
 
-export const DEFAULT_HERO: HeroId = 'soldier'
+export const DEFAULT_HERO: HeroId = 'huntress'
 
 export const isHeroId = (value: unknown): value is HeroId => typeof value === 'string' && value in HEROES
 
-/** Whether the hero's sprite has this attack animation (the soldier alone has three). */
-export const hasClip = (hero: HeroId, clip: string) => clip in SPRITES[hero].phases
+/** The blows of a chain, or the one blow of a special. */
+export const stepsOf = (hero: HeroDef, kind: ComboKind): readonly AttackStep[] => {
+  if (kind === 'light' || kind === 'heavy') return hero.combos[kind]
+  const step = hero.special[kind]
+  return step ? [step] : []
+}
+
+/** Whether the hero's sprite has this move. */
+export const hasMove = (hero: HeroId, move: string) => move in SPRITES[hero].moves

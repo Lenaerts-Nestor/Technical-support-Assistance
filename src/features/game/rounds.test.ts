@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { COST, ENEMIES, ROUNDS, SCORE } from './config'
+import { DEFAULT_HERO, HEROES } from './heroes'
 import { enemyHealthScale, enemyPower, isBossRound, maxAlive, maxOf, roundBudget } from './pacing'
 import { awardKill, nextRound, pickUpgrade, streakMultiplier } from './rounds'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
@@ -24,7 +25,16 @@ function defeatAll(w: World) {
   }
 }
 
-/** Play a round out with the player untouchable, killing everyone as they arrive. Returns who came. */
+/** Take every shard and light every shrine, as if the player had gone round them all. */
+function completeObjective(w: World) {
+  for (const shard of w.objective.shards) shard.taken = true
+  for (const shrine of w.objective.shrines) shrine.lit = true
+}
+
+/**
+ * Play a round out with the player untouchable, killing everyone as they arrive. A round of
+ * shards or shrines is completed after a while of that. Returns who came.
+ */
 function playRound(w: World, rng: () => number, hurt = false): EnemyKind[] {
   const seen = new Map<number, EnemyKind>()
   for (let t = 0; t < 600 && w.stage === 'fight'; t += DT) {
@@ -32,6 +42,7 @@ function playRound(w: World, rng: () => number, hurt = false): EnemyKind[] {
     w.player.invuln = 1
     for (const e of w.enemies) seen.set(e.id, e.kind)
     if (w.enemies.some((e) => e.state !== 'dying')) defeatAll(w)
+    if (t > 12) completeObjective(w)
   }
   if (hurt) w.hurtThisRound = true
   return [...seen.values()]
@@ -53,31 +64,33 @@ describe('pacing', () => {
     expect(maxAlive(5)).toBeLessThanOrEqual(5)
   })
 
-  it('makes enemies tougher from round five, and not before', () => {
-    expect(enemyHealthScale(4)).toBe(1)
-    expect(enemyPower(4)).toBe(1)
+  it('makes enemies tougher with every round after the first', () => {
+    expect(enemyHealthScale(1)).toBe(1)
+    expect(enemyPower(1)).toBe(1)
+    expect(enemyHealthScale(2)).toBeGreaterThan(1)
     expect(enemyHealthScale(12)).toBeGreaterThan(enemyHealthScale(6))
     const w = createWorld()
     w.round = 12
-    const orc = spawnEnemy(w, 'orc', 0)
-    expect(orc.maxHp).toBeGreaterThan(ENEMIES.orc.hp)
-    expect(orc.power).toBeGreaterThan(1)
+    const demon = spawnEnemy(w, 'demon', 0)
+    expect(demon.maxHp).toBeGreaterThan(ENEMIES.demon.hp)
+    expect(demon.power).toBeGreaterThan(1)
     w.round = 1
-    expect(spawnEnemy(w, 'orc', 0).maxHp).toBe(ENEMIES.orc.hp)
+    expect(spawnEnemy(w, 'demon', 0).maxHp).toBe(ENEMIES.demon.hp)
   })
 
-  it('lets the crowd grow, within a limit', () => {
+  it('keeps the crowd small: it grows a little, within a low limit', () => {
     expect(maxAlive(10)).toBeGreaterThan(maxAlive(1))
-    expect(maxAlive(100)).toBeLessThanOrEqual(8)
+    expect(maxAlive(1)).toBeLessThanOrEqual(3)
+    expect(maxAlive(100)).toBeLessThanOrEqual(5)
   })
 })
 
 describe('a round', () => {
-  it('spends exactly its budget, in goblins only on the first round', () => {
+  it('spends exactly its budget on the first round, in imps and demons only', () => {
     const w = createWorld()
     const rng = rngFrom(1)
     const kinds = playRound(w, rng)
-    expect(kinds.every((k) => k === 'goblin')).toBe(true)
+    expect(kinds.every((k) => k === 'imp' || k === 'demon')).toBe(true)
     expect(kinds.reduce((sum, k) => sum + COST[k], 0)).toBe(roundBudget(1))
     expect(w.stage).toBe('cleared')
   })
@@ -125,7 +138,7 @@ describe('a round', () => {
     expect(w.offer).toHaveLength(0)
   })
 
-  it('brings in orcs from round two, ogres from round four and the boss on round five, within the limits', () => {
+  it('brings in each kind from its round on, and the boss on round five, within the limits', () => {
     const w = createWorld()
     const rng = rngFrom(5)
     const everSeen = new Set<EnemyKind>()
@@ -137,20 +150,21 @@ describe('a round', () => {
         w.player.invuln = 1
         for (const e of w.enemies) seen.set(e.id, e.kind)
         expect(w.enemies.filter((e) => e.state !== 'dying').length).toBeLessThanOrEqual(maxAlive(round))
-        peakOgres = Math.max(peakOgres, w.enemies.filter((e) => e.kind === 'ogre' && e.state !== 'dying').length)
+        peakOgres = Math.max(peakOgres, w.enemies.filter((e) => e.kind === 'brute' && e.state !== 'dying').length)
         // Let each wave of arrivals live a moment, so the limits get tested.
-        if (w.enemies.filter((e) => e.state !== 'dying').length >= maxAlive(round) || w.budget === 0) defeatAll(w)
+        if (w.enemies.filter((e) => e.state !== 'dying').length >= maxAlive(round) || w.budget <= 0) defeatAll(w)
+        if (t > 30) completeObjective(w)
       }
+      expect(w.stage).not.toBe('fight')
       const kinds = new Set(seen.values())
       kinds.forEach((k) => everSeen.add(k))
-      if (round < ROUNDS.orcFromRound) expect(kinds.has('orc')).toBe(false)
-      if (round < ROUNDS.ogreFromRound) expect(kinds.has('ogre')).toBe(false)
+      for (const kind of kinds) expect(round).toBeGreaterThanOrEqual(ROUNDS.unlock[kind])
       expect(kinds.has('warlord')).toBe(isBossRound(round))
-      expect(peakOgres).toBeLessThanOrEqual(maxOf('ogre', round))
+      expect(peakOgres).toBeLessThanOrEqual(maxOf('brute', round))
       toBreak(w, rng)
       nextRound(w)
     }
-    expect([...everSeen].sort()).toEqual(['goblin', 'ogre', 'orc', 'warlord'])
+    expect([...everSeen].sort()).toEqual(['archer', 'brute', 'demon', 'imp', 'lancer', 'warlord'])
   })
 
   it('does not clear while the player is dead', () => {
@@ -166,29 +180,29 @@ describe('a round', () => {
 describe('score', () => {
   it('multiplies kills in a streak and falls back when it lapses', () => {
     const w = createWorld()
-    const goblin = ENEMIES.goblin
-    awardKill(w, goblin)
-    expect(w.score).toBe(goblin.score)
-    awardKill(w, goblin)
-    expect(w.score).toBe(goblin.score + Math.round(goblin.score * streakMultiplier(2)))
+    const imp = ENEMIES.imp
+    awardKill(w, imp)
+    expect(w.score).toBe(imp.score)
+    awardKill(w, imp)
+    expect(w.score).toBe(imp.score + Math.round(imp.score * streakMultiplier(2)))
     expect(streakMultiplier(2)).toBeGreaterThan(1)
     expect(streakMultiplier(1000)).toBe(SCORE.maxMultiplier)
     // Let the streak run out.
     for (let t = 0; t < SCORE.streakTime + 0.5; t += DT) stepWorld(w, NO_INPUT, DT, rngFrom(1))
     expect(w.streak).toBe(0)
     const before = w.score
-    awardKill(w, goblin)
-    expect(w.score - before).toBe(goblin.score)
+    awardKill(w, imp)
+    expect(w.score - before).toBe(imp.score)
   })
 
   it('loses the streak when the player is hurt', () => {
     const w = createWorld()
     w.spawnTimer = 1e9
-    awardKill(w, ENEMIES.goblin)
-    awardKill(w, ENEMIES.goblin)
+    awardKill(w, ENEMIES.imp)
+    awardKill(w, ENEMIES.imp)
     expect(w.streak).toBe(2)
-    // A goblin leaps onto the player.
-    const e = spawnEnemy(w, 'goblin', w.player.x + 100)
+    // An imp leaps onto the player.
+    const e = spawnEnemy(w, 'imp', w.player.x + 100)
     e.cooldown = 0
     for (let t = 0; t < 1.3; t += DT) stepWorld(w, NO_INPUT, DT, rngFrom(1))
     expect(w.streak).toBe(0)
@@ -229,7 +243,7 @@ describe('upgrade picks', () => {
     w.offer = ['hardened', 'lungs', 'whetstone']
     w.player.hp = 50
     pickUpgrade(w, 'hardened')
-    expect(w.player.maxHp).toBe(120)
+    expect(w.player.maxHp).toBe(HEROES[DEFAULT_HERO].hp + 20)
     expect(w.player.hp).toBe(70)
     nextRound(w)
     toBreak(w, rngFrom(1))

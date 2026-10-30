@@ -3,9 +3,11 @@
  * a small slice of time given what the player is pressing. The random source is passed in so a
  * test can play the same game twice.
  */
-import { ARENA, COMBO_WINDOW, DASH, ENEMIES, PLAYER, POISE_RESET, ROUNDS, SHIELD, VULNERABLE_BONUS } from './config'
-import type { AttackStep, EnemyStats } from './config'
-import { HEROES } from './heroes'
+import { ARENA, CAMERA, COMBO_WINDOW, DASH, ELITE, ENEMIES, PLAYER, POISE_RESET, ROUNDS, SHIELD, TIER, VULNERABLE_BONUS } from './config'
+import type { AttackStep, ComboKind, EnemyStats } from './config'
+import { ledgeLeft, ledgeRight } from './biomes'
+import type { Platform } from './biomes'
+import { HEROES, stepsOf } from './heroes'
 import type { HeroDef } from './heroes'
 import { awardKill, stepRound } from './rounds'
 import type { Enemy, FrameInput, Player, World } from './types'
@@ -24,7 +26,9 @@ const WALL_MARGIN = 24
 const MAX_PARTICLES = 240
 /** Spark colours: steel on steel, dust, and blood-red for a hit that gets through. */
 const STEEL_SPARKS = ['#ffffff', '#c9d1de', '#ffd27a']
-const DUST = ['#8a7a62', '#6b5a44', '#a08a6c']
+const DUST = ['#5c5a4c', '#45443a', '#77735f']
+/** What is left of an enemy as it goes: wisps of shadow. */
+const SHADE = ['#16141a', '#2b2733', '#4a4458', '#9ff0ff']
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -56,10 +60,19 @@ export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
   stepPlayer(w, input, dt, rng)
   for (const enemy of w.enemies) stepEnemy(w, enemy, dt, rng)
   stepWaves(w, dt, rng)
+  stepArrows(w, dt, rng)
   keepApart(w)
   w.enemies = w.enemies.filter((e) => e.state !== 'dying' || e.stateTime < 0.7)
   stepRound(w, dt, rng)
   stepParticles(w, dt)
+  stepCamera(w, dt)
+}
+
+/** The camera rises with the hero as they climb, keeping them a little below the middle of the view. */
+function stepCamera(w: World, dt: number) {
+  const p = w.player
+  const target = clamp(floorBelow(w, p.x, p.y) - CAMERA.lead + 60, 0, CAMERA.maxRise)
+  w.camY += (target - w.camY) * Math.min(1, dt * CAMERA.follow)
 }
 
 /* -- Player ---------------------------------------------------------------- */
@@ -68,7 +81,7 @@ export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
 export const heroOf = (w: World): HeroDef => HEROES[w.hero]
 
 /** The step of the combo being swung. */
-const stepOf = (w: World, p: Player): AttackStep => heroOf(w).combos[p.attackKind][p.attackIndex]
+const stepOf = (w: World, p: Player): AttackStep => stepsOf(heroOf(w), p.attackKind)[p.attackIndex]
 
 function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   const p = w.player
@@ -135,14 +148,27 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
       if (t - dt < step.hitStart && t >= step.hitStart) {
         p.vx = p.facing * step.lunge
         if (step.hop) {
-          p.vy = step.hop
+          p.vy = Math.max(p.vy, step.hop)
+          p.grounded = false
+        }
+        if (step.plunge) {
+          p.vy = -step.plunge
+          p.vx = 0
           p.grounded = false
         }
         if (step.wave) spawnPlayerWave(w, p, step, rng)
       } else if (t < step.hitStart || t > step.hitEnd) p.vx = approach(p.vx, 0, 1500 * dt)
+      // A dive is over once it hits the floor.
+      if (step.plunge && t > step.hitStart && p.grounded) {
+        burst(w, p.x, p.y, 0, rng, 12, DUST)
+        w.shake = Math.max(w.shake, 4)
+        endAttack(w, p)
+        break
+      }
       // A rush cannot be touched while the blow is out.
       if (step.rush && t >= step.hitStart && t <= step.hitEnd) p.invuln = Math.max(p.invuln, 0.06)
       if (t >= step.hitStart && t <= step.hitEnd) strike(w, step, rng)
+      if (p.state !== 'attack') break
       if (t >= step.cancelAt) continueAttack(w, p, input)
       if (p.state === 'attack' && t >= step.duration) endAttack(w, p)
       break
@@ -150,6 +176,8 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
     case 'dash': {
       p.vx = p.facing * DASH.speed
       p.vy = 0
+      // An attack out of a dash carries its speed into a cut, for a hero who has one.
+      if (w.buffer.light > 0 && hero.special.dashAttack && beginAttack(w, p, input, 'dashAttack', 0)) break
       if (p.stateTime >= DASH.time) {
         p.state = 'free'
         p.stateTime = 0
@@ -169,7 +197,8 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
       break
   }
 
-  if (p.state !== 'dash') p.vy -= PLAYER.gravity * dt
+  const diving = p.state === 'attack' && stepOf(w, p).plunge !== undefined && p.stateTime >= stepOf(w, p).hitStart
+  if (p.state !== 'dash' && !diving) p.vy -= PLAYER.gravity * dt
   const wanted = p.x + p.vx * dt
   p.x = clamp(wanted, WALL_MARGIN, ARENA.width - WALL_MARGIN)
   if (p.x !== wanted) p.vx = 0
@@ -179,6 +208,7 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
     // Coming down hard kicks up a little dust.
     if (!p.grounded && fallSpeed < -350) burst(w, p.x, p.y, 0, rng, 7, DUST)
     p.grounded = true
+    p.airJumps = hero.airJumps
   } else {
     p.grounded = false
   }
@@ -195,8 +225,7 @@ function moveVertically(w: World, body: { x: number; y: number; vy: number }, dt
   let land: number | null = body.y <= 0 ? 0 : null
   if (land === null && body.vy <= 0 && !ignoreLedges) {
     for (const ledge of w.platforms) {
-      const onIt = body.x >= ledge.cx - ledge.width / 2 && body.x <= ledge.cx + ledge.width / 2
-      if (onIt && before >= ledge.y - 0.01 && body.y <= ledge.y) land = Math.max(land ?? 0, ledge.y)
+      if (spans(ledge, body.x) && before >= ledge.y - 0.01 && body.y <= ledge.y) land = Math.max(land ?? 0, ledge.y)
     }
   }
   if (land === null) return null
@@ -205,11 +234,21 @@ function moveVertically(w: World, body: { x: number; y: number; vy: number }, dt
   return land
 }
 
+/**
+ * Whether a ledge is underfoot at `x`. A ledge that meets a side of the arena carries on out of
+ * it, so an enemy coming in that way walks in along it.
+ */
+function spans(ledge: Platform, x: number) {
+  const left = ledgeLeft(ledge) <= 0 ? -400 : ledgeLeft(ledge)
+  const right = ledgeRight(ledge) >= ARENA.width ? ARENA.width + 400 : ledgeRight(ledge)
+  return x >= left && x <= right
+}
+
 /** The height of the highest surface at or below `y` under `x`: a ledge, or the ground (0). */
 export function floorBelow(w: World, x: number, y: number): number {
   let floor = 0
   for (const ledge of w.platforms) {
-    if (ledge.y > floor && ledge.y <= y + 1 && x >= ledge.cx - ledge.width / 2 && x <= ledge.cx + ledge.width / 2) floor = ledge.y
+    if (ledge.y > floor && ledge.y <= y + 1 && spans(ledge, x)) floor = ledge.y
   }
   return floor
 }
@@ -226,9 +265,17 @@ function spend(p: Player, amount: number) {
   p.staminaDelay = PLAYER.staminaDelay
 }
 
-/** Starts a jump if one was asked for and the player stands on something. */
+/** Starts a jump if one was asked for and the player stands on something, or has a jump left in the air. */
 function tryJump(w: World, p: Player) {
-  if (w.buffer.jump <= 0 || !p.grounded) return false
+  if (w.buffer.jump <= 0) return false
+  if (!p.grounded) {
+    if (p.airJumps <= 0) return false
+    p.airJumps -= 1
+    p.vy = PLAYER.jumpSpeed * 0.9
+    w.buffer.jump = 0
+    impact(w, p.x, p.y + 6, p.facing, 22, '#ffb36b')
+    return true
+  }
   p.vy = PLAYER.jumpSpeed
   p.grounded = false
   w.buffer.jump = 0
@@ -267,8 +314,21 @@ function tryDash(w: World, p: Player, input: FrameInput) {
   return true
 }
 
-/** Start the first hit of a combo, or the next one while the chain is still alive. */
+/**
+ * Start the first hit of a combo, or the next one while the chain is still alive. In the air a
+ * light press is the hero's air blow if it has one: a dive with down held, a rising cut while
+ * going up (or with jump held), otherwise its blow straight ahead.
+ */
 function tryAttack(w: World, p: Player, input: FrameInput, button: 'light' | 'heavy') {
+  const special = heroOf(w).special
+  if (button === 'light' && !p.grounded) {
+    const air: ComboKind | null =
+      input.downHeld && special.airDown ? 'airDown'
+      : special.airUp && (input.jumpHeld || p.vy > 0 || !special.airForward) ? 'airUp'
+      : special.airForward ? 'airForward'
+      : null
+    if (air) return beginAttack(w, p, input, air, 0)
+  }
   const continues = p.comboWindow > 0 && p.attackKind === button
   return beginAttack(w, p, input, button, continues ? p.attackIndex : 0)
 }
@@ -277,16 +337,17 @@ function nearestEnemy(w: World, range: number): Enemy | null {
   const p = w.player
   let best: Enemy | null = null
   for (const e of w.enemies) {
-    if (e.state === 'dying') continue
+    if (e.state === 'dying' || Math.abs(e.y - p.y) > 120) continue
     if (Math.abs(e.x - p.x) <= range && (!best || Math.abs(e.x - p.x) < Math.abs(best.x - p.x))) best = e
   }
   return best
 }
 
-function beginAttack(w: World, p: Player, input: FrameInput, button: 'light' | 'heavy', index: number) {
+function beginAttack(w: World, p: Player, input: FrameInput, kind: ComboKind, index: number) {
   const hero = heroOf(w)
-  const step = hero.combos[button][index]
+  const step = stepsOf(hero, kind)[index]
   if (!step) return false
+  const button = kind === 'heavy' ? 'heavy' : 'light'
   if (p.stamina < step.stamina) {
     w.buffer[button] = 0
     p.lowStamina = 0.5
@@ -295,7 +356,7 @@ function beginAttack(w: World, p: Player, input: FrameInput, button: 'light' | '
   spend(p, step.stamina)
   p.state = 'attack'
   p.stateTime = 0
-  p.attackKind = button
+  p.attackKind = kind
   p.attackIndex = index
   p.comboWindow = 0
   p.struck.clear()
@@ -311,8 +372,7 @@ function beginAttack(w: World, p: Player, input: FrameInput, button: 'light' | '
 
 /** Late in a swing the next action may cut the recovery short. */
 function continueAttack(w: World, p: Player, input: FrameInput) {
-  const combos = heroOf(w).combos
-  const last = p.attackIndex >= combos[p.attackKind].length - 1
+  const last = p.attackIndex >= stepsOf(heroOf(w), p.attackKind).length - 1
   if (w.buffer.dash > 0 && tryDash(w, p, input)) return
   // The heavy blow can follow any light one.
   if (w.buffer.heavy > 0 && p.attackKind === 'light' && beginAttack(w, p, input, 'heavy', 0)) return
@@ -321,8 +381,8 @@ function continueAttack(w: World, p: Player, input: FrameInput) {
 }
 
 function endAttack(w: World, p: Player) {
-  const steps = heroOf(w).combos[p.attackKind]
-  const last = p.attackIndex >= steps.length - 1
+  const steps = stepsOf(heroOf(w), p.attackKind)
+  const last = p.attackIndex >= steps.length - 1 || (p.attackKind !== 'light' && p.attackKind !== 'heavy')
   p.state = 'free'
   p.stateTime = 0
   p.comboWindow = last ? 0 : COMBO_WINDOW
@@ -353,22 +413,45 @@ function spawnPlayerWave(w: World, p: Player, step: AttackStep, rng: Rng) {
 /** What lands on an enemy, whether from a blade or a wave of rock. */
 type HitInfo = { damage: number; poise: number; knockback: number; hitStop: number; shake: number; dir: 1 | -1; finisher: boolean }
 
-/** The blade is out: hurt every enemy in reach that this swing has not touched yet. */
+/** The space a blow covers: ahead of the hero by its reach, and behind, above and below by its own amounts. */
+export function strikeBox(p: Player, step: AttackStep) {
+  const ahead = step.reach
+  const behind = step.back ?? 10
+  return {
+    x0: p.facing > 0 ? p.x - behind : p.x - ahead,
+    x1: p.facing > 0 ? p.x + ahead : p.x + behind,
+    y0: p.y - (step.below ?? 10),
+    y1: p.y + p.height + (step.rise ?? 10),
+  }
+}
+
+/** The blade is out: hurt every enemy in reach that this swing has not touched yet, and cut arrows out of the air. */
 function strike(w: World, step: AttackStep, rng: Rng) {
   const p = w.player
-  const steps = heroOf(w).combos[p.attackKind]
-  const finisher = step === steps[steps.length - 1]
-  const x0 = p.facing < 0 ? p.x - step.reach : p.x - 10
-  const x1 = p.facing > 0 ? p.x + step.reach : p.x + 10
-  const y0 = p.y - 10
-  const y1 = p.y + p.height + 10
+  const steps = stepsOf(heroOf(w), p.attackKind)
+  const finisher = (p.attackKind === 'light' || p.attackKind === 'heavy') && step === steps[steps.length - 1]
+  const { x0, x1, y0, y1 } = strikeBox(p, step)
+  let landed = false
   for (const e of w.enemies) {
     if (e.state === 'dying' || p.struck.has(e.id)) continue
     const stats = ENEMIES[e.kind]
     const overlaps = e.x - stats.halfWidth < x1 && e.x + stats.halfWidth > x0 && e.y < y1 && e.y + stats.height > y0
     if (!overlaps) continue
     p.struck.add(e.id)
+    landed = true
     hitEnemy(w, e, { ...step, dir: p.facing, finisher }, rng)
+  }
+  for (const arrow of w.arrows) {
+    if (arrow.x < x0 || arrow.x > x1 || arrow.y < y0 || arrow.y > y1) continue
+    arrow.life = 0
+    burst(w, arrow.x, arrow.y, p.facing, rng, 6, STEEL_SPARKS)
+  }
+  // A dive that lands on something bounces off it, ready to go again.
+  if (landed && step.bounce) {
+    p.vy = step.bounce
+    p.grounded = false
+    p.airJumps = heroOf(w).airJumps
+    endAttack(w, p)
   }
 }
 
@@ -382,7 +465,7 @@ function hitEnemy(w: World, e: Enemy, hit: HitInfo, rng: Rng) {
   e.hp -= dealt
   e.flash = 0.1
   e.hitTime = 0.3
-  e.poiseHit += hit.poise * w.mods.poise
+  e.poiseHit += (hit.poise * w.mods.poise) / (e.elite ? ELITE.poise : 1)
   e.poiseTimer = POISE_RESET
   const breaks = stats.poise === 0 || e.poiseHit >= stats.poise
   const wasStaggered = e.state === 'stagger'
@@ -393,7 +476,8 @@ function hitEnemy(w: World, e: Enemy, hit: HitInfo, rng: Rng) {
     e.facing = (dir * -1) as 1 | -1
     e.vx = dir * hit.knockback * 1.2 * Math.max(stats.knockScale, 0.4)
     e.vy = stats.heavy ? 0 : 380
-    awardKill(w, stats)
+    awardKill(w, stats, e.elite)
+    burst(w, e.x, e.y + stats.height * 0.5, dir, rng, e.elite ? 22 : 12, SHADE)
   } else if (wasStaggered) {
     // Already reeling: it takes the damage and the shove, but the clock does not restart.
     e.vx = dir * hit.knockback * stats.knockScale * 0.5
@@ -518,10 +602,16 @@ export function windupTime(e: Enemy): number {
   const stats = ENEMIES[e.kind]
   const boss = stats.boss
   const base = boss && e.move === 'charge' ? boss.chargeWindup : boss && e.move === 'roar' ? boss.roarWindup : stats.windup
-  return base * (isEnraged(e) ? 0.85 : 1)
+  return base * (isEnraged(e) ? 0.85 : 1) * (e.elite ? 0.9 : 1)
 }
 
 const aliveCount = (w: World) => w.enemies.filter((e) => e.state !== 'dying').length
+
+/** The height the player is standing at, or will come down on: what an enemy chasing them aims for. */
+const playerFloor = (w: World) => (w.player.grounded ? w.player.y : floorBelow(w, w.player.x, w.player.y))
+
+/** Whether the player is on the same level as the enemy, close enough in height to be hit by it. */
+const sameLevel = (w: World, e: Enemy) => Math.abs(w.player.y - e.y) < 60
 
 function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
   const stats = ENEMIES[e.kind]
@@ -532,26 +622,43 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
   e.cooldown = Math.max(0, e.cooldown - dt)
   e.poiseTimer = Math.max(0, e.poiseTimer - dt)
   e.jumpCooldown = Math.max(0, e.jumpCooldown - dt)
+  e.dropTime = Math.max(0, e.dropTime - dt)
   if (e.poiseTimer === 0) e.poiseHit = 0
   const dx = p.x - e.x
   const toward = dx >= 0 ? 1 : -1
   const enraged = isEnraged(e)
+  const speed = stats.speed * (enraged ? 1.3 : 1) * (e.elite ? ELITE.speed : 1)
 
   switch (e.state) {
-    case 'walk':
+    case 'walk': {
       e.facing = toward
       if (w.over) {
         e.vx = approach(e.vx, 0, 2600 * dt)
         break
       }
-      e.vx = approach(e.vx, toward * stats.speed * (enraged ? 1.3 : 1), 2600 * dt)
       if (stats.style === 'boss') {
+        e.vx = approach(e.vx, toward * speed, 2600 * dt)
         if (e.cooldown === 0 && e.grounded) chooseBossMove(w, e, stats, Math.abs(dx))
-      } else if (Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.grounded && Math.abs(p.y - e.y) < 60) {
-        e.state = 'windup'
-        e.stateTime = 0
-      } else if (stats.canJump && e.grounded && e.jumpCooldown === 0 && !w.over) hopTowardPlayer(w, e)
+        break
+      }
+      const level = sameLevel(w, e)
+      const inside = e.x > stats.halfWidth && e.x < ARENA.width - stats.halfWidth
+      if (stats.style === 'shoot' && level && inside) {
+        // An archer keeps its distance, and looses when it has a clear line.
+        const tooClose = Math.abs(dx) < (stats.keepAway ?? 0)
+        const cornered = (toward > 0 && e.x < 90) || (toward < 0 && e.x > ARENA.width - 90)
+        e.vx = approach(e.vx, tooClose && !cornered ? -toward * speed : 0, 2600 * dt)
+        if (Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.grounded && (!tooClose || cornered)) startWindup(e)
+        break
+      }
+      // In the air it keeps the heading it jumped with.
+      if (!e.grounded) break
+      const target = chaseTarget(w, e, stats, speed)
+      const gap = target - e.x
+      if (e.grounded) e.vx = approach(e.vx, Math.abs(gap) < 6 ? 0 : Math.sign(gap) * speed, 2600 * dt)
+      if (level && Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.grounded && inside) startWindup(e)
       break
+    }
     case 'windup':
       e.facing = toward
       e.vx = approach(e.vx, 0, 3000 * dt)
@@ -589,36 +696,83 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
   }
 
   e.vy -= ENEMY_GRAVITY * dt
-  e.x += e.vx * dt
-  e.grounded = moveVertically(w, e, dt, false) !== null
+  // Walking in from outside is allowed; once in, the walls hold an enemy in like the player.
+  let x = e.x + e.vx * dt
+  const lo = stats.halfWidth * 0.6
+  const hi = ARENA.width - stats.halfWidth * 0.6
+  if (e.vx < 0 && x < lo) x = Math.min(e.x, lo)
+  if (e.vx > 0 && x > hi) x = Math.max(e.x, hi)
+  e.x = x
+  e.grounded = moveVertically(w, e, dt, e.dropTime > 0) !== null
 }
 
-/** The speed of an enemy's hop up onto a ledge: just enough to clear one. */
-const ENEMY_HOP = 780
+function startWindup(e: Enemy) {
+  e.state = 'windup'
+  e.stateTime = 0
+}
 
-/** Light enemies climb to the player when they stand on a ledge, and come down to them when they do not. */
-function hopTowardPlayer(w: World, e: Enemy) {
+/** The speed of an enemy's hop up onto a ledge: just enough to clear one tier. */
+const ENEMY_HOP = 930
+
+/**
+ * Where an enemy walks to get at the player. On the player's level it walks straight at them.
+ * A climber below them heads for the nearest ledge of the next tier up, under the player if it
+ * can, and hops onto it there; above them it drops through the ledge it stands on. Those that
+ * cannot climb wait under the player.
+ */
+function chaseTarget(w: World, e: Enemy, stats: EnemyStats, speed: number): number {
   const p = w.player
-  const stats = ENEMIES[e.kind]
-  const rise = p.y - e.y
-  // The player is up on a ledge nearby: jump for it.
-  if (rise > 40 && p.grounded && Math.abs(p.x - e.x) < stats.halfWidth + 140) {
-    e.vy = ENEMY_HOP
-    e.grounded = false
-    e.jumpCooldown = 1.1
-    return
+  const floor = playerFloor(w)
+  if (!stats.canJump || Math.abs(floor - e.y) < 40 || !e.grounded) return p.x
+  if (floor < e.y) {
+    // Above the player: step off the ledge.
+    if (e.jumpCooldown === 0 && e.y > 0) {
+      e.dropTime = 0.3
+      e.grounded = false
+      e.y -= 1
+      e.jumpCooldown = 0.7
+    }
+    return p.x
   }
-  // Waiting under a ledge the player is on, or boxed in on a ledge: a short wait before trying again.
-  e.jumpCooldown = 0.25
+  // The stretch it can walk along: the ledge it stands on, or the whole ground.
+  const under = w.platforms.find((l) => Math.abs(l.y - e.y) < 1 && e.x >= ledgeLeft(l) && e.x <= ledgeRight(l))
+  const lo = under ? ledgeLeft(under) + 10 : 0
+  const hi = under ? ledgeRight(under) - 10 : ARENA.width
+  let best: number | null = null
+  let bestCost = Infinity
+  let across = 0
+  for (const ledge of w.platforms) {
+    if (ledge.y <= e.y + 20 || ledge.y > e.y + TIER.step + 20) continue
+    // Under the ledge above if it overlaps this one; otherwise the end of this one nearest to it, for a running hop.
+    const from = Math.max(lo, ledgeLeft(ledge) + 30)
+    const to = Math.min(hi, ledgeRight(ledge) - 30)
+    const spot = from <= to ? clamp(p.x, from, to) : ledgeLeft(ledge) > hi ? hi : lo
+    if (Math.abs(spot - clamp(spot, ledgeLeft(ledge) - 130, ledgeRight(ledge) + 130)) > 0) continue
+    const cost = Math.abs(spot - e.x) + Math.abs(spot - p.x) * 0.6
+    if (cost < bestCost) {
+      bestCost = cost
+      best = spot
+      across = from <= to ? 0 : ledgeLeft(ledge) > hi ? 1 : -1
+    }
+  }
+  if (best === null) return p.x
+  if (Math.abs(best - e.x) < 26 && e.jumpCooldown === 0) {
+    // Straight up onto a ledge overhead, or from the end of this one across to the next.
+    e.vy = ENEMY_HOP
+    e.vx = across * speed * 1.4
+    e.grounded = false
+    e.jumpCooldown = 0.9
+  }
+  return best
 }
 
 /** The boss cycles through its moves: close in, it slams or roars; at range, it charges or roars. */
 function chooseBossMove(w: World, e: Enemy, stats: EnemyStats, distance: number) {
   const n = e.pattern++
-  const roomForGoblins = aliveCount(w) < 4
+  const roomForImps = aliveCount(w) < 4
   const near = distance < stats.attackRange
-  if (near) e.move = n % 3 === 2 && roomForGoblins ? 'roar' : 'slam'
-  else e.move = n % 2 === 1 && roomForGoblins ? 'roar' : 'charge'
+  if (near) e.move = n % 3 === 2 && roomForImps ? 'roar' : 'slam'
+  else e.move = n % 2 === 1 && roomForImps ? 'roar' : 'charge'
   e.state = 'windup'
   e.stateTime = 0
 }
@@ -647,7 +801,20 @@ function beginEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
   if (stats.style === 'leap') {
     e.vx = e.facing * stats.leapSpeed
     e.vy = stats.leapLift
-  } else if (stats.style === 'slam') {
+  } else if (stats.style === 'lance') {
+    e.vx = e.facing * (stats.dashSpeed ?? 600)
+    burst(w, e.x - e.facing * 20, e.y + 4, -e.facing, rng, 6, DUST)
+  } else if (stats.style === 'shoot') {
+    // The arrow leaves the bow at chest height and flies level.
+    w.arrows.push({
+      x: e.x + e.facing * 30,
+      y: e.y + stats.height * 0.55,
+      vx: e.facing * (stats.dashSpeed ?? 600),
+      damage: stats.damage * e.power,
+      blockCost: stats.blockCost,
+      life: 2.2,
+    })
+  } else if (stats.style === 'slam' && e.y === 0) {
     // The club hits the ground and a wave of rock runs out ahead of it.
     pushWave(w, e, stats, e.facing)
     w.shake = Math.max(w.shake, 9)
@@ -657,8 +824,8 @@ function beginEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
       e.vx = e.facing * stats.boss.chargeSpeed
       w.shake = Math.max(w.shake, 4)
     } else if (e.move === 'roar') {
-      // Goblins answer the call from both edges of the arena.
-      for (let i = 0; i < stats.boss.summon; i++) spawnEnemy(w, 'goblin', i % 2 === 0 ? -ROUNDS.margin - 20 : ARENA.width + ROUNDS.margin + 20)
+      // Imps answer the call from both edges of the arena.
+      for (let i = 0; i < stats.boss.summon; i++) spawnEnemy(w, 'imp', i % 2 === 0 ? -ROUNDS.margin - 20 : ARENA.width + ROUNDS.margin + 20)
       w.shake = Math.max(w.shake, 8)
       floater(w, e.x, e.y + stats.labelHeight, 'ROAR!', '#c9a3ff', 24)
       burst(w, e.x, e.y + stats.height * 0.7, e.facing, rng, 20, ['#c9a3ff', '#ffffff', '#8a6fd6'])
@@ -678,6 +845,18 @@ function stepEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
       e.state = 'recover'
       e.stateTime = 0
       e.vx = 0
+    }
+    return
+  }
+  if (stats.style === 'lance') {
+    // The run keeps its heading for its whole length; only what is ahead of the spear is hit.
+    if (e.state === 'attack') e.vx = e.facing * (stats.dashSpeed ?? 600)
+    const ahead = (w.player.x - e.x) * e.facing > -10
+    if (!e.struckPlayer && ahead && overlapsPlayer(w, e, stats.halfWidth + stats.reach)) settleStrike(e, stats, damagePlayer(w, stats.damage * e.power, e.x, rng, stats.blockCost))
+    const atWall = (e.facing < 0 && e.x <= stats.halfWidth) || (e.facing > 0 && e.x >= ARENA.width - stats.halfWidth)
+    if (e.state === 'attack' && (e.stateTime >= stats.active || atWall)) {
+      e.state = 'recover'
+      e.stateTime = 0
     }
     return
   }
@@ -713,7 +892,7 @@ function stepEnemyAttack(w: World, e: Enemy, stats: EnemyStats, rng: Rng) {
     }
     return
   }
-  if (!e.struckPlayer && inStrikeZone(w, e, stats)) settleStrike(e, stats, damagePlayer(w, stats.damage * e.power, e.x, rng, stats.blockCost))
+  if (stats.style !== 'shoot' && !e.struckPlayer && inStrikeZone(w, e, stats)) settleStrike(e, stats, damagePlayer(w, stats.damage * e.power, e.x, rng, stats.blockCost))
   if (e.stateTime >= stats.active) {
     e.state = 'recover'
     e.stateTime = 0
@@ -730,7 +909,7 @@ function settleStrike(e: Enemy, stats: EnemyStats, result: HitResult) {
     e.vx = -e.facing * (stats.heavy ? 70 : 240)
   } else if (result === 'blocked') {
     e.vx = -e.facing * (stats.heavy ? 40 : 170)
-    if (stats.style === 'leap') {
+    if (stats.style === 'leap' || stats.style === 'lance') {
       e.state = 'recover'
       e.stateTime = 0
     }
@@ -777,6 +956,21 @@ function stepWaves(w: World, dt: number, rng: Rng) {
   w.waves = w.waves.filter((wave) => wave.life > 0 && wave.x > -60 && wave.x < ARENA.width + 60)
 }
 
+/** Arrows fly level until they hit the player, are cut down, or leave the arena. A dash or a jump lets one pass. */
+function stepArrows(w: World, dt: number, rng: Rng) {
+  const p = w.player
+  for (const arrow of w.arrows) {
+    arrow.life -= dt
+    arrow.x += arrow.vx * dt
+    if (arrow.life <= 0) continue
+    const inBody = Math.abs(p.x - arrow.x) < p.halfWidth + 6 && arrow.y > p.y && arrow.y < p.y + p.height
+    if (!inBody) continue
+    const result = damagePlayer(w, arrow.damage, arrow.x - Math.sign(arrow.vx) * 40, rng, arrow.blockCost)
+    if (result !== 'none') arrow.life = 0
+  }
+  w.arrows = w.arrows.filter((a) => a.life > 0 && a.x > -40 && a.x < ARENA.width + 40)
+}
+
 /**
  * Bodies are solid. Heavy enemies shove the player aside; lighter ones are pushed back by
  * the player and by each other, so a crowd spreads out instead of stacking on one spot.
@@ -788,7 +982,7 @@ function keepApart(w: World) {
   if (p.state !== 'dash' && p.state !== 'dead') {
     for (const e of live) {
       const stats = ENEMIES[e.kind]
-      if (p.y > stats.height * 0.7) continue
+      if (p.y - e.y > stats.height * 0.7 || e.y - p.y > p.height * 0.7) continue
       const dx = p.x - e.x
       const overlap = stats.halfWidth + p.halfWidth * 0.5 - Math.abs(dx)
       if (overlap <= 0) continue
