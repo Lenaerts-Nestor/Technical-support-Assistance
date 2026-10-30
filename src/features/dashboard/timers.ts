@@ -2,7 +2,7 @@ export type TimerKind = 'break' | 'lunch'
 
 /** Personal countdowns. They differ only in length and wording. */
 export const TIMERS: Record<TimerKind, { label: string; minutes: number; message: string }> = {
-  break: { label: 'Break', minutes: 15, message: 'You are on your break' },
+  break: { label: 'Break', minutes: 10, message: 'You are on your break' },
   lunch: { label: 'Lunch', minutes: 45, message: 'You are on your lunch' },
 }
 
