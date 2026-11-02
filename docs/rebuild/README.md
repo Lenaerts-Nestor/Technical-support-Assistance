@@ -17,6 +17,9 @@ Purpose: capture **what** the app does, **why**, and the **rules** behind it, so
 Cases, Voice Call, RMA, Guides, Links, Calendar, Sync/backup, Dashboard/timers, App shell, Desktop shell + release pipeline.
 Suggested order: Cases → Guides → Links → Calendar → Voice Call/RMA → Sync → shell.
 
+## Decisions already made
+Lunch rule set is complete as documented · backend/database stays · no real accounts (honor-system identity) · one chat tool. Details: `features/lunch-scheduler.md` §10 and `03-proposed-decisions.md`.
+
 ## Conventions
 - Rule IDs: `<AREA>-R<n>`; never reuse an ID; link each to a test in the new repo.
 - "Why" is mandatory on every rule and every feature.

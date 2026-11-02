@@ -11,7 +11,9 @@ Status values: **Proposed** (my recommendation, needs your yes/no) · **Open** (
 | ADR-005 | Desktop capabilities via typed IPC contract, validated again in main | Proposed | Safety rules (private IPs, read-only default) cannot be bypassed from UI |
 | ADR-006 | Scheduled automation = **outbox + worker + job log**, not fire-and-forget | Proposed | Fixes "claimed but never delivered" (see lunch doc §7) |
 | ADR-007 | Settings (times, tz, publishers, webhook ref) as data with an admin screen | Proposed | Today they need SQL edits and code edits in two places |
-| ADR-008 | Identity: start local-first; add real auth only when sharing is needed (magic link / join code), roles in a `members` table | **Open** | Depends on whether team features stay |
+| ADR-008 | Identity: **no real accounts**; keep the "I am" list and named publishers; publisher list in one settings table; optional shared team code | **Accepted** (owner, answer 3; confirm reading) | Small trusted team; avoids building auth |
+| ADR-016 | Backend stays: hosted Postgres with functions + scheduler, same scope as today (+ outbox, job log, settings) | **Accepted** (owner, answer 2) | Shared days, calendar and automation need it |
+| ADR-017 | One chat adapter (current tool) behind a thin interface | **Accepted** (owner, answer 4) | No multi-provider work |
 | ADR-009 | Database changes only via versioned migrations applied in CI to an empty DB | Proposed | "Paste SQL into the editor once" is not reproducible |
 | ADR-010 | Schema validation library at every boundary + `schemaVersion` migrations | Proposed | Replaces ad-hoc `revive*` functions (keep their test cases) |
 | ADR-011 | Component library + design tokens before pages (UI talk is scheduled for later) | Proposed | Replaces repeated style constants |

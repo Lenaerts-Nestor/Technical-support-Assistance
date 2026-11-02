@@ -219,14 +219,14 @@ publisher list · reminder times · time zone.
 
 ## 8. Known weaknesses → proposed target design
 
-1. **Honor-system identity.** Anyone with the public key who knows a publisher name can publish (worst case: change today's shifts).
-   Target: lightweight auth (magic link or per-team join code) and a `members(role)` table instead of two hard-coded lists.
+1. **Honor-system identity** (accepted, see section 10). Anyone with the public key who knows a publisher name can publish (worst case: change today's shifts).
+   Target: keep it, but with one settings-based publisher list and an optional shared team code. No real accounts.
 2. **Publisher list in two places** (SQL + TS). Target: one `members`/`roles` table; the client reads its own role.
 3. **At-most-once with no visibility.** Target: an **outbox** table (`id, kind, payload, status: pending|sent|failed, attempts, last_error, run_after`),
    a worker that retries with backoff, and a read-only "last runs" view in the app.
 4. **Times, time zone, webhook, publishers are settings rows**, edited from an admin screen (not SQL).
 5. **Holiday / non-working-day calendar** per team; reminders skip those.
-6. **Notifier abstraction** (`ChatNotifier`): Teams card, Slack block, email, in-app push; message templates in data.
+6. **Notifier abstraction** (`ChatNotifier`), one adapter (the current chat tool); message templates in data. Other tools are out of scope.
 7. **Schema as migrations** (`supabase/migrations/…`), with a CI check that applies them to an empty database and runs SQL tests.
 8. **Injected clock** (`now`) everywhere (already true for `send_shift_reminders(p_now)`; copy that pattern to the client logic).
 9. **Realtime instead of polling** (subscribe to the table) with polling as fallback.
@@ -245,9 +245,22 @@ publisher list · reminder times · time zone.
   reminder window edges (due−1 min, due, due+29, due+30), weekend, DST days, empty shift.
 - Contract test: client `reviveDays` against a real row shape.
 
-## 10. Open questions for you (answer later; none block documentation)
+## 10. Decisions confirmed by the owner (resolved open questions)
 
-1. Is "two shifts, languages, chat balance" the full rule set, or are there rules that only live in your head (e.g. seniority, training days)?
-2. Should the rebuilt app keep working **without any backend** (local-only mode)? The current one does.
-3. Do you want accounts, or is "trusted small team, honor system" still acceptable?
-4. Which chat tools must be supported besides the current one?
+| # | Question | Answer | Consequence for the rebuild |
+|---|---|---|---|
+| 1 | Is the documented rule set complete? | **Yes** | LS-R1…R70 are the full requirements; nothing hidden to capture. Anything new goes to section 8 as a future idea. |
+| 2 | Local-only mode or backend? | **Keep the database**, same scope as today, not much more | Backend stays (shared days, calendar, settings, automation). Local-only mode is not a requirement. Do not grow the schema beyond what section 3 lists, plus the outbox/job log. |
+| 3 | Accounts or honor system? | **No real accounts** (honor-system identity stays: "I am" list, named publishers) | See hardening note below. |
+| 4 | Other chat tools? | **Only the current one** | Keep a thin `Notifier` interface for testing, but build one adapter only. Drop Slack/email ideas from scope. |
+
+**Interpretation note (please confirm):** answer 3 was read as "no accounts; keep the lightweight honor system". If you meant "neither", the
+alternative is a shared team code stored in settings and checked by the publish function.
+
+**Hardening that fits "no accounts" (cheap, optional):**
+- publisher list lives in **one settings table**, read by both the database function and the app (removes the duplicate list);
+- a shared **team code** the publish function checks, so the public key alone is not enough (still no per-person login);
+- server rate limit on publish and a visible "published by / at" line, so misuse is noticed.
+
+Scope reminders after these answers: section 8 items 1 (real auth), 6 (multiple chat tools), 10 (skills generalization),
+11 (more than two shifts) and 9 (realtime) are **future ideas only**. Items 2, 3, 4, 5, 7, 8 and 12 stay in scope as reliability fixes.
