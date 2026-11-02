@@ -103,7 +103,8 @@ export function Sidebar({
 
   return (
     <aside
-      className={`border-sidebar-line bg-sidebar flex h-full shrink-0 flex-col overflow-hidden border-r py-4 transition-[width] duration-200 ${
+      // Hidden on a phone: the page gets the whole width (the website opens on the Lunch Planner there).
+      className={`border-sidebar-line bg-sidebar hidden h-full shrink-0 flex-col overflow-hidden border-r py-4 transition-[width] duration-200 md:flex ${
         compact ? 'w-16 px-2' : 'w-[244px] px-3'
       }`}
     >

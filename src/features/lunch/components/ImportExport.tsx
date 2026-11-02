@@ -11,8 +11,11 @@ type Found = { name: string; result: LunchImport }
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
-/** Roster in and out as CSV (Excel) or JSON; the JSON export also carries the history. */
-export function ImportExport({ planner }: { planner: LunchPlanner }) {
+/**
+ * Roster in and out as CSV (Excel) or JSON; the JSON export also carries the history. `importOnly` shows
+ * just Import, centred: the one thing a phone with no roster can do about it.
+ */
+export function ImportExport({ planner, importOnly = false }: { planner: LunchPlanner; importOnly?: boolean }) {
   const input = useRef<HTMLInputElement>(null)
   const [found, setFound] = useState<Found | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
@@ -48,11 +51,11 @@ export function ImportExport({ planner }: { planner: LunchPlanner }) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <button type="button" className={GHOST_BTN_MD} onClick={() => input.current?.click()}>
+    <div className={`flex flex-col gap-2 ${importOnly ? 'items-center' : 'items-end'}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${importOnly ? 'justify-center' : 'justify-end'}`}>
+        <button type="button" className={`${GHOST_BTN_MD} ${importOnly ? 'min-h-11' : ''}`} onClick={() => input.current?.click()}>
           <UploadIcon className="h-4 w-4" />
-          Import
+          {importOnly ? 'Import a roster file' : 'Import'}
         </button>
         <input
           ref={input}
@@ -66,14 +69,18 @@ export function ImportExport({ planner }: { planner: LunchPlanner }) {
             if (file) void pick(file)
           }}
         />
-        <button type="button" className={GHOST_BTN_MD} onClick={exportCsv} disabled={planner.agents.length === 0}>
-          <DownloadIcon className="h-4 w-4" />
-          Roster (CSV)
-        </button>
-        <button type="button" className={GHOST_BTN_MD} onClick={exportAll}>
-          <DownloadIcon className="h-4 w-4" />
-          Roster + history (JSON)
-        </button>
+        {!importOnly && (
+          <>
+            <button type="button" className={GHOST_BTN_MD} onClick={exportCsv} disabled={planner.agents.length === 0}>
+              <DownloadIcon className="h-4 w-4" />
+              Roster (CSV)
+            </button>
+            <button type="button" className={GHOST_BTN_MD} onClick={exportAll}>
+              <DownloadIcon className="h-4 w-4" />
+              Roster + history (JSON)
+            </button>
+          </>
+        )}
       </div>
       {notice && (
         <p role={notice.tone === 'error' ? 'alert' : 'status'} className={`text-sm font-semibold ${notice.tone === 'error' ? 'text-rose-300' : 'text-emerald-300'}`}>

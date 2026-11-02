@@ -55,3 +55,25 @@ export const isPageAvailable = (
   id: PageId,
   audience: NavAudience = { desktop: isDesktopApp(), publisher: true },
 ): boolean => NAV_ITEMS.some((item) => item.id === id && isNavItemVisible(item, audience))
+
+/**
+ * Where to send the user when the page they are on is not theirs, or `null` to stay. On a phone the
+ * sidebar is gone and the Lunch Planner is the only page, so it is never left (the planner carries its
+ * own "I am" picker there) and anything else leads back to it. Elsewhere a page that is not available to
+ * this audience (the planner once "I am" is not Kevin C or Nestor) leads back to the Dashboard.
+ */
+export function redirectFor(page: PageId, { phone, ...audience }: NavAudience & { phone: boolean }): PageId | null {
+  if (phone) return page === 'lunch' ? null : 'lunch'
+  return isPageAvailable(page, audience) ? null : 'dashboard'
+}
+
+/**
+ * The page the app opens on. The desktop app always opens on the Dashboard. On a phone (the website, with
+ * no sidebar) it opens straight on the Lunch Planner, which is what a team lead there came for. Elsewhere
+ * the website returns to the page the user was last on, or the Dashboard when that is gone or never set.
+ */
+export function landingPage({ desktop, phone, saved }: { desktop: boolean; phone: boolean; saved: PageId | null }): PageId {
+  if (desktop) return 'dashboard'
+  if (phone) return 'lunch'
+  return saved !== null && isPageAvailable(saved, { desktop, publisher: true }) ? saved : 'dashboard'
+}

@@ -68,8 +68,8 @@ export function AgentCard({ agent, role, onPick, onCancel, onMove, onSwap, onDra
       }}
       className={`${PANEL} cursor-grab space-y-2 p-3 ${ring} ${role.kind === 'other' ? 'opacity-80' : ''}`}
     >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
+      <div className="flex items-start gap-2 max-md:flex-wrap">
+        <div className="min-w-0 flex-1 max-md:basis-40">
           <p className="text-ink truncate text-sm font-semibold">{agent.name}</p>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {agent.languages.map((language) => (
@@ -92,21 +92,21 @@ export function AgentCard({ agent, role, onPick, onCancel, onMove, onSwap, onDra
           </div>
         </div>
         {role.kind === 'picked' && showControls ? (
-          <button type="button" className={GHOST_BTN} aria-pressed="true" onClick={onCancel}>
+          <button type="button" className={`${GHOST_BTN} max-md:min-h-11 max-md:w-full`} aria-pressed="true" onClick={onCancel}>
             Cancel
           </button>
         ) : partner && showControls ? (
           <button
             type="button"
             onClick={onSwap}
-            className={`${GHOST_BTN} ${safe ? '!border-emerald-400/60' : '!border-rose-400/60'}`}
+            className={`${GHOST_BTN} max-md:min-h-11 max-md:w-full ${safe ? '!border-emerald-400/60' : '!border-rose-400/60'}`}
             aria-label={`Swap ${partner.picked.name} with ${agent.name}`}
           >
             <SwapIcon className="h-3.5 w-3.5" />
             Swap with {partner.picked.name}
           </button>
         ) : (
-          <button type="button" className={GHOST_BTN} aria-pressed="false" aria-label={`Swap ${agent.name}`} onClick={onPick}>
+          <button type="button" className={`${GHOST_BTN} max-md:min-h-11`} aria-pressed="false" aria-label={`Swap ${agent.name}`} onClick={onPick}>
             <SwapIcon className="h-3.5 w-3.5" />
             Swap
           </button>
@@ -117,7 +117,7 @@ export function AgentCard({ agent, role, onPick, onCancel, onMove, onSwap, onDra
         <button
           type="button"
           onClick={onMove}
-          className={`${GHOST_BTN} w-full ${role.moveLost.length ? '!border-rose-400/60' : ''}`}
+          className={`${GHOST_BTN} w-full max-md:min-h-11 ${role.moveLost.length ? '!border-rose-400/60' : ''}`}
         >
           Move {agent.name} to {SHIFT_LABELS[role.moveTo]}
         </button>

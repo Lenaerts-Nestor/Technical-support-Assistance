@@ -5,8 +5,9 @@ import { AppDataProvider } from './AppDataProvider'
 import { SharedShiftProvider } from '../features/shift/SharedShiftProvider'
 import { useSharedShift } from '../features/shift/sharedShiftContext'
 import { FocusModeContext } from './focusMode'
-import { NAV_ITEMS, NavigationContext, isDesktopApp, isPageAvailable } from './navigation'
+import { NAV_ITEMS, NavigationContext, isDesktopApp, landingPage, redirectFor } from './navigation'
 import { storageKey, usePersistentState } from '../shared/storage/usePersistentState'
+import { PHONE_QUERY, matchesMedia, useIsPhone } from '../shared/hooks/useMediaQuery'
 import type { PageId } from './navigation'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { VoiceCallPage } from '../features/voiceCall/VoiceCallPage'
@@ -39,33 +40,35 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
 const LAST_PAGE_KEY = storageKey('app', 'lastPage')
 
 /**
- * Sends the user back to the Dashboard when the page they are on stops being theirs — the Lunch Planner
- * once "I am" changes to someone who does not plan lunch. Renders nothing; it sits inside the shift
+ * Sends the user away from a page that has stopped being theirs: back to the Dashboard when the Lunch
+ * Planner is left behind by "I am" changing to someone who does not plan lunch, and to the Lunch Planner
+ * on a phone, where it is the only page (see `redirectFor`). Renders nothing; it sits inside the shift
  * provider because that is where "I am" lives.
  */
-function PageGuard({ page, onLeave }: { page: PageId; onLeave: () => void }) {
+function PageGuard({ page, onRedirect }: { page: PageId; onRedirect: (to: PageId) => void }) {
   const { canPublish } = useSharedShift()
-  const allowed = isPageAvailable(page, { desktop: isDesktopApp(), publisher: canPublish })
+  const phone = useIsPhone()
+  const target = redirectFor(page, { desktop: isDesktopApp(), publisher: canPublish, phone })
   useEffect(() => {
-    if (!allowed) onLeave()
-  }, [allowed, onLeave])
+    if (target) onRedirect(target)
+  }, [target, onRedirect])
   return null
 }
 
 /**
- * The desktop app always opens on the Dashboard. The website returns to the page the user was last on
- * (so a refresh keeps their place); a first visit, or a page that is no longer available, lands on the Dashboard.
+ * The desktop app always opens on the Dashboard and a phone on the Lunch Planner. The website otherwise
+ * returns to the page the user was last on (so a refresh keeps their place); a first visit, or a page
+ * that is no longer available, lands on the Dashboard.
  */
 function initialPage(): PageId {
-  if (isDesktopApp()) return 'dashboard'
+  let saved: PageId | null = null
   try {
-    const saved = window.localStorage.getItem(LAST_PAGE_KEY)
-    const id = saved === null ? undefined : (JSON.parse(saved) as PageId)
-    if (id && isPageAvailable(id)) return id
+    const raw = window.localStorage.getItem(LAST_PAGE_KEY)
+    saved = raw === null ? null : (JSON.parse(raw) as PageId)
   } catch {
-    // Storage blocked or unreadable: start on the Dashboard.
+    // Storage blocked or unreadable: start on the default page.
   }
-  return 'dashboard'
+  return landingPage({ desktop: isDesktopApp(), phone: matchesMedia(PHONE_QUERY), saved })
 }
 
 export default function App() {
@@ -97,7 +100,6 @@ export default function App() {
     })
   }, [])
   const forced = focused.has(page)
-  const leaveToDashboard = useCallback(() => setPage('dashboard'), [setPage])
 
   return (
     <ErrorBoundary>
@@ -109,7 +111,7 @@ export default function App() {
         <AppDataProvider>
           <NavigationContext.Provider value={setPage}>
             <div className="bg-canvas text-ink flex h-full">
-              <PageGuard page={page} onLeave={leaveToDashboard} />
+              <PageGuard page={page} onRedirect={setPage} />
               <Sidebar
                 current={page}
                 onNavigate={setPage}

@@ -59,6 +59,25 @@ The page only appears in the sidebar when **I am** is **Kevin C** or **Nestor** 
 shifts); for anyone else it is left out, and changing **I am** while on it returns to the Dashboard.
 **Add agent** opens a small popup, so the form takes no room in the table.
 
+### On a phone (the website)
+
+On a narrow screen (under 768 px wide, so a phone held upright) the website is laid out for the team lead
+who wants to mark who is in, generate and paste the schedule into Teams. The desktop app and any wider window are unchanged.
+
+- **It opens straight on the Lunch Planner.** The sidebar is hidden so the page gets the whole width, which
+  also means there are no other pages on a phone. Because the page cannot bounce you to the Dashboard there, it
+  carries its own **I am** picker under the title (Kevin C or Nestor, so Copy for Teams also shares the shifts).
+- **Agents are decision cards**, not a table: the name first (with languages and chat as read-only chips), then
+  **Early** and **Available** side by side, then **Yesterday**'s shift as two large buttons. Search takes the
+  full width, with **Show** under it, and **Everyone in** / **Fill yesterday** side by side below. Adding,
+  renaming, deleting and editing languages or chat are left to the computer, and so are Import and Export.
+- **Generate, Save and Copy for Teams stay pinned to the bottom of the screen**, Generate as the full-width primary
+  button, so they are in reach from the agent list as well as from the schedule. **Generate** also scrolls the new
+  schedule into view, and what Copy for Teams did (copied, shared with the team, posted to the Teams chat) appears
+  right above the buttons. Swapping works with the **Swap** button (dragging is not used on a touch screen).
+- **The roster is kept per browser**, so a phone browser starts empty. Until it has agents the Agents card
+  shows a single **Import a roster file** button, to bring in the *Roster + history (JSON)* export from a computer.
+
 Keep the agent table (name, languages, chat agent, early shift, available today, yesterday's
 shift), press **Generate** for a fair two-shift lunch schedule, then adjust it by hand —
 drag an agent onto a card in the other shift to swap, onto the column to move, or use the

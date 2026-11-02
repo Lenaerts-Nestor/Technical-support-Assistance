@@ -70,7 +70,7 @@ export function ShiftColumn({
         <button
           type="button"
           onClick={() => onMove(incoming.agent)}
-          className={`${GHOST_BTN} mb-3 w-full ${incoming.lostLanguages.length ? '!border-rose-400/60' : ''}`}
+          className={`${GHOST_BTN} mb-3 w-full max-md:min-h-11 ${incoming.lostLanguages.length ? '!border-rose-400/60' : ''}`}
         >
           Move {incoming.agent.name} here
           {incoming.lostLanguages.length > 0 && ` (leaves ${incoming.lostLanguages.join(', ')} uncovered)`}
