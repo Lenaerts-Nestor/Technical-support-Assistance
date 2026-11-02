@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from './ErrorBoundary'
 import { AppDataProvider } from './AppDataProvider'
 import { SharedShiftProvider } from '../features/shift/SharedShiftProvider'
+import { useSharedShift } from '../features/shift/sharedShiftContext'
 import { FocusModeContext } from './focusMode'
 import { NAV_ITEMS, NavigationContext, isDesktopApp, isPageAvailable } from './navigation'
 import { storageKey, usePersistentState } from '../shared/storage/usePersistentState'
@@ -36,6 +37,20 @@ const PAGES: Record<PageId, () => React.ReactElement> = {
 }
 
 const LAST_PAGE_KEY = storageKey('app', 'lastPage')
+
+/**
+ * Sends the user back to the Dashboard when the page they are on stops being theirs — the Lunch Planner
+ * once "I am" changes to someone who does not plan lunch. Renders nothing; it sits inside the shift
+ * provider because that is where "I am" lives.
+ */
+function PageGuard({ page, onLeave }: { page: PageId; onLeave: () => void }) {
+  const { canPublish } = useSharedShift()
+  const allowed = isPageAvailable(page, { desktop: isDesktopApp(), publisher: canPublish })
+  useEffect(() => {
+    if (!allowed) onLeave()
+  }, [allowed, onLeave])
+  return null
+}
 
 /**
  * The desktop app always opens on the Dashboard. The website returns to the page the user was last on
@@ -82,6 +97,7 @@ export default function App() {
     })
   }, [])
   const forced = focused.has(page)
+  const leaveToDashboard = useCallback(() => setPage('dashboard'), [setPage])
 
   return (
     <ErrorBoundary>
@@ -93,6 +109,7 @@ export default function App() {
         <AppDataProvider>
           <NavigationContext.Provider value={setPage}>
             <div className="bg-canvas text-ink flex h-full">
+              <PageGuard page={page} onLeave={leaveToDashboard} />
               <Sidebar
                 current={page}
                 onNavigate={setPage}

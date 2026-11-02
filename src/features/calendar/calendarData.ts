@@ -93,6 +93,28 @@ export function formatLong(iso: string): string {
   return `${WEEKDAY_NAMES[weekdayIndex(iso)]}, ${p.day} ${MONTH_NAMES[p.month]} ${p.year}`
 }
 
+/** "Wed, 15 Nov": the weekday and day, for a date that leads a card. */
+export function formatDay(iso: string): string {
+  const p = parseIso(iso)
+  if (!p) return iso
+  return `${WEEKDAY_NAMES[weekdayIndex(iso)].slice(0, 3)}, ${String(p.day).padStart(2, '0')} ${MONTH_NAMES[p.month].slice(0, 3)}`
+}
+
+/** "Monday / 02 Nov 2026": the small date line above a page title (shown uppercase). */
+export function formatEyebrow(iso: string): string {
+  const p = parseIso(iso)
+  if (!p) return iso
+  return `${WEEKDAY_NAMES[weekdayIndex(iso)]} / ${String(p.day).padStart(2, '0')} ${MONTH_NAMES[p.month].slice(0, 3)} ${p.year}`
+}
+
+/** Whole days from `from` to `to` (negative when `to` is earlier). */
+export function daysBetweenIso(from: string, to: string): number {
+  const a = parseIso(from)
+  const b = parseIso(to)
+  if (!a || !b) return 0
+  return Math.round((Date.UTC(b.year, b.month, b.day) - Date.UTC(a.year, a.month, a.day)) / 86_400_000)
+}
+
 /** "15 Nov" or, across years, "15 Nov 2026". */
 export function formatShort(iso: string, withYear = false): string {
   const p = parseIso(iso)

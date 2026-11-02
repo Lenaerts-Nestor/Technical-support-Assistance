@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
 import type { AddResult } from '../useLunchPlanner'
 import { filterAgents, nameKey, sortAgents } from '../roster'
 import type { AvailabilityFilter, SortDirection } from '../roster'
 import type { Agent } from '../types'
 import { COLUMNS } from './rosterColumns'
+import { AddAgentDialog } from './AddAgentDialog'
 import { ConfirmDialog } from './ConfirmDialog'
 import { CheckIcon, ChevronIcon, RefreshIcon, SearchIcon, SortIcon } from './icons'
 import { storageKey, usePersistentState } from '../../../shared/storage/usePersistentState'
@@ -12,7 +12,7 @@ import { PlusIcon, TrashIcon } from '../../../shared/ui/icons'
 import {
   CARD,
   CARD_HEADER,
-  COUNT_BADGE,
+  CARD_TITLE,
   DELETE_BTN,
   EMPTY,
   GHOST_BTN,
@@ -40,8 +40,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
   const [query, setQuery] = useState('')
   const [availability, setAvailability] = useState<AvailabilityFilter>('all')
   const [sort, setSort] = useState<{ column: string; direction: SortDirection }>({ column: 'name', direction: 'asc' })
-  const [newName, setNewName] = useState('')
-  const [addError, setAddError] = useState('')
+  const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<Agent | null>(null)
   // Remembered per browser, like the sidebar: a long roster is mostly out of the way once it is set up.
   const [open, setOpen] = usePersistentState<boolean>(
@@ -67,18 +66,14 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
   const isTaken = (name: string, exceptId: string) =>
     agents.some((a) => a.id !== exceptId && nameKey(a.name) === nameKey(name))
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    const result = onAdd(newName)
+  /** The popup's add: a new agent must be visible, so a search or filter typed earlier is cleared. */
+  const handleAdd = (name: string): AddResult => {
+    const result = onAdd(name)
     if (result === 'added') {
-      setNewName('')
-      setAddError('')
-      // A new agent must be visible, not hidden by a filter typed earlier.
       setQuery('')
       setAvailability('all')
-    } else {
-      setAddError(result === 'duplicate' ? 'An agent with that name is already in the table.' : 'Type a name first.')
     }
+    return result
   }
 
   const toggleSort = (column: string) =>
@@ -87,12 +82,14 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
   return (
     <section className={CARD} aria-labelledby="lunch-roster-title">
       <div className={`${CARD_HEADER} flex-wrap`}>
-        <h3 id="lunch-roster-title" className="text-ink flex items-center gap-2.5 text-sm font-bold tracking-tight">
-          Agents
-          <span className={COUNT_BADGE}>
-            {agents.length} · {availableCount} in today
-          </span>
-        </h3>
+        <div>
+          <p className={SECTION_LABEL}>
+            {agents.length} / {availableCount} in today
+          </p>
+          <h3 id="lunch-roster-title" className={`${CARD_TITLE} mt-1`}>
+            Agents
+          </h3>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           {open && awayCount > 0 && (
             <button
@@ -131,8 +128,8 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
       </div>
 
       <div id="lunch-roster-body" hidden={!open}>
-      <div className="flex flex-wrap items-end gap-3 px-4 pt-4">
-        <label className="block w-56">
+      <div className="border-line flex flex-wrap items-end gap-3 border-b px-4 py-3">
+        <label className="block w-60">
           <span className={SECTION_LABEL}>Search</span>
           <span className="relative mt-1 block">
             <SearchIcon className="text-ink-faint pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
@@ -150,52 +147,33 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
           <select
             value={availability}
             onChange={(e) => setAvailability(e.target.value as AvailabilityFilter)}
-            className={`${SELECT} mt-1 block !py-2 !text-sm`}
+            className={`${SELECT} mt-1 block`}
           >
             <option value="all">Everyone</option>
             <option value="available">Available today</option>
             <option value="away">Not available</option>
           </select>
         </label>
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-2" noValidate>
-          <label className="block">
-            <span className={SECTION_LABEL}>New agent</span>
-            <input
-              value={newName}
-              onChange={(e) => {
-                setNewName(e.target.value)
-                setAddError('')
-              }}
-              placeholder="Agent name"
-              aria-invalid={addError !== ''}
-              aria-describedby={addError ? 'lunch-add-error' : undefined}
-              className={`${INPUT} mt-1 w-48`}
-            />
-          </label>
-          <button type="submit" className={PRIMARY_BTN}>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setChatHidden((v) => !v)}
+            aria-pressed={chatHidden}
+            title="Hide or show the Chat agent and Languages columns"
+            className={GHOST_BTN_MD}
+          >
+            {chatHidden ? 'Show chat & language columns' : 'Hide chat & language columns'}
+          </button>
+          <button type="button" onClick={() => setAdding(true)} className={PRIMARY_BTN}>
             <PlusIcon className="h-4 w-4" />
             Add agent
           </button>
-        </form>
-        <button
-          type="button"
-          onClick={() => setChatHidden((v) => !v)}
-          aria-pressed={chatHidden}
-          title="Hide or show the Chat agent and Languages columns"
-          className={`${GHOST_BTN_MD} ml-auto`}
-        >
-          {chatHidden ? 'Show chat & language columns' : 'Hide chat & language columns'}
-        </button>
+        </div>
       </div>
-      {addError && (
-        <p id="lunch-add-error" role="alert" className="px-4 pt-2 text-sm font-semibold text-rose-300">
-          {addError}
-        </p>
-      )}
 
-      <div className="overflow-x-auto p-4">
+      <div className="overflow-x-auto px-4 pt-1 pb-3">
         {agents.length === 0 ? (
-          <p className={EMPTY}>No agents yet. Add one above, or import your table with Import in the page header.</p>
+          <p className={EMPTY}>No agents yet. Press Add agent, or import your table with Import in the page header.</p>
         ) : (
           <table className="w-full min-w-[820px] border-separate border-spacing-0 text-left text-sm">
             <caption className="sr-only">Agents, with their languages and today's status. Headings sort the table.</caption>
@@ -208,12 +186,12 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
                       key={column.id}
                       scope="col"
                       aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className="border-line border-b px-2 py-2 font-normal"
+                      className="border-line border-b px-2 py-1.5 font-normal"
                     >
                       <button
                         type="button"
                         onClick={() => toggleSort(column.id)}
-                        className={`${SECTION_LABEL} hover:text-ink inline-flex items-center gap-1 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`}
+                        className={`${SECTION_LABEL} hover:text-ink inline-flex items-center gap-1 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus`}
                       >
                         {column.label}
                         <SortIcon className={`h-3.5 w-3.5 ${active ? 'text-brand-strong' : 'text-ink-faint'}`} direction={active ? sort.direction : undefined} />
@@ -221,7 +199,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
                     </th>
                   )
                 })}
-                <th scope="col" className="border-line border-b px-2 py-2">
+                <th scope="col" className="border-line border-b px-2 py-1.5">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -230,7 +208,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
               {rows.map((agent) => (
                 <tr key={agent.id} className={`hover:bg-hover ${agent.available ? '' : 'opacity-70'}`}>
                   {columns.map((column) => (
-                    <td key={column.id} className="border-line-soft border-b px-2 py-1.5 align-middle">
+                    <td key={column.id} className="border-line-soft border-b px-2 py-1 align-middle">
                       {column.cell({
                         agent,
                         agents,
@@ -239,10 +217,10 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
                       })}
                     </td>
                   ))}
-                  <td className="border-line-soft border-b px-2 py-1.5 text-right">
+                  <td className="border-line-soft border-b px-2 py-1 text-right">
                     <button
                       type="button"
-                      className={`${DELETE_BTN} p-1.5`}
+                      className={`${DELETE_BTN} p-1`}
                       aria-label={`Delete ${agent.name}`}
                       title="Delete agent"
                       onClick={() => setDeleting(agent)}
@@ -260,6 +238,8 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
         )}
       </div>
       </div>
+
+      {adding && <AddAgentDialog onAdd={handleAdd} onClose={() => setAdding(false)} />}
 
       {deleting && (
         <ConfirmDialog

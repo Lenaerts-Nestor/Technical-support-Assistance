@@ -1,5 +1,5 @@
 @import "tailwindcss";
-/* The light theme ("Coffee"). The default (dark) palette is the @theme block below. */
+/* The light theme ("Parchment Workshop"). The default (dark, "Graphite Workshop") palette is the @theme block below. */
 @import "./shared/theme/themes.css";
 
 /**
@@ -7,75 +7,114 @@
  * utility family, so `--color-line` gives `border-line`, `text-ink` gives the
  * primary text colour, and so on.
  *
- * THIS BLOCK IS THE DEFAULT THEME ("Dark": a neutral slate with one warm amber
- * accent — the only colour in it, so nothing on the page is tinted). `static`
- * makes Tailwind emit every variable here even if no utility uses it yet, so a
- * theme always has something to override. The other theme ("Coffee", a light one)
- * lives in `src/shared/theme/themes.css` and only overrides these same variables
- * under `[data-theme="…"]`, so a component never needs to know which theme is
- * active. To try a new palette, copy that block, change the values and add it to
- * THEMES in `themes.ts`; the sidebar's theme switch toggles between them live.
+ * THIS BLOCK IS THE DEFAULT THEME ("Graphite Workshop"): true graphite greys (no
+ * navy, no blue) with warm off-white text and one warm amber accent. The light
+ * theme ("Parchment Workshop") lives in `src/shared/theme/themes.css` and
+ * overrides the same variables under `[data-theme="parchment"]`, so a component never
+ * needs to know which theme is active. `static` makes Tailwind emit every variable
+ * here even if no utility uses it yet, so a theme always has something to override.
  *
- * Depth is built from four steps, darkest to lightest (a light theme reverses it):
- *   field (input wells) → canvas (page) → surface (cards) → surface-hi / subtle (raised, headers)
+ * Depth is built from colour and border contrast, not from heavy shadows:
+ *   field (input wells) → canvas (page) → surface (cards) → surface-hi (raised controls) → subtle (headers, hover)
+ *
+ * Meaning is shared by both themes: amber / terracotta = primary action and
+ * attention, green = available or successful, red = a problem, lavender = supporting
+ * information. Pairs of text + surface are chosen for WCAG AA.
  */
 @theme static {
   /* Surfaces. */
-  --color-canvas: #131418;
-  --color-surface: #1a1c22;
-  /* The lit top edge of a card — cards fade from this down to `surface`. */
-  --color-surface-hi: #23262e;
-  /* Card header strips and recessed blocks. */
-  --color-subtle: #292c35;
-  /* Input wells: darker than the card they sit on, so a field reads as a hole to type in. */
-  --color-field: #0f1014;
+  --color-canvas: #111214;
+  --color-surface: #202124;
+  /* Raised controls: buttons, chips, selects. One step lighter than a card. */
+  --color-surface-hi: #292a2d;
+  /* Header strips, hover on a raised control, recessed blocks. */
+  --color-subtle: #303134;
+  /* Input wells: darker than the card they sit on, so a field reads as a place to type. */
+  --color-field: #17181a;
 
-  /* Sidebar: its own gradient so it reads as chrome, not as one more card. */
-  --color-sidebar-hi: #20232b;
-  --color-sidebar-lo: #131419;
-  --color-sidebar-line: #2c2f39;
+  /* Sidebar: a flat step lighter than the canvas, separated by its own border. */
+  --color-sidebar: #191a1d;
+  --color-sidebar-hi: #191a1d;
+  --color-sidebar-lo: #191a1d;
+  --color-sidebar-line: #36373b;
 
-  /* Borders — `line-soft` between rows, `line` is the default edge, `line-strong` outlines cards and buttons. */
-  --color-line-soft: #2c2f38;
-  --color-line: #383c47;
-  --color-line-strong: #4d525f;
+  /* Borders: `line-soft` between rows, `line` is the default edge, `line-strong` outlines cards and buttons. */
+  --color-line-soft: #303134;
+  --color-line: #3c3d41;
+  --color-line-strong: #45464a;
+  /* Edge of a text field or select: stronger than a card border so a control's boundary stays visible (3:1). */
+  --color-field-line: #6e6f73;
 
-  /* Text, brightest to dimmest. `ink-soft` is for button labels and small headings that must stay readable. */
-  --color-ink: #f4f5f8;
-  --color-ink-soft: #d6d9e1;
-  --color-ink-muted: #a7acb9;
-  --color-ink-faint: #838896;
+  /* Text, brightest to dimmest. All four pass AA on every surface above (ink-faint is for placeholders). */
+  --color-ink: #f4f1eb;
+  --color-ink-soft: #d8d4cc;
+  --color-ink-muted: #aaa69e;
+  --color-ink-faint: #97938b;
 
-  /* Brand accent: primary actions, active nav, focus rings. `brand-hi` is the lit top of a filled button. */
-  --color-brand: #e9a23b;
-  --color-brand-hi: #f7b955;
-  --color-brand-strong: #f7b955;
-  --color-brand-soft: rgb(233 162 59 / 0.14);
-  --color-brand-line: rgb(233 162 59 / 0.45);
-  /* Text that sits on a filled brand background — pick whichever of light/dark contrasts with the accent. */
-  --color-on-brand: #1b1305;
-  /* A faint wash of the accent in the top corner of the page. */
-  --color-glow: rgb(233 162 59 / 0.05);
-  /* Hover tint for rows and nav items: a touch of light on a dark theme, a touch of shade on a light one. */
-  --color-hover: rgb(255 255 255 / 0.06);
+  /* Primary action colour: filled buttons, active nav, current shift, selected rows. */
+  --color-brand: #e7a83e;
+  --color-brand-hi: #e7a83e;
+  --color-brand-hover: #c98420;
+  /* Amber used as text or an icon on a dark surface. */
+  --color-brand-strong: #eeb552;
+  /* Selected row / active control background (deep brown-gold) and the matching edge. */
+  --color-brand-soft: #3d3221;
+  --color-brand-line: rgb(231 168 62 / 0.5);
+  /* Text that sits on a filled brand background. */
+  --color-on-brand: #25180a;
+  --color-focus: #ffd27d;
+  --color-glow: transparent;
+  /* Hover tint for rows and nav items. */
+  --color-hover: rgb(244 241 235 / 0.06);
 
-  /* Calendar days away. PTO is a deliberately loud light green so a day off
-     is the first thing the eye lands on; "other" is a violet that stays apart from it. */
-  --color-pto: #3df58a;
-  --color-pto-ink: #04230f;
-  --color-leave-other: #c58bff;
-  --color-leave-other-ink: #1f0a38;
+  /* Semantic colours (text, icons, dots, edges) and their quiet surfaces. */
+  --color-success: #78c895;
+  --color-warning: #e7a83e;
+  --color-danger: #ec7880;
+  --color-info: #b49ae0;
+  --color-success-surface: #1f3226;
+  --color-warning-surface: #3b301f;
+  --color-danger-surface: #3a2529;
+  --color-info-surface: #30293c;
 
-  /* A lit top edge plus a soft drop: lifts a card off the canvas without a harsh outline. */
-  --shadow-card:
-    inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.45),
-    0 14px 28px -18px rgb(0 0 0 / 0.8);
-  /* Buttons: a thin highlight on top, so they read as something pressable. */
-  --shadow-btn: inset 0 1px 0 0 rgb(255 255 255 / 0.22), 0 1px 2px 0 rgb(0 0 0 / 0.4);
-  --shadow-btn-soft: inset 0 1px 0 0 rgb(255 255 255 / 0.06), 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-glow: 0 0 22px -8px var(--color-brand);
-  /* Input wells look pressed in. */
-  --shadow-field: inset 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  /*
+   * Calendar days away. PTO is a strong aqua-mint, between the lavender used for
+   * information and a neon green: loud enough that a day off is the first thing the
+   * eye lands on, without glowing. "Other" stays a clearly separate violet.
+   */
+  --color-pto: #4fd3b2;
+  --color-pto-ink: #062922;
+  --color-leave-other: #ae92e6;
+  --color-leave-other-ink: #1d1233;
+
+  /* Cards sit on the page by border colour; the shadow is only a hint. */
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-btn: 0 1px 1px 0 rgb(0 0 0 / 0.3);
+  --shadow-btn-soft: none;
+  --shadow-glow: none;
+  --shadow-field: none;
+
+  /*
+   * Status colours. The app writes Tailwind's palette names all over (rose for a
+   * problem, emerald for success, amber for attention, sky for information) and
+   * pairs them as "-200/-300" text, "-400" dots and edges, "/10" tints and "-950" ink
+   * on a solid "-400". Each family is redefined here, so those names stay readable and
+   * stay inside this palette: no neon, no saturated blue.
+   */
+  --color-amber-50: #fff4dc;   --color-amber-100: #fbe6bd;   --color-amber-200: #f6d395;   --color-amber-300: #f0c070;   --color-amber-400: #e7a83e;   --color-amber-500: #c98420;   --color-amber-950: #25180a;
+  --color-yellow-100: #fbebc0; --color-yellow-200: #f4da95;  --color-yellow-300: #ebc96b;  --color-yellow-400: #ddb44a;  --color-yellow-500: #b9922f;  --color-yellow-950: #2b2108;
+  --color-orange-300: #e6a37d; --color-orange-400: #d58a5a;  --color-orange-500: #c06f3f;  --color-orange-950: #2f1608;
+  --color-rose-50: #fff1f2;    --color-rose-100: #fadadd;    --color-rose-200: #f6bcc0;    --color-rose-300: #f2959b;    --color-rose-400: #ec7880;    --color-rose-500: #c2474f;    --color-rose-950: #3a1419;
+  --color-emerald-50: #effaf3; --color-emerald-100: #dbf2e3; --color-emerald-200: #bde5cb; --color-emerald-300: #9adab1; --color-emerald-400: #78c895; --color-emerald-500: #5bae7a; --color-emerald-950: #10291a;
+  --color-green-300: #9adab1;  --color-green-400: #78c895;   --color-green-950: #10291a;
+  --color-lime-400: #a3cf86;
+  --color-teal-200: #c3e9df;   --color-teal-300: #96d8c8;    --color-teal-400: #6ec7b4;    --color-teal-950: #0f2b26;
+  --color-sky-50: #f4effb;     --color-sky-100: #e6dcf6;     --color-sky-200: #d6c8f0;     --color-sky-300: #c6b1ea;     --color-sky-400: #b49ae0;     --color-sky-500: #9a7fd0;     --color-sky-950: #241a3a;
+  --color-cyan-300: #c6b1ea;   --color-cyan-400: #b49ae0;
+  --color-blue-100: #e6dcf6;   --color-blue-200: #d6c8f0;    --color-blue-400: #b49ae0;
+  --color-indigo-200: #d6c8f0; --color-indigo-400: #b49ae0;
+  --color-violet-100: #f1dcf3; --color-violet-200: #e5c4ea;  --color-violet-300: #d4a5dc;  --color-violet-400: #c08ccb;  --color-violet-950: #2e1a33;
+  --color-fuchsia-200: #e5c4ea; --color-fuchsia-400: #c08ccb;
 }
 
 html,
@@ -92,9 +131,6 @@ body,
 body {
   margin: 0;
   background-color: var(--color-canvas);
-  /* A soft accent wash in the top-right keeps the page from being one flat slab. */
-  background-image: radial-gradient(900px 420px at 90% -120px, var(--color-glow), transparent 70%);
-  background-repeat: no-repeat;
   color: var(--color-ink);
 }
 
@@ -118,6 +154,12 @@ body {
     background-color: var(--color-brand-line);
     color: var(--color-ink);
   }
+
+  /* One visible focus ring everywhere, in the theme's focus colour. Fields draw their own ring on focus. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
 }
 
 /* Interactive panel block: marching dashes on a troubleshooting link. */
@@ -131,8 +173,13 @@ body {
   animation: panel-link-flow 1s linear infinite;
 }
 
+/* Reduced motion: no transitions, no animations, no smooth scrolling. */
 @media (prefers-reduced-motion: reduce) {
-  .panel-link {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 }

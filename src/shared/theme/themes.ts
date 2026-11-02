@@ -6,7 +6,7 @@ import { storageKey } from '../storage/usePersistentState'
  * needs: a name and two swatch colours so a theme can be recognised before it is
  * applied.
  */
-export type ThemeId = 'dark' | 'coffee'
+export type ThemeId = 'dark' | 'parchment'
 
 export type ThemeInfo = {
   id: ThemeId
@@ -16,16 +16,20 @@ export type ThemeInfo = {
 }
 
 export const THEMES: readonly ThemeInfo[] = [
-  { id: 'dark', label: 'Dark', swatch: ['#23262e', '#e9a23b'] },
-  { id: 'coffee', label: 'Coffee', swatch: ['#fffdf9', '#8f5b2a'] },
+  { id: 'dark', label: 'Graphite', swatch: ['#202124', '#e7a83e'] },
+  { id: 'parchment', label: 'Parchment', swatch: ['#fffdf9', '#914b32'] },
 ]
 
 export const DEFAULT_THEME: ThemeId = 'dark'
 
 export const THEME_KEY = storageKey('app', 'theme')
 
-/** Accepts only a theme that exists, so a renamed or removed theme falls back to the default. */
-export const reviveTheme = (raw: unknown): ThemeId | null => THEMES.find((t) => t.id === raw)?.id ?? null
+/** Saved choices from before a theme was renamed: "coffee" became "parchment". */
+const RENAMED: Record<string, ThemeId> = { coffee: 'parchment' }
+
+/** Accepts only a theme that exists (or an old name of one), so a removed theme falls back to the default. */
+export const reviveTheme = (raw: unknown): ThemeId | null =>
+  THEMES.find((t) => t.id === raw)?.id ?? (typeof raw === 'string' ? (RENAMED[raw] ?? null) : null)
 
 /** Put a theme on the page. The default theme is the bare `:root`, so it clears the attribute. */
 export function applyTheme(id: ThemeId): void {

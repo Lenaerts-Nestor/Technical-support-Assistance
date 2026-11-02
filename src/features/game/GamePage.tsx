@@ -265,7 +265,7 @@ export function GamePage() {
           }}
           aria-label="Game screen. Press Enter to start, then A and D to run, W to jump, S to drop off a ledge, Shift to dash and J and K to attack. The Warden holds L to guard."
           style={{ aspectRatio: `${ARENA.width} / ${ARENA.height}` }}
-          className="border-line-strong focus-visible:outline-brand relative mx-auto w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="border-line-strong focus-visible:outline-focus relative mx-auto w-full overflow-hidden rounded-lg border bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
           {phase === 'break' && <BreakScreen world={engine.world} picked={picked} onPick={pick} onContinue={begin} />}

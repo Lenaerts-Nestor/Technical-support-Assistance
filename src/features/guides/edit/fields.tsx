@@ -9,14 +9,14 @@ import type { ReactNode, TextareaHTMLAttributes } from 'react'
  */
 
 const FIELD =
-  'w-full rounded-lg border border-line-strong bg-canvas text-ink transition-colors placeholder:text-ink-faint hover:border-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none'
+  'w-full rounded-lg border border-field-line bg-field text-ink transition-colors placeholder:text-ink-faint hover:border-ink-faint focus:border-focus focus:ring-2 focus:ring-focus/40 focus:outline-none'
 
 export const INPUT = `${FIELD} px-3 py-2 text-[15px]`
 export const INPUT_HEADING = `${FIELD} px-3 py-2 text-base font-semibold`
 export const INPUT_TITLE = `${FIELD} px-3 py-2.5 text-lg font-semibold tracking-tight`
 export const TEXTAREA = `${FIELD} resize-y px-3 py-2 text-[15px] leading-relaxed`
 export const SELECT =
-  'rounded-lg border border-line-strong bg-canvas px-2.5 py-2 text-sm font-medium text-ink transition-colors hover:border-ink-faint focus:border-brand focus:ring-2 focus:ring-brand/30 focus:outline-none'
+  'rounded-lg border border-field-line bg-field px-2.5 py-2 text-sm font-medium text-ink transition-colors hover:border-ink-faint focus:border-focus focus:ring-2 focus:ring-focus/40 focus:outline-none'
 
 /** A labelled control: the label sits above and clicking it focuses the field. */
 export function Field({

@@ -60,7 +60,7 @@ export function ShiftColumn({
       }}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h4 id={headingId} className="text-ink text-sm font-bold tracking-tight">
+        <h4 id={headingId} className="text-ink text-base font-extrabold tracking-tight">
           {SHIFT_LABELS[shift]}
         </h4>
         <span className={COUNT_BADGE}>{agents.length}</span>

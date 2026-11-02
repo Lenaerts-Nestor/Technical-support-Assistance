@@ -3,8 +3,10 @@ import { useSharedShift } from '../features/shift/sharedShiftContext'
 import { SELECT } from '../shared/ui/styles'
 
 /**
- * Optional "I am …" picker, above the theme switcher. There are no accounts: the choice stays in
+ * Optional "I am …" picker, above Sync. There are no accounts: the choice stays in
  * this browser and only decides which shift to show — and whether Copy for Teams also shares the shifts.
+ * The picker carries no visible heading (the sidebar is short on room); a hidden label names it for
+ * screen readers, and the line under it explains what the choice does.
  */
 export function SidebarIdentity({ compact }: { compact: boolean }) {
   const { enabled, me, setMe, choices, canPublish } = useSharedShift()
@@ -14,7 +16,7 @@ export function SidebarIdentity({ compact }: { compact: boolean }) {
     return (
       <div
         title={me ? `You are ${me}. Expand the sidebar to change.` : 'Expand the sidebar to say who you are.'}
-        className="text-ink-soft mx-auto flex h-8 w-8 items-center justify-center rounded-full border border-line-strong text-xs font-bold"
+        className="text-ink-soft border-line-strong bg-surface-hi mx-auto flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold"
       >
         {me ? me.charAt(0).toUpperCase() : '?'}
       </div>
@@ -22,8 +24,8 @@ export function SidebarIdentity({ compact }: { compact: boolean }) {
   }
 
   return (
-    <div className="px-3">
-      <label htmlFor="sidebar-identity" className="text-ink-muted mb-2 block text-[11px] font-bold tracking-[0.1em] uppercase">
+    <div>
+      <label htmlFor="sidebar-identity" className="sr-only">
         I am
       </label>
       <select

@@ -6,5 +6,5 @@ export const KIND_STYLE: Record<LeaveKind, { label: string; fill: string; swatch
   other: { label: 'Other', fill: 'bg-leave-other text-leave-other-ink', swatch: 'bg-leave-other' },
 }
 
-/** The red marker for today, shared by the month and year views. */
-export const TODAY_RING = 'outline-2 -outline-offset-2 outline-dashed outline-rose-500'
+/** The marker for today (the primary accent), shared by the month and year views. */
+export const TODAY_RING = 'outline-2 -outline-offset-2 outline-dashed outline-brand'

@@ -82,8 +82,8 @@ export function AgentCard({ agent, role, onPick, onCancel, onMove, onSwap, onDra
                 <span className="sr-only"> ({language})</span>
               </span>
             ))}
-            {agent.chat && <span className={`${BADGE} border-sky-400/50 bg-sky-400/10 text-sky-200`}>Chat</span>}
-            {agent.earlyShift && <span className={`${BADGE} border-violet-400/50 bg-violet-400/10 text-violet-200`}>Early</span>}
+            {agent.chat && <span className={`${BADGE} border-info/50 bg-info-surface text-sky-100`}>Chat</span>}
+            {agent.earlyShift && <span className={`${BADGE} border-violet-400/50 bg-violet-400/15 text-violet-100`}>Early</span>}
             {agent.yesterdayShift && (
               <span className={`${BADGE} border-line-strong text-ink-muted`} title={`Yesterday: ${SHIFT_LABELS[agent.yesterdayShift]}`}>
                 Yest. {agent.yesterdayShift}

@@ -3,7 +3,8 @@ import { ImportExport } from './components/ImportExport'
 import { RosterCard } from './components/RosterCard'
 import { ScheduleCard } from './components/ScheduleCard'
 import { useLunchPlanner } from './useLunchPlanner'
-import { PAGE_SUBTITLE, PAGE_TITLE } from '../../shared/ui/styles'
+import { PageHeader } from '../../app/PageHeader'
+import { ALERT_DANGER } from '../../shared/ui/styles'
 
 const dateFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
@@ -16,20 +17,20 @@ export function LunchPlannerPage() {
   const planner = useLunchPlanner()
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-6 px-4 py-7 sm:px-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className={PAGE_TITLE}>Lunch Planner</h2>
-          <p className={PAGE_SUBTITLE}>
-            {planner ? dateFormat.format(new Date(`${planner.today}T00:00:00Z`)) : 'Loading…'}
-            <span className="text-ink-faint"> · saved in this browser</span>
-          </p>
-        </div>
-        {planner && <ImportExport planner={planner} />}
-      </header>
+    <div className="mx-auto max-w-[1600px] space-y-5 px-4 py-7 sm:px-8">
+      <PageHeader
+        title="Lunch Planner"
+        label="Coverage planning"
+        description={
+          planner
+            ? `${dateFormat.format(new Date(`${planner.today}T00:00:00Z`))} · saved in this browser`
+            : 'Loading…'
+        }
+        actions={planner && <ImportExport planner={planner} />}
+      />
 
       {planner?.saveFailed && (
-        <p role="alert" className="rounded-lg border border-rose-400/50 bg-rose-400/10 px-3 py-2 text-sm font-semibold text-rose-200">
+        <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
           Your changes could not be saved in this browser (storage is full or blocked). Export the roster to keep them.
         </p>
       )}
