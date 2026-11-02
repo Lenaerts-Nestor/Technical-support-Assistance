@@ -8,18 +8,26 @@ type ModalProps = {
   children: ReactNode
   /** Buttons along the bottom edge. */
   footer?: ReactNode
+  /** Width of the dialog; defaults to a form-sized `max-w-lg`. */
+  className?: string
 }
 
 /** A centred dialog. Esc or a click outside closes it; focus starts on the dialog itself. */
-export function Modal({ title, onClose, children, footer }: ModalProps) {
+export function Modal({ title, onClose, children, footer, className = 'max-w-lg' }: ModalProps) {
   const ref = useRef<HTMLDivElement>(null)
+  // The latest handler, so a parent that passes a new function on every render does not re-run the effect below.
+  const closeRef = useRef(onClose)
+  useEffect(() => {
+    closeRef.current = onClose
+  })
 
   useEffect(() => {
-    ref.current?.focus()
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    // A field inside the dialog may already have asked for focus (autoFocus); do not take it away.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
 
   return (
     <div
@@ -32,7 +40,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`${CARD} max-h-[80vh] w-full max-w-lg overflow-y-auto p-5 focus:outline-none`}
+        className={`${CARD} max-h-[80vh] w-full ${className} overflow-y-auto p-5 focus:outline-none`}
       >
         <h3 className="text-ink text-base font-semibold tracking-tight">{title}</h3>
         <div className="mt-3">{children}</div>

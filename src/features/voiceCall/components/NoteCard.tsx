@@ -1,5 +1,4 @@
 import { ModeToggle } from "./ModeToggle";
-import { AlertIcon, UsersIcon, WrenchIcon } from "./icons";
 import { CARD } from "../../../shared/ui/styles";
 import type { NoteAccent, NoteMode } from "../types";
 
@@ -15,32 +14,15 @@ type NoteCardProps = {
 };
 
 /**
- * Each note template gets a colour so the three cards stay distinguishable at a
- * glance mid-call: the band tints the header and a matching rail marks the edge.
+ * Each note template has a role colour so the three cards stay distinguishable at a glance
+ * mid-call: coral for the current fault, amber for what the client tried, lavender for the
+ * work done. The colour is a thin top edge and a rail beside the title — the title itself
+ * says what the card is, so colour is only a second cue.
  */
-const ACCENTS: Record<
-  NoteAccent,
-  {
-    band: string;
-    rail: string;
-    Icon: (p: { className?: string }) => React.ReactElement;
-  }
-> = {
-  rose: {
-    band: "border-rose-400/35 bg-rose-400/12 text-rose-200",
-    rail: "bg-rose-400",
-    Icon: AlertIcon,
-  },
-  amber: {
-    band: "border-amber-400/35 bg-amber-400/12 text-amber-200",
-    rail: "bg-amber-400",
-    Icon: UsersIcon,
-  },
-  sky: {
-    band: "border-sky-400/35 bg-sky-400/12 text-sky-200",
-    rail: "bg-sky-400",
-    Icon: WrenchIcon,
-  },
+const ACCENTS: Record<NoteAccent, { top: string; rail: string }> = {
+  rose: { top: "border-t-rose-400", rail: "bg-rose-400" },
+  amber: { top: "border-t-amber-400", rail: "bg-amber-400" },
+  sky: { top: "border-t-sky-400", rail: "bg-sky-400" },
 };
 
 /** One free-text note template with a Text / Bullets mode switch. */
@@ -54,21 +36,16 @@ export function NoteCard({
   onModeChange,
   className,
 }: NoteCardProps) {
-  const { band, rail, Icon } = ACCENTS[accent];
+  const { top, rail } = ACCENTS[accent];
 
   return (
     <section
-      className={`${CARD} flex flex-col overflow-hidden ${className ?? ""}`}
+      className={`${CARD} focus-within:ring-focus/50 flex flex-col overflow-hidden border-t-[3px] focus-within:ring-2 ${top} ${className ?? ""}`}
     >
-      <div
-        className={`flex items-center justify-between gap-3 border-b px-4 py-2.5 ${band}`}
-      >
-        <div className="flex items-center gap-2">
-          <span className={`h-4 w-1 shrink-0 rounded-full ${rail}`} />
-          <Icon className="h-4 w-4" />
-          <span className="text-xs font-semibold tracking-[0.06em] uppercase">
-            {label}
-          </span>
+      <div className="border-line flex items-center justify-between gap-3 border-b px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span aria-hidden="true" className={`h-4 w-1 shrink-0 rounded-full ${rail}`} />
+          <h3 className="text-ink truncate text-sm font-bold tracking-tight">{label}</h3>
         </div>
         <ModeToggle mode={mode} onChange={onModeChange} />
       </div>
@@ -76,7 +53,8 @@ export function NoteCard({
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
         placeholder={placeholder}
-        className="text-ink placeholder:text-ink-faint h-72 min-h-64 w-full flex-1 resize-y px-4 py-3 text-[15px] leading-relaxed focus:outline-none"
+        aria-label={label}
+        className="text-ink placeholder:text-ink-faint h-[22rem] min-h-64 w-full flex-1 resize-y bg-transparent px-4 py-3.5 text-[15px] leading-relaxed focus:outline-none"
       />
     </section>
   );

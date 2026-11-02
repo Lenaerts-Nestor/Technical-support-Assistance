@@ -13,9 +13,11 @@ import { PUBLISHERS, REMINDER_NOTE } from '../../shift/config'
 import { useSharedShift } from '../../shift/sharedShiftContext'
 import type { TeamsPost } from '../../shift/shiftLogic'
 import {
+  ALERT_DANGER,
+  ALERT_WARNING,
   CARD,
   CARD_HEADER,
-  COUNT_BADGE,
+  CARD_TITLE,
   EMPTY,
   GHOST_BTN,
   GHOST_BTN_MD,
@@ -39,9 +41,9 @@ const SHARE_MESSAGE: Record<TeamsPost, string> = {
 }
 
 const WARNING_TONE: Record<LanguageWarning['kind'], string> = {
-  uncovered: 'border-rose-400/50 bg-rose-400/10 text-rose-200',
-  single: 'border-amber-400/45 bg-amber-400/10 text-amber-100',
-  none: 'border-amber-400/45 bg-amber-400/10 text-amber-100',
+  uncovered: 'border-danger/45 bg-danger-surface text-rose-100',
+  single: 'border-warning/45 bg-warning-surface text-amber-100',
+  none: 'border-warning/45 bg-warning-surface text-amber-100',
 }
 
 /**
@@ -225,7 +227,7 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
             : announcement}
         </p>
         {copyFailed && (
-          <p role="alert" className="text-sm font-semibold text-rose-300">
+          <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
             Could not copy to the clipboard. Allow clipboard access for this site and try again.
           </p>
         )}
@@ -236,7 +238,7 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
               {SHARE_MESSAGE[shareResult.teams]}
             </p>
           ) : (
-            <p role="alert" className="text-sm font-semibold text-rose-300">
+            <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
               Copied, but the shifts could not be shared with the team. Check the connection and press Copy for Teams again.
             </p>
           ))}
@@ -281,7 +283,7 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         </div>
 
         {board.unassigned.length > 0 && (
-          <div className="rounded-lg border border-amber-400/45 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+          <div className={ALERT_WARNING}>
             <p className="font-semibold">
               Available but not scheduled (the table changed after generating). Generate again, or place them:
             </p>
@@ -321,17 +323,17 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <section className={`${INSET} p-3`} aria-labelledby="lunch-chat-title">
-            <div className="mb-2 flex items-center justify-between">
-              <h4 id="lunch-chat-title" className={SECTION_LABEL}>Chat</h4>
-              <span className={COUNT_BADGE}>{board.chat.length}</span>
-            </div>
+          <section className={`${INSET} p-4`} aria-labelledby="lunch-chat-title">
+            <p className="text-ink text-2xl leading-none font-extrabold tabular-nums">{board.chat.length}</p>
+            <h4 id="lunch-chat-title" className={`${SECTION_LABEL} mt-2`}>
+              Chat
+            </h4>
             {board.chat.length === 0 ? (
-              <p className="text-ink-muted text-sm">No chat agents scheduled.</p>
+              <p className="text-ink-muted mt-3 text-sm">No chat agents scheduled.</p>
             ) : (
-              <ul className="space-y-1 text-sm">
+              <ul className="border-line mt-3 divide-y divide-[var(--color-line-soft)] border-t text-sm">
                 {board.chat.map((agent) => (
-                  <li key={agent.id} className="text-ink flex justify-between gap-2">
+                  <li key={agent.id} className="text-ink flex justify-between gap-2 py-1.5">
                     {agent.name}
                     <span className="text-ink-muted">{board.shift1.includes(agent) ? SHIFT_LABELS[1] : SHIFT_LABELS[2]}</span>
                   </li>
@@ -339,17 +341,19 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
               </ul>
             )}
           </section>
-          <section className={`${INSET} p-3`} aria-labelledby="lunch-out-title">
-            <div className="mb-2 flex items-center justify-between">
-              <h4 id="lunch-out-title" className={SECTION_LABEL}>PTO / OOO</h4>
-              <span className={COUNT_BADGE}>{board.out.length}</span>
-            </div>
+          <section className={`${INSET} p-4`} aria-labelledby="lunch-out-title">
+            <p className="text-ink text-2xl leading-none font-extrabold tabular-nums">{board.out.length}</p>
+            <h4 id="lunch-out-title" className={`${SECTION_LABEL} mt-2`}>
+              PTO / OOO
+            </h4>
             {board.out.length === 0 ? (
-              <p className="text-ink-muted text-sm">Everybody is in today.</p>
+              <p className="text-ink-muted mt-3 text-sm">Everybody is in today.</p>
             ) : (
-              <ul className="text-ink space-y-1 text-sm">
+              <ul className="border-line text-ink mt-3 divide-y divide-[var(--color-line-soft)] border-t text-sm">
                 {board.out.map((agent) => (
-                  <li key={agent.id}>{agent.name}</li>
+                  <li key={agent.id} className="py-1.5">
+                    {agent.name}
+                  </li>
                 ))}
               </ul>
             )}
@@ -399,8 +403,11 @@ function SharedBanner({
   return (
     <>
       {enabled && shared && differs && (
-        <div className="border-brand/40 bg-brand-soft text-brand-strong flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
-          <p className="font-semibold">
+        <div className={`${ALERT_WARNING} flex flex-wrap items-center justify-between gap-2`}>
+          <p>
+            <strong className="text-amber-200 mr-2 font-bold">
+              {planner.board ? 'Schedule difference detected' : 'Shared schedule available'}
+            </strong>
             {shared.publishedBy} shared today’s schedule{planner.board ? ', and it differs from the one on screen' : ''}.
           </p>
           <button type="button" className={GHOST_BTN} onClick={() => onLoad(planner.loadShared())}>
@@ -409,7 +416,7 @@ function SharedBanner({
         </div>
       )}
       {missing.length > 0 && (
-        <p role="status" className="text-sm font-semibold text-amber-200">
+        <p role="status" className={`${ALERT_WARNING} font-semibold`}>
           Not on your roster, so not placed: {missing.join(', ')}. Add them to the table and load it again.
         </p>
       )}
@@ -429,9 +436,12 @@ function Header({ planner, onCopy, copied }: HeaderProps) {
   const board = planner.board
   return (
     <div className={`${CARD_HEADER} flex-wrap`}>
-      <h3 id="lunch-schedule-title" className="text-ink text-sm font-bold tracking-tight">
-        Lunch schedule
-      </h3>
+      <div>
+        <p className={SECTION_LABEL}>Generated coverage</p>
+        <h3 id="lunch-schedule-title" className={`${CARD_TITLE} mt-1`}>
+          Lunch schedule
+        </h3>
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className={PRIMARY_BTN} onClick={planner.generate} disabled={planner.agents.every((a) => !a.available)}>
           <RefreshIcon className="h-4 w-4" />

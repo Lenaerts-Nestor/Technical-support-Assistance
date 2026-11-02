@@ -43,7 +43,7 @@ export function YearView({ year, today, byDate, onPick }: YearViewProps) {
                       onClick={() => onPick(iso)}
                       title={title}
                       aria-label={title}
-                      className={`h-9 rounded-[3px] border transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-brand ${
+                      className={`h-9 rounded-[3px] border transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-focus ${
                         entry
                           ? `${KIND_STYLE[entry.kind].fill} border-black/30`
                           : isWeekend(iso)

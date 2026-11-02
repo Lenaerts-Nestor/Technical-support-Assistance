@@ -6,7 +6,7 @@ import { INPUT } from '../../../shared/ui/styles'
 
 /** The editable cells of the roster table. One small component per kind of value. */
 
-const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand'
+const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus'
 
 type NameCellProps = {
   agent: Agent
@@ -40,7 +40,7 @@ export function NameCell({ agent, isTaken, onRename }: NameCellProps) {
       aria-label="Agent name"
       aria-invalid={invalid}
       title={invalid ? 'Needs a name that no other agent has' : undefined}
-      className={`${INPUT} min-w-36 ${invalid ? '!border-rose-400/80' : ''}`}
+      className={`${INPUT} min-w-40 !py-1 ${invalid ? '!border-rose-400/80' : ''}`}
     />
   )
 }
@@ -87,9 +87,9 @@ export function YesNoCell({ label, on, onChange }: YesNoCellProps) {
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={`${FOCUS} w-14 rounded-md border px-2 py-1 text-xs font-bold transition-colors ${
+      className={`${FOCUS} w-12 rounded-md border px-2 py-1 text-xs font-bold transition-colors ${
         on
-          ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-200'
+          ? 'border-success/60 bg-success-surface text-emerald-100'
           : 'border-line-strong bg-field/60 text-ink-muted hover:text-ink'
       }`}
     >
@@ -101,8 +101,8 @@ export function YesNoCell({ label, on, onChange }: YesNoCellProps) {
 type ShiftCellProps = { label: string; value: ShiftNo | null; onChange: (value: ShiftNo | null) => void }
 
 const SHIFT_BUTTON: Record<ShiftNo, string> = {
-  1: 'border-sky-300 bg-sky-400 text-sky-950 shadow-[0_0_0_1px_rgb(125_211_252/0.5)]',
-  2: 'border-green-300 bg-green-400 text-green-950 shadow-[0_0_0_1px_rgb(134_239_172/0.5)]',
+  1: 'border-sky-400 bg-sky-400 text-sky-950',
+  2: 'border-emerald-400 bg-emerald-400 text-emerald-950',
 }
 
 /** Shift 1 / Shift 2 as two buttons side by side. Pressing the lit one again clears the value. */

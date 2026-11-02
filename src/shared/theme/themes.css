@@ -1,6 +1,6 @@
 /**
- * Colour variants. The default theme ("Dark") is the @theme block in
- * `src/index.css`; each block here overrides the same variables under
+ * Colour variants. The default theme ("Graphite Workshop", dark) is the @theme block
+ * in `src/index.css`; each block here overrides the same variables under
  * `data-theme` on <html>, so nothing else in the app changes when a theme is
  * switched.
  *
@@ -11,69 +11,96 @@
  */
 
 /**
- * Coffee — a light theme: warm cream page, white cards, light-wood sidebar and a
- * coffee-brown accent. Dark text on light surfaces, the reverse of the default.
+ * Parchment Workshop — the light theme: warm parchment canvas, nearly-white warm
+ * cards, a beige-grey sidebar and a terracotta accent. Walnut-brown text on light
+ * surfaces. It is its own palette (parchment, oat, terracotta, walnut, forest green,
+ * dusty lavender), not an inversion of the dark one.
  */
-:root[data-theme="coffee"] {
+:root[data-theme="parchment"] {
   /* Native controls (selects, scrollbars, autofill) switch to their light look. */
   color-scheme: light;
 
-  --color-canvas: #f4eee5;
+  --color-canvas: #f1eee8;
   --color-surface: #fffdf9;
-  --color-surface-hi: #ffffff;
-  --color-subtle: #efe5d6;
-  --color-field: #f7f1e7;
+  /* Raised controls: buttons, chips, selects. */
+  --color-surface-hi: #f6f1e9;
+  /* Header strips, hover on a raised control, recessed blocks. */
+  --color-subtle: #ece5d9;
+  /* Input wells: a shade below the card they sit on. */
+  --color-field: #f1eee8;
 
-  --color-sidebar-hi: #e8d7bf;
-  --color-sidebar-lo: #d9c4a6;
-  --color-sidebar-line: #c4a983;
+  --color-sidebar: #e4ded4;
+  --color-sidebar-hi: #e4ded4;
+  --color-sidebar-lo: #e4ded4;
+  --color-sidebar-line: #cdc4b7;
 
-  --color-line-soft: #eadfcd;
-  --color-line: #dccdb5;
-  --color-line-strong: #c2ae90;
+  --color-line-soft: #e6e0d5;
+  --color-line: #d9d1c5;
+  --color-line-strong: #c7beb2;
+  --color-field-line: #8a8176;
 
-  /* Espresso text. `ink-faint` stays above 4.5:1 on white so placeholders remain legible. */
-  --color-ink: #2a1f17;
-  --color-ink-soft: #4a392c;
-  --color-ink-muted: #6c5a49;
-  --color-ink-faint: #85715d;
+  /* Walnut text. `ink-faint` stays at 4.5:1 or better on the field colour so placeholders remain legible. */
+  --color-ink: #2b2926;
+  --color-ink-soft: #46413c;
+  --color-ink-muted: #665f58;
+  --color-ink-faint: #6f6962;
 
-  --color-brand: #8f5b2a;
-  --color-brand-hi: #a8703a;
-  --color-brand-strong: #6f431c;
-  --color-brand-soft: rgb(143 91 42 / 0.12);
-  --color-brand-line: rgb(143 91 42 / 0.42);
-  --color-on-brand: #fff9f0;
-  --color-glow: rgb(143 91 42 / 0.07);
-  --color-hover: rgb(74 52 30 / 0.07);
+  /* Terracotta: primary buttons, active navigation, lunch actions, the current agent. */
+  --color-brand: #914b32;
+  --color-brand-hi: #914b32;
+  --color-brand-hover: #713923;
+  /* Terracotta used as text or an icon on a light surface (a touch deeper, for contrast on pale clay). */
+  --color-brand-strong: #7f402a;
+  /* Selected row / active control background (pale clay) and the matching edge. */
+  --color-brand-soft: #eadbd0;
+  --color-brand-line: rgb(145 75 50 / 0.45);
+  --color-on-brand: #fffaf5;
+  --color-focus: #693a28;
+  --color-glow: transparent;
+  --color-hover: rgb(43 41 38 / 0.06);
 
-  /* On a light page depth comes from soft brown shadows, not from lit edges. */
-  --shadow-card:
-    inset 0 1px 0 0 rgb(255 255 255 / 0.9), 0 1px 2px 0 rgb(74 52 30 / 0.12),
-    0 12px 24px -16px rgb(74 52 30 / 0.35);
-  --shadow-btn: inset 0 1px 0 0 rgb(255 255 255 / 0.25), 0 1px 2px 0 rgb(74 52 30 / 0.3);
-  --shadow-btn-soft: inset 0 1px 0 0 rgb(255 255 255 / 0.8), 0 1px 2px 0 rgb(74 52 30 / 0.12);
-  --shadow-glow: 0 0 18px -8px var(--color-brand);
-  --shadow-field: inset 0 1px 2px 0 rgb(74 52 30 / 0.12);
+  --color-success: #39704b;
+  --color-warning: #996019;
+  --color-danger: #a84443;
+  --color-info: #70608f;
+  --color-success-surface: #e3eee5;
+  --color-warning-surface: #f6ead5;
+  --color-danger-surface: #f4e4e2;
+  --color-info-surface: #ebe6f1;
+
+  /* Calendar days away: the same meanings as the dark theme, deep enough to stand on parchment. */
+  --color-pto: #2db394;
+  --color-pto-ink: #04241c;
+  --color-leave-other: #977cd4;
+  --color-leave-other-ink: #1d1233;
+
+  /* On a light page depth comes from soft walnut shadows, kept thin. */
+  --shadow-card: 0 1px 2px 0 rgb(43 41 38 / 0.07), 0 10px 22px -16px rgb(43 41 38 / 0.28);
+  --shadow-btn: 0 1px 2px 0 rgb(43 41 38 / 0.25);
+  --shadow-btn-soft: 0 1px 0 0 rgb(43 41 38 / 0.05);
+  --shadow-glow: none;
+  --shadow-field: none;
 
   /*
-   * Tailwind's status colours (emerald, rose, amber…) are written all over the app
-   * for a dark page: "-300" text, "-400" dots and bars, "-100" for bright text. On a
-   * light page those pale shades vanish, so this theme swaps the light end of each
-   * palette for its dark end (50↔950, 100→900, 200→800, 300→700, 400→600). Every
-   * existing `text-emerald-300` stays readable with no component edited.
+   * Status colours. The app names Tailwind's palette for these (rose = problem, emerald =
+   * success, amber = attention, sky = information) and pairs them for a DARK page:
+   * pale "-100…-300" for text, "-400" for dots, edges and solid fills, "-950" for ink on a
+   * solid "-400". On parchment the text shades are therefore the dark end of each
+   * family and "-950" is the light ink, so existing classes read correctly with no
+   * component edited. "-400" is the full-strength semantic colour above.
    */
-  --color-amber-50: #451a03;   --color-amber-100: #78350f;   --color-amber-200: #92400e;   --color-amber-300: #b45309;   --color-amber-400: #d97706;   --color-amber-950: #fffbeb;
-  --color-rose-50: #4c0519;    --color-rose-100: #881337;    --color-rose-200: #9f1239;    --color-rose-300: #be123c;    --color-rose-400: #e11d48;    --color-rose-950: #fff1f2;
-  --color-emerald-50: #022c22; --color-emerald-100: #064e3b; --color-emerald-200: #065f46; --color-emerald-300: #047857; --color-emerald-400: #059669; --color-emerald-950: #ecfdf5;
-  --color-sky-50: #082f49;     --color-sky-100: #0c4a6e;     --color-sky-200: #075985;     --color-sky-300: #0369a1;     --color-sky-400: #0284c7;     --color-sky-950: #f0f9ff;
-  --color-violet-50: #2e1065;  --color-violet-100: #4c1d95;  --color-violet-200: #5b21b6;  --color-violet-300: #6d28d9;  --color-violet-400: #7c3aed;  --color-violet-950: #f5f3ff;
-  --color-fuchsia-50: #4a044e; --color-fuchsia-100: #701a75; --color-fuchsia-200: #86198f; --color-fuchsia-300: #a21caf; --color-fuchsia-400: #c026d3; --color-fuchsia-950: #fdf4ff;
-  --color-blue-50: #172554;    --color-blue-100: #1e3a8a;    --color-blue-200: #1e40af;    --color-blue-300: #1d4ed8;    --color-blue-400: #2563eb;    --color-blue-950: #eff6ff;
-  --color-indigo-50: #1e1b4b;  --color-indigo-100: #312e81;  --color-indigo-200: #3730a3;  --color-indigo-300: #4338ca;  --color-indigo-400: #4f46e5;  --color-indigo-950: #eef2ff;
-  --color-teal-50: #042f2e;    --color-teal-100: #134e4a;    --color-teal-200: #115e59;    --color-teal-300: #0f766e;    --color-teal-400: #0d9488;    --color-teal-950: #f0fdfa;
-  --color-lime-50: #1a2e05;    --color-lime-100: #365314;    --color-lime-200: #3f6212;    --color-lime-300: #4d7c0f;    --color-lime-400: #65a30d;    --color-lime-950: #f7fee7;
-  --color-cyan-50: #083344;    --color-cyan-100: #164e63;    --color-cyan-200: #155e75;    --color-cyan-300: #0e7490;    --color-cyan-400: #0891b2;    --color-cyan-950: #ecfeff;
-  --color-yellow-50: #422006;  --color-yellow-100: #713f12;  --color-yellow-200: #854d0e;  --color-yellow-300: #a16207;  --color-yellow-400: #ca8a04;  --color-yellow-950: #fefce8;
-  --color-orange-50: #431407;  --color-orange-100: #7c2d12;  --color-orange-200: #9a3412;  --color-orange-300: #c2410c;  --color-orange-400: #ea580c;  --color-orange-950: #fff7ed;
+  --color-amber-50: #4a2e07;   --color-amber-100: #5c3a0a;   --color-amber-200: #6f4510;   --color-amber-300: #84520f;   --color-amber-400: #996019;   --color-amber-500: #7f4f14;   --color-amber-950: #fff8ea;
+  --color-yellow-100: #4d3a06; --color-yellow-200: #5e4609;  --color-yellow-300: #d9a82e;  --color-yellow-400: #b98a17;  --color-yellow-500: #94700f;  --color-yellow-950: #fff9e3;
+  --color-orange-300: #8f4f26; --color-orange-400: #a35a2e;  --color-orange-500: #8a4a22;  --color-orange-950: #fff4ec;
+  --color-rose-50: #4a1717;    --color-rose-100: #5e1f1e;    --color-rose-200: #7a2a29;    --color-rose-300: #933836;    --color-rose-400: #a84443;    --color-rose-500: #8f3837;    --color-rose-950: #fff5f4;
+  --color-emerald-50: #0f2b1a; --color-emerald-100: #163d26; --color-emerald-200: #1e4f31; --color-emerald-300: #2a6141; --color-emerald-400: #39704b; --color-emerald-500: #2d5a3b; --color-emerald-950: #f1faf4;
+  --color-green-300: #2a6141;  --color-green-400: #39704b;   --color-green-950: #f1faf4;
+  --color-lime-400: #4d7a3a;
+  --color-teal-200: #14504a;   --color-teal-300: #1a665a;    --color-teal-400: #1f7a6b;    --color-teal-950: #eef9f6;
+  --color-sky-50: #251c3a;     --color-sky-100: #2f2548;     --color-sky-200: #3d3060;     --color-sky-300: #55467a;     --color-sky-400: #70608f;     --color-sky-500: #5c4d7c;     --color-sky-950: #f5f1fa;
+  --color-cyan-300: #55467a;   --color-cyan-400: #70608f;
+  --color-blue-100: #2f2548;   --color-blue-200: #3d3060;    --color-blue-400: #70608f;
+  --color-indigo-200: #3d3060; --color-indigo-400: #70608f;
+  --color-violet-100: #43204a; --color-violet-200: #55295c;  --color-violet-300: #6e3a75;  --color-violet-400: #84508b;  --color-violet-950: #faf1fb;
+  --color-fuchsia-200: #55295c; --color-fuchsia-400: #84508b;
 }

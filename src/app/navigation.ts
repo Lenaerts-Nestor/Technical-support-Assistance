@@ -6,8 +6,19 @@ export type PageId = 'dashboard' | 'voiceCall' | 'rma' | 'cases' | 'guides' | 'l
  * `hidden` pages stay mounted and reachable in code but get no sidebar entry.
  * `placement: 'bottom'` pins an entry to the foot of the sidebar, apart from the
  * working pages. `desktopOnly` entries are left out of the sidebar on the website.
+ * `publishersOnly` entries are shown only to the people who may share the lunch
+ * shifts ("I am" is Nestor or Kevin C, see `PUBLISHERS` in features/shift/config.ts).
  */
-export const NAV_ITEMS: { id: PageId; label: string; hidden?: boolean; desktopOnly?: boolean; placement?: 'bottom' }[] = [
+export type NavItem = {
+  id: PageId
+  label: string
+  hidden?: boolean
+  desktopOnly?: boolean
+  publishersOnly?: boolean
+  placement?: 'bottom'
+}
+
+export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'voiceCall', label: 'Voice Call' },
   { id: 'rma', label: 'RMA' },
@@ -17,8 +28,8 @@ export const NAV_ITEMS: { id: PageId; label: string; hidden?: boolean; desktopOn
   { id: 'nvx', label: 'Device API', desktopOnly: true },
   { id: 'terminal', label: 'Terminal', desktopOnly: true },
   { id: 'calendar', label: 'Calendar' },
-  { id: 'lunch', label: 'Lunch Planner' },
-  { id: 'game', label: 'Game' },
+  { id: 'lunch', label: 'Lunch Planner', publishersOnly: true },
+  { id: 'game', label: 'Break room' },
   { id: 'sync', label: 'Sync', placement: 'bottom' },
 ]
 
@@ -28,6 +39,19 @@ export const NavigationContext = createContext<(page: PageId) => void>(() => {})
 /** True in the desktop app (its preload script sets `window.desktop`), false on the website. */
 export const isDesktopApp = (): boolean => typeof window !== 'undefined' && window.desktop?.isDesktop === true
 
-/** Whether a page has a sidebar entry here: not hidden, and not desktop-only when on the website. */
-export const isPageAvailable = (id: PageId, desktop: boolean = isDesktopApp()): boolean =>
-  NAV_ITEMS.some((item) => item.id === id && !item.hidden && (desktop || !item.desktopOnly))
+/** Who is looking: which build, and whether they are one of the people who plan lunch. */
+export type NavAudience = { desktop: boolean; publisher: boolean }
+
+/** Whether a sidebar entry is shown to this audience. */
+export const isNavItemVisible = (item: NavItem, { desktop, publisher }: NavAudience): boolean =>
+  !item.hidden && (desktop || !item.desktopOnly) && (publisher || !item.publishersOnly)
+
+/**
+ * Whether a page has a sidebar entry for this audience. Without an audience it is judged for the
+ * current build with the publisher-only pages counted in, so a saved page is not dropped before the
+ * app knows who "I am" is; the shell checks again once it does.
+ */
+export const isPageAvailable = (
+  id: PageId,
+  audience: NavAudience = { desktop: isDesktopApp(), publisher: true },
+): boolean => NAV_ITEMS.some((item) => item.id === id && isNavItemVisible(item, audience))

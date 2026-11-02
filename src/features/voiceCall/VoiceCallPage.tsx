@@ -15,7 +15,7 @@ export function VoiceCallPage() {
 
   return (
     <div className="mx-auto flex max-w-[1600px] items-start gap-6 px-8 py-7">
-      <div className="min-w-0 flex-1 space-y-6">
+      <div className="min-w-0 flex-1 space-y-5">
       <CallHeader
         justCopied={vc.justCopied}
         hasContent={vc.hasContent}
@@ -32,11 +32,10 @@ export function VoiceCallPage() {
         onRemove={vc.removeProduct}
       />
 
-      <div className="grid grid-cols-2 gap-6">
-        {NOTE_SECTIONS.map((section, i) => (
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(20rem,1fr))] gap-5">
+        {NOTE_SECTIONS.map((section) => (
           <NoteCard
             key={section.id}
-            className={i === NOTE_SECTIONS.length - 1 ? 'col-span-2' : undefined}
             label={section.label}
             placeholder={section.placeholder}
             accent={section.accent}

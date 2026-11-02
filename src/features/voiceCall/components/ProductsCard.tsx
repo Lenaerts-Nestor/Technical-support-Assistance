@@ -1,8 +1,9 @@
-import { ProductRow } from "./ProductRow";
+import { ProductRow, PRODUCT_GRID } from "./ProductRow";
 import { PlusIcon } from "./icons";
 import {
   CARD,
   CARD_HEADER,
+  CARD_TITLE,
   COUNT_BADGE,
   GHOST_BTN,
   SECTION_LABEL,
@@ -24,30 +25,35 @@ export function ProductsCard({
   onRemove,
 }: ProductsCardProps) {
   return (
-    <section className={CARD}>
+    <section className={CARD} aria-labelledby="call-products-title">
       <div className={CARD_HEADER}>
-        <div className="flex items-center gap-2">
-          <h3 className={SECTION_LABEL}>Products</h3>
-          <span className={COUNT_BADGE}>{products.length}</span>
+        <div>
+          <p className={SECTION_LABEL}>Call context</p>
+          <h3 id="call-products-title" className={`${CARD_TITLE} mt-1 flex items-center gap-2`}>
+            Products
+            <span className={COUNT_BADGE}>{products.length}</span>
+          </h3>
         </div>
         <button type="button" onClick={onAdd} className={GHOST_BTN}>
           <PlusIcon className="h-3.5 w-3.5" />
-          Add
+          Add product
         </button>
       </div>
 
-      <div className="p-4">
-        <div className="text-ink-faint mb-2 grid grid-cols-[1fr_1fr_1fr_auto] gap-3 px-1 text-[11px] font-semibold tracking-[0.06em] uppercase">
-          <span>Product / Model</span>
+      <div className="px-4 py-4">
+        <div className={`${PRODUCT_GRID} mb-1.5 ${SECTION_LABEL} !tracking-[0.1em]`} aria-hidden="true">
+          <span />
+          <span>Model / Product</span>
           <span>Firmware</span>
-          <span>Serial #</span>
-          <span className="w-8" />
+          <span>Serial number</span>
+          <span className="w-9" />
         </div>
 
         <div className="space-y-2">
-          {products.map((product) => (
+          {products.map((product, index) => (
             <ProductRow
               key={product.id}
+              index={index}
               product={product}
               canRemove={products.length > 1}
               onChange={(patch) => onChange(product.id, patch)}

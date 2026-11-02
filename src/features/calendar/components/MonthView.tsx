@@ -44,7 +44,7 @@ export function MonthView({ month, today, byDate, onPick }: MonthViewProps) {
               onClick={() => onPick(iso)}
               title={title}
               aria-label={title}
-              className={`border-line-soft relative flex min-h-[92px] flex-col items-start justify-between gap-1 border-r border-b p-2 text-left transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand [&:nth-child(7n)]:border-r-0 ${
+              className={`border-line-soft relative flex min-h-[92px] flex-col items-start justify-between gap-1 border-r border-b p-2 text-left transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus [&:nth-child(7n)]:border-r-0 ${
                 entry
                   ? `${KIND_STYLE[entry.kind].fill} ${inMonth ? '' : 'opacity-50'}`
                   : `${isWeekend(iso) ? 'bg-canvas' : 'bg-surface'} ${inMonth ? 'text-ink hover:bg-subtle' : 'text-ink-faint hover:bg-subtle'}`
@@ -52,7 +52,7 @@ export function MonthView({ month, today, byDate, onPick }: MonthViewProps) {
             >
               <span
                 className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold ${
-                  isToday ? 'bg-rose-500 text-white' : ''
+                  isToday ? 'bg-brand text-on-brand' : ''
                 }`}
               >
                 {first ? `${first} ${day}` : day}

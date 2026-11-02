@@ -55,6 +55,10 @@ days — keep it to days away.
 
 ## Lunch Planner
 
+The page only appears in the sidebar when **I am** is **Kevin C** or **Nestor** (the people who share the
+shifts); for anyone else it is left out, and changing **I am** while on it returns to the Dashboard.
+**Add agent** opens a small popup, so the form takes no room in the table.
+
 Keep the agent table (name, languages, chat agent, early shift, available today, yesterday's
 shift), press **Generate** for a fair two-shift lunch schedule, then adjust it by hand —
 drag an agent onto a card in the other shift to swap, onto the column to move, or use the
@@ -77,7 +81,7 @@ thing that leaves the computer is the shared lunch shift below.
 ### Shared lunch shift (optional)
 
 When **Kevin C** or **Nestor** presses **Copy for Teams**, today's two shifts are also shared with the
-team, and every agent sees **YOU ARE ON SHIFT 1** (or 2) in the sidebar under the clock. There are no
+team, and every agent sees **SHIFT 01** (or 02) next to the clock at the top of the sidebar. There are no
 accounts and no passwords: the sidebar has an optional **I am** list (the roster's names, plus the team
 list that comes with each published schedule), the choice stays in that browser, and nobody has to pick.
 Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterday's schedule is ignored.
@@ -123,6 +127,8 @@ top; `lunchStorage.ts` is the only file that touches `localStorage` (swap it for
 there); `components/rosterColumns.tsx` lists the table's columns.
 
 ## Game (Last Stand)
+
+(Shown as **Break room** in the sidebar.)
 
 A side-view brawler for the break between calls, in the dark style of the SHADOW Series art: pick one of
 three heroes and hold a level of ledges against demons and shades coming through the gates on both sides.
@@ -449,3 +455,15 @@ export default defineConfig([
 ])
 
 ```
+
+## Colour themes
+
+Two themes, switched with the single sun/moon button at the foot of the sidebar and remembered per browser:
+**Graphite Workshop** (dark: graphite greys, warm off-white text, amber accent) and **Parchment Workshop**
+(light: parchment, oat, terracotta, walnut text). The default is a `@theme` block in `src/index.css`; the light
+one overrides the same variables in `src/shared/theme/themes.css`. Components use the semantic tokens
+(`canvas`, `surface`, `ink`, `brand`, `success` / `warning` / `danger` / `info` and their `-surface` colours), so a
+palette change never touches a component. The same meaning holds in both: amber / terracotta for primary action
+and attention, green for available or successful, red for problems, lavender for information. The Tailwind
+colour names used across the app (`rose`, `emerald`, `amber`, `sky` …) are redefined inside each theme to
+match, so there is no neon and no saturated blue anywhere.

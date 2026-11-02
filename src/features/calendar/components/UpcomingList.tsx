@@ -31,7 +31,7 @@ export function UpcomingList({ runs, today, onPick }: UpcomingListProps) {
             key={`${run.start}-${run.kind}-${run.note}`}
             type="button"
             onClick={() => onPick(run.start)}
-            className={`${style.fill} flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left shadow-card transition-transform hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`}
+            className={`${style.fill} flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left shadow-card transition-transform hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus`}
           >
             <span className="text-3xl leading-none font-bold tabular-nums">{parseIso(run.start)?.day}</span>
             <span className="min-w-0 flex-1">
