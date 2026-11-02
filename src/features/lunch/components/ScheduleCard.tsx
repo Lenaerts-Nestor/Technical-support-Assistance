@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DragEvent } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import { SHIFT_LABELS } from '../config'
 import { applyMove, coverageLost } from '../coverage'
 import { boardNames } from '../board'
@@ -9,6 +9,7 @@ import { teamsHtml, teamsText } from '../teamsText'
 import type { LunchPlanner } from '../useLunchPlanner'
 import type { Agent, LanguageWarning, ShiftNo } from '../types'
 import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
+import { useIsPhone } from '../../../shared/hooks/useMediaQuery'
 import { PUBLISHERS, REMINDER_NOTE } from '../../shift/config'
 import { useSharedShift } from '../../shift/sharedShiftContext'
 import type { TeamsPost } from '../../shift/shiftLogic'
@@ -40,6 +41,13 @@ const SHARE_MESSAGE: Record<TeamsPost, string> = {
   off: 'Shared with the team: everyone who picked their name sees their shift in the sidebar.',
 }
 
+/** The same results in fewer words, for the pinned bar of a phone (there is no sidebar there to mention). */
+const SHARE_MESSAGE_PHONE: Record<TeamsPost, string> = {
+  posted: 'Copied. Shared with the team and posted to the Teams chat.',
+  already: 'Copied. Shared with the team (the Teams chat was already posted today).',
+  off: 'Copied. Shared with the team.',
+}
+
 const WARNING_TONE: Record<LanguageWarning['kind'], string> = {
   uncovered: 'border-danger/45 bg-danger-surface text-rose-100',
   single: 'border-warning/45 bg-warning-surface text-amber-100',
@@ -53,6 +61,8 @@ const WARNING_TONE: Record<LanguageWarning['kind'], string> = {
  */
 export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   const { board, agents } = planner
+  const phone = useIsPhone()
+  const sectionRef = useRef<HTMLElement>(null)
   const [pickedId, setPickedId] = useState<string | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
   const [announcement, setAnnouncement] = useState('')
@@ -89,14 +99,22 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [picked, pending])
 
+  /** On a phone the result is below the long agent list, so Generate also brings the schedule into view. */
+  const generate = () => {
+    planner.generate()
+    if (!phone) return
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    window.requestAnimationFrame(() => sectionRef.current?.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' }))
+  }
+
   if (!board) {
     return (
-      <section className={CARD} aria-labelledby="lunch-schedule-title">
-        <Header planner={planner} onCopy={null} copied={false} />
+      <section ref={sectionRef} className={`${CARD} scroll-mt-3`} aria-labelledby="lunch-schedule-title">
+        <Header planner={planner} onGenerate={generate} onCopy={null} copied={false} phone={phone} notice={null} />
         <div className="space-y-3 p-4">
           <SharedBanner planner={planner} differs missing={notOnRoster} onLoad={setNotOnRoster} />
           <p className={EMPTY}>
-            No schedule yet. Mark who is in today in the table, then press Generate.
+            No schedule yet. Mark who is in today in the {phone ? 'list' : 'table'}, then press Generate.
           </p>
         </div>
       </section>
@@ -171,6 +189,29 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
     }
   }
   const currentText = teamsText(boardNames(board))
+  // What Copy for Teams achieved. In the card on a computer; on a phone in the pinned bar, next to the button just pressed.
+  const copyNotice = copyFailed ? (
+    <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
+      {phone
+        ? 'Could not copy. Allow clipboard access for this site and try again.'
+        : 'Could not copy to the clipboard. Allow clipboard access for this site and try again.'}
+    </p>
+  ) : null
+  const shareNotice =
+    shareResult?.forText === currentText ? (
+      shareResult.teams ? (
+        <p role="status" className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+          <CheckIcon className="h-4 w-4 shrink-0" />
+          {(phone ? SHARE_MESSAGE_PHONE : SHARE_MESSAGE)[shareResult.teams]}
+        </p>
+      ) : (
+        <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
+          {phone
+            ? 'Copied, but not shared with the team. Check the connection and press Copy for Teams again.'
+            : 'Copied, but the shifts could not be shared with the team. Check the connection and press Copy for Teams again.'}
+        </p>
+      )
+    ) : null
   /** The shared schedule without the names this roster does not have, which can never be on screen. */
   const known = new Set(agents.map((a) => nameKey(a.name)))
   const onRoster = (day: { shift1: string[]; shift2: string[] }) => ({
@@ -217,8 +258,22 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   ]
 
   return (
-    <section className={CARD} aria-labelledby="lunch-schedule-title">
-      <Header planner={planner} onCopy={copyText} copied={copied === 'default'} />
+    <section ref={sectionRef} className={`${CARD} scroll-mt-3`} aria-labelledby="lunch-schedule-title">
+      <Header
+        planner={planner}
+        onGenerate={generate}
+        onCopy={copyText}
+        copied={copied === 'default'}
+        phone={phone}
+        notice={
+          copyNotice || shareNotice ? (
+            <>
+              {copyNotice}
+              {shareNotice}
+            </>
+          ) : null
+        }
+      />
 
       <div className="space-y-4 p-4">
         <p className="sr-only" role="status">
@@ -226,22 +281,8 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
             ? `${picked.name} selected. Choose an agent in ${SHIFT_LABELS[pickedShift === 1 ? 2 : 1]} to swap with, or move ${picked.name} there. Press Escape to cancel.`
             : announcement}
         </p>
-        {copyFailed && (
-          <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
-            Could not copy to the clipboard. Allow clipboard access for this site and try again.
-          </p>
-        )}
-        {shareResult?.forText === currentText &&
-          (shareResult.teams ? (
-            <p role="status" className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
-              <CheckIcon className="h-4 w-4" />
-              {SHARE_MESSAGE[shareResult.teams]}
-            </p>
-          ) : (
-            <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
-              Copied, but the shifts could not be shared with the team. Check the connection and press Copy for Teams again.
-            </p>
-          ))}
+        {!phone && copyNotice}
+        {!phone && shareNotice}
         {shared.canPublish && (
           <p className="text-ink-muted text-xs">
             Reminders for each shift are posted to the Teams chat ({REMINDER_NOTE}) with the schedule shared here, so press
@@ -250,7 +291,8 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         )}
         {shared.enabled && !shared.canPublish && (
           <p className="text-ink-muted text-xs">
-            Only {PUBLISHERS.join(' and ')} share the shifts when copying for Teams. Choose who you are under “I am” in the sidebar.
+            Only {PUBLISHERS.join(' and ')} share the shifts when copying for Teams. Choose who you are under “I am”{' '}
+            {phone ? 'at the top of the page' : 'in the sidebar'}.
           </p>
         )}
 
@@ -272,9 +314,9 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
               {board.warnings.map((w) => (
                 <li
                   key={`${w.kind}-${w.language}-${w.shift ?? ''}`}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${WARNING_TONE[w.kind]}`}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm max-md:items-start max-md:py-2 ${WARNING_TONE[w.kind]}`}
                 >
-                  <AlertIcon className="h-4 w-4 shrink-0" />
+                  <AlertIcon className="h-4 w-4 shrink-0 max-md:mt-0.5" />
                   {w.message}
                 </li>
               ))}
@@ -289,13 +331,13 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
             </p>
             <ul className="mt-2 flex flex-wrap gap-2">
               {board.unassigned.map((agent) => (
-                <li key={agent.id} className="flex items-center gap-1.5">
+                <li key={agent.id} className="flex items-center gap-1.5 max-md:w-full max-md:justify-between">
                   <span className="font-semibold">{agent.name}</span>
                   {([1, 2] as const).map((shift) => (
                     <button
                       key={shift}
                       type="button"
-                      className={GHOST_BTN}
+                      className={`${GHOST_BTN} max-md:min-h-10`}
                       aria-label={`Add ${agent.name} to ${SHIFT_LABELS[shift]}`}
                       onClick={() =>
                         planner.setAssignment({
@@ -314,8 +356,9 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         )}
 
         <p className="text-ink-muted text-xs">
-          Drag an agent onto a card in the other shift to swap, or onto the column to move. With the keyboard, press
-          Swap on a card and pick a partner.
+          {phone
+            ? 'Tap Swap on an agent, then tap who to swap with, or move them to the other shift.'
+            : 'Drag an agent onto a card in the other shift to swap, or onto the column to move. With the keyboard, press Swap on a card and pick a partner.'}
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -410,7 +453,7 @@ function SharedBanner({
             </strong>
             {shared.publishedBy} shared today’s schedule{planner.board ? ', and it differs from the one on screen' : ''}.
           </p>
-          <button type="button" className={GHOST_BTN} onClick={() => onLoad(planner.loadShared())}>
+          <button type="button" className={`${GHOST_BTN} max-md:min-h-11 max-md:w-full`} onClick={() => onLoad(planner.loadShared())}>
             {planner.board ? 'Use the shared schedule' : 'Load it'}
           </button>
         </div>
@@ -426,14 +469,39 @@ function SharedBanner({
 
 type HeaderProps = {
   planner: LunchPlanner
+  onGenerate: () => void
   /** `null` while there is no schedule to copy. */
   onCopy: (() => void) | null
   copied: boolean
+  phone: boolean
+  /** What Copy for Teams just did, shown next to the buttons on a phone. */
+  notice: ReactNode
 }
 
-function Header({ planner, onCopy, copied }: HeaderProps) {
+function Header({ planner, onGenerate, onCopy, copied, phone, notice }: HeaderProps) {
   const hasToday = planner.history.some((e) => e.date === planner.today)
   const board = planner.board
+  const saveLabel = (
+    <>
+      {planner.savedToday ? (
+        <>
+          <CheckIcon className="h-4 w-4" />
+          Saved
+        </>
+      ) : phone ? (
+        hasToday ? (
+          'Update saved'
+        ) : (
+          'Save'
+        )
+      ) : hasToday ? (
+        'Update saved schedule'
+      ) : (
+        "Save today's schedule"
+      )}
+    </>
+  )
+
   return (
     <div className={`${CARD_HEADER} flex-wrap`}>
       <div>
@@ -442,33 +510,54 @@ function Header({ planner, onCopy, copied }: HeaderProps) {
           Lunch schedule
         </h3>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={PRIMARY_BTN} onClick={planner.generate} disabled={planner.agents.every((a) => !a.available)}>
-          <RefreshIcon className="h-4 w-4" />
-          {board ? 'Generate again' : 'Generate'}
-        </button>
-        <button
-          type="button"
-          className={GHOST_BTN_MD}
-          onClick={planner.saveToday}
-          disabled={!board || planner.savedToday}
+      {phone ? (
+        // Pinned to the bottom of the screen (not to the card), so Generate, Save and Copy for Teams are in
+        // reach from the agent list above as well as from the schedule. The page leaves room for it (LunchPlannerPage).
+        <div
+          role="group"
+          aria-label="Schedule actions"
+          className="border-line-strong bg-surface fixed inset-x-0 bottom-0 z-30 space-y-2 border-t px-4 pt-3 pb-4 shadow-[0_-8px_24px_rgb(0_0_0/0.3)]"
         >
-          {planner.savedToday ? (
-            <>
-              <CheckIcon className="h-4 w-4" />
-              Saved
-            </>
-          ) : hasToday ? (
-            'Update saved schedule'
-          ) : (
-            "Save today's schedule"
-          )}
-        </button>
-        <button type="button" className={copied ? SUCCESS_BTN : GHOST_BTN_MD} onClick={onCopy ?? undefined} disabled={!onCopy}>
-          <CopyIcon className="h-4 w-4" />
-          {copied ? 'Copied' : 'Copy for Teams'}
-        </button>
-      </div>
+          {notice}
+          <button
+            type="button"
+            className={`${PRIMARY_BTN} min-h-12 w-full text-base`}
+            onClick={onGenerate}
+            disabled={planner.agents.every((a) => !a.available)}
+          >
+            <RefreshIcon className="h-4 w-4" />
+            {board ? 'Generate again' : 'Generate'}
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className={`${GHOST_BTN_MD} min-h-11`} onClick={planner.saveToday} disabled={!board || planner.savedToday}>
+              {saveLabel}
+            </button>
+            <button
+              type="button"
+              className={`${copied ? SUCCESS_BTN : GHOST_BTN_MD} min-h-11`}
+              onClick={onCopy ?? undefined}
+              disabled={!onCopy}
+            >
+              <CopyIcon className="h-4 w-4" />
+              {copied ? 'Copied' : 'Copy for Teams'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className={PRIMARY_BTN} onClick={onGenerate} disabled={planner.agents.every((a) => !a.available)}>
+            <RefreshIcon className="h-4 w-4" />
+            {board ? 'Generate again' : 'Generate'}
+          </button>
+          <button type="button" className={GHOST_BTN_MD} onClick={planner.saveToday} disabled={!board || planner.savedToday}>
+            {saveLabel}
+          </button>
+          <button type="button" className={copied ? SUCCESS_BTN : GHOST_BTN_MD} onClick={onCopy ?? undefined} disabled={!onCopy}>
+            <CopyIcon className="h-4 w-4" />
+            {copied ? 'Copied' : 'Copy for Teams'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

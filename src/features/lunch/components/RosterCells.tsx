@@ -98,7 +98,13 @@ export function YesNoCell({ label, on, onChange }: YesNoCellProps) {
   )
 }
 
-type ShiftCellProps = { label: string; value: ShiftNo | null; onChange: (value: ShiftNo | null) => void }
+type ShiftCellProps = {
+  label: string
+  value: ShiftNo | null
+  onChange: (value: ShiftNo | null) => void
+  /** Finger-sized buttons, for the phone card. */
+  large?: boolean
+}
 
 const SHIFT_BUTTON: Record<ShiftNo, string> = {
   1: 'border-sky-400 bg-sky-400 text-sky-950',
@@ -106,9 +112,9 @@ const SHIFT_BUTTON: Record<ShiftNo, string> = {
 }
 
 /** Shift 1 / Shift 2 as two buttons side by side. Pressing the lit one again clears the value. */
-export function ShiftCell({ label, value, onChange }: ShiftCellProps) {
+export function ShiftCell({ label, value, onChange, large = false }: ShiftCellProps) {
   return (
-    <div role="group" aria-label={label} className="inline-flex gap-1">
+    <div role="group" aria-label={label} className={`inline-flex ${large ? 'gap-2' : 'gap-1'}`}>
       {([1, 2] as const).map((shift) => {
         const on = value === shift
         return (
@@ -119,9 +125,9 @@ export function ShiftCell({ label, value, onChange }: ShiftCellProps) {
             aria-label={`Shift ${shift}`}
             title={on ? `Shift ${shift} (click to clear)` : `Shift ${shift}`}
             onClick={() => onChange(on ? null : shift)}
-            className={`${FOCUS} w-9 rounded-md border px-2 py-1 text-xs font-extrabold transition-colors ${
-              on ? SHIFT_BUTTON[shift] : 'border-line-strong bg-field/60 text-ink-muted hover:text-ink'
-            }`}
+            className={`${FOCUS} rounded-md border font-extrabold transition-colors ${
+              large ? 'h-11 w-16 text-base' : 'w-9 px-2 py-1 text-xs'
+            } ${on ? SHIFT_BUTTON[shift] : 'border-line-strong bg-field/60 text-ink-muted hover:text-ink'}`}
           >
             {shift}
           </button>
