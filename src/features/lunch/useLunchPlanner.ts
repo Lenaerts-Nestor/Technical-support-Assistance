@@ -9,6 +9,9 @@ import { applyYesterday, newAgent, nameKey, rollOver } from './roster'
 import { adoptShared, scheduleFromShared, sharedToEntries } from './sharedHistory'
 import { generateSchedule } from './scheduler'
 import type { Assignment } from './scheduler'
+import type { RosterStatus } from './rosterApi'
+import { changesProfile, markDirty, markRemoved, markReplaced } from './sharedRoster'
+import { useRosterSync } from './useRosterSync'
 import type { Agent, HistoryEntry, LunchData } from './types'
 import type { SharedDay } from '../shift/shiftLogic'
 
@@ -45,6 +48,12 @@ export type LunchPlanner = {
   sharedToday: SharedDay | null
   /** Use the shared schedule as today's; returns the names this roster does not have. */
   loadShared: () => string[]
+  /** The agents are shared with the other people who plan lunch (see `useRosterSync`): where that stands. */
+  roster: {
+    status: RosterStatus
+    /** The shared service is switched on (so a roster that is `off` is waiting for someone to be picked under "I am"). */
+    enabled: boolean
+  }
 }
 
 /**
@@ -55,7 +64,7 @@ export type LunchPlanner = {
  */
 export function useLunchPlanner(): LunchPlanner | null {
   const today = useToday()
-  const { days: sharedDays } = useSharedShift()
+  const { days: sharedDays, enabled: sharedEnabled, me, canPublish } = useSharedShift()
   const sharedEntries = useMemo(() => sharedToEntries(sharedDays), [sharedDays])
   const sharedToday = useMemo(() => sharedDays.find((d) => d.day === today) ?? null, [sharedDays, today])
   const [stored, setStored] = useState<LunchData | null>(null)
@@ -97,13 +106,18 @@ export function useLunchPlanner(): LunchPlanner | null {
 
   const board = useMemo(() => (data ? deriveBoard(data.agents, data.schedule) : null), [data])
 
+  // The agents are shared with the other people who plan lunch. Only the one who is picked under "I am" and may plan
+  // lunch takes part; every change to who an agent is (not "in today" or yesterday's shift) is queued for the database.
+  const rosterStatus = useRosterSync({ by: canPublish ? me : null, data, update, today })
+
   const agents = data?.agents
   const addAgent = useCallback(
     (name: string): AddResult => {
       const trimmed = name.trim()
       if (!trimmed) return 'empty'
       if (agents?.some((a) => nameKey(a.name) === nameKey(trimmed))) return 'duplicate'
-      update((d) => ({ ...d, agents: [...d.agents, newAgent({ name: trimmed })] }))
+      const agent = newAgent({ name: trimmed })
+      update((d) => markDirty({ ...d, agents: [...d.agents, agent] }, [agent.id]))
       return 'added'
     },
     [agents, update],
@@ -111,21 +125,29 @@ export function useLunchPlanner(): LunchPlanner | null {
 
   const updateAgent = useCallback(
     (id: string, patch: Partial<Omit<Agent, 'id'>>) =>
-      update((d) => ({ ...d, agents: d.agents.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
+      update((d) => {
+        const next = { ...d, agents: d.agents.map((a) => (a.id === id ? { ...a, ...patch } : a)) }
+        return changesProfile(patch) ? markDirty(next, [id]) : next
+      }),
     [update],
   )
 
   const removeAgent = useCallback(
     (id: string) =>
-      update((d) => ({
-        ...d,
-        agents: d.agents.filter((a) => a.id !== id),
-        schedule: d.schedule && {
-          ...d.schedule,
-          shift1: d.schedule.shift1.filter((x) => x !== id),
-          shift2: d.schedule.shift2.filter((x) => x !== id),
-        },
-      })),
+      update((d) =>
+        markRemoved(
+          {
+            ...d,
+            agents: d.agents.filter((a) => a.id !== id),
+            schedule: d.schedule && {
+              ...d.schedule,
+              shift1: d.schedule.shift1.filter((x) => x !== id),
+              shift2: d.schedule.shift2.filter((x) => x !== id),
+            },
+          },
+          [id],
+        ),
+      ),
     [update],
   )
 
@@ -162,13 +184,19 @@ export function useLunchPlanner(): LunchPlanner | null {
 
   const importRoster = useCallback(
     (incoming: Agent[], history: HistoryEntry[] | null) =>
-      update((d) => ({
-        ...d,
-        agents: incoming,
-        // The old shift lists point at agents that are gone; a fresh Generate is the honest next step.
-        schedule: null,
-        history: history ? mergeHistory(d.history, history, today) : d.history,
-      })),
+      update((d) =>
+        markReplaced(
+          {
+            ...d,
+            agents: incoming,
+            // The old shift lists point at agents that are gone; a fresh Generate is the honest next step.
+            schedule: null,
+            history: history ? mergeHistory(d.history, history, today) : d.history,
+          },
+          d.agents.map((a) => a.id),
+          incoming.map((a) => a.id),
+        ),
+      ),
     [update, today],
   )
 
@@ -206,5 +234,6 @@ export function useLunchPlanner(): LunchPlanner | null {
     importRoster,
     sharedToday,
     loadShared,
+    roster: { status: rosterStatus, enabled: sharedEnabled },
   }
 }

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { downloadBlob } from '../../guides/storage/folderZip'
 import { exportJson, parseImport, rosterToCsv } from '../lunchFile'
 import type { LunchImport } from '../lunchFile'
+import { isShared } from '../rosterApi'
 import type { LunchPlanner } from '../useLunchPlanner'
 import { GHOST_BTN_MD } from '../../../shared/ui/styles'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -11,11 +12,8 @@ type Found = { name: string; result: LunchImport }
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
-/**
- * Roster in and out as CSV (Excel) or JSON; the JSON export also carries the history. `importOnly` shows
- * just Import, centred: the one thing a phone with no roster can do about it.
- */
-export function ImportExport({ planner, importOnly = false }: { planner: LunchPlanner; importOnly?: boolean }) {
+/** Roster in and out as CSV (Excel) or JSON; the JSON export also carries the history. */
+export function ImportExport({ planner }: { planner: LunchPlanner }) {
   const input = useRef<HTMLInputElement>(null)
   const [found, setFound] = useState<Found | null>(null)
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
@@ -51,11 +49,11 @@ export function ImportExport({ planner, importOnly = false }: { planner: LunchPl
   }
 
   return (
-    <div className={`flex flex-col gap-2 ${importOnly ? 'items-center' : 'items-end'}`}>
-      <div className={`flex flex-wrap items-center gap-2 ${importOnly ? 'justify-center' : 'justify-end'}`}>
-        <button type="button" className={`${GHOST_BTN_MD} ${importOnly ? 'min-h-11' : ''}`} onClick={() => input.current?.click()}>
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button type="button" className={GHOST_BTN_MD} onClick={() => input.current?.click()}>
           <UploadIcon className="h-4 w-4" />
-          {importOnly ? 'Import a roster file' : 'Import'}
+          Import
         </button>
         <input
           ref={input}
@@ -69,18 +67,14 @@ export function ImportExport({ planner, importOnly = false }: { planner: LunchPl
             if (file) void pick(file)
           }}
         />
-        {!importOnly && (
-          <>
-            <button type="button" className={GHOST_BTN_MD} onClick={exportCsv} disabled={planner.agents.length === 0}>
-              <DownloadIcon className="h-4 w-4" />
-              Roster (CSV)
-            </button>
-            <button type="button" className={GHOST_BTN_MD} onClick={exportAll}>
-              <DownloadIcon className="h-4 w-4" />
-              Roster + history (JSON)
-            </button>
-          </>
-        )}
+        <button type="button" className={GHOST_BTN_MD} onClick={exportCsv} disabled={planner.agents.length === 0}>
+          <DownloadIcon className="h-4 w-4" />
+          Roster (CSV)
+        </button>
+        <button type="button" className={GHOST_BTN_MD} onClick={exportAll}>
+          <DownloadIcon className="h-4 w-4" />
+          Roster + history (JSON)
+        </button>
       </div>
       {notice && (
         <p role={notice.tone === 'error' ? 'alert' : 'status'} className={`text-sm font-semibold ${notice.tone === 'error' ? 'text-rose-300' : 'text-emerald-300'}`}>
@@ -94,6 +88,11 @@ export function ImportExport({ planner, importOnly = false }: { planner: LunchPl
             <strong>{found.name}</strong> holds {plural(found.result.agents.length, 'agent')}. They replace the {plural(planner.agents.length, 'agent')} in
             the table now, and today's schedule is cleared.
           </p>
+          {isShared(planner.roster.status) && (
+            <p>
+              <strong>The shared roster is replaced too</strong>, so the agents change for everyone who plans lunch.
+            </p>
+          )}
           {found.result.skipped > 0 && <p>{plural(found.result.skipped, 'row')} skipped: no name, or a name already used.</p>}
           {found.result.unknownLanguages.length > 0 && (
             <p>
