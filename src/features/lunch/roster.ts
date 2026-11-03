@@ -1,7 +1,7 @@
 import { boardNames, deriveBoard } from './board'
 import { LANGUAGES, isAssumedLanguage } from './config'
 import { lastWorkingEntry, reviveHistory, saveEntry, shiftOnEntry, wasOutOnEntry } from './history'
-import type { Agent, LunchData, Schedule, ShiftNo } from './types'
+import type { Agent, LunchData, RosterQueue, Schedule, ShiftNo } from './types'
 
 export const newId = () => crypto.randomUUID()
 
@@ -62,15 +62,28 @@ function reviveSchedule(raw: unknown): Schedule | null {
   return { date: o.date, shift1: asStrings(o.shift1), shift2: asStrings(o.shift2) }
 }
 
+function reviveQueue(raw: unknown): RosterQueue | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined
+  const o = raw as Record<string, unknown>
+  return {
+    synced: asBool(o.synced, false),
+    dirty: [...new Set(asStrings(o.dirty))],
+    removed: [...new Set(asStrings(o.removed))],
+    ...(o.replace === true ? { replace: true } : {}),
+  }
+}
+
 export function reviveLunchData(raw: unknown): LunchData | null {
   if (typeof raw !== 'object' || raw === null) return null
   const o = raw as Record<string, unknown>
+  const roster = reviveQueue(o.roster)
   return {
     agents: reviveAgents(o.agents),
     history: reviveHistory(o.history),
     schedule: reviveSchedule(o.schedule),
     syncedDate: typeof o.syncedDate === 'string' ? o.syncedDate : '',
     sharedKey: typeof o.sharedKey === 'string' ? o.sharedKey : '',
+    ...(roster ? { roster } : {}),
   }
 }
 

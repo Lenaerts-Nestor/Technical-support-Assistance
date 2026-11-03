@@ -6,6 +6,7 @@ import { ScheduleCard } from './components/ScheduleCard'
 import { useLunchPlanner } from './useLunchPlanner'
 import { PageHeader } from '../../app/PageHeader'
 import { useIsPhone } from '../../shared/hooks/useMediaQuery'
+import { isShared } from './rosterApi'
 import { ALERT_DANGER } from '../../shared/ui/styles'
 
 const dateFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -23,6 +24,8 @@ const dateFormat = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'num
 export function LunchPlannerPage() {
   const planner = useLunchPlanner()
   const phone = useIsPhone()
+  /** The agents are shared with the other people who plan lunch (the schedule and history stay in this browser). */
+  const sharing = planner !== null && isShared(planner.roster.status)
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 px-4 py-7 sm:px-8 max-md:space-y-4 max-md:py-4 max-md:pb-48">
@@ -33,8 +36,12 @@ export function LunchPlannerPage() {
         description={
           planner
             ? phone
-              ? 'Saved in this browser'
-              : `${dateFormat.format(new Date(`${planner.today}T00:00:00Z`))} · saved in this browser`
+              ? sharing
+                ? 'Agents shared with the team'
+                : 'Saved in this browser'
+              : `${dateFormat.format(new Date(`${planner.today}T00:00:00Z`))} · ${
+                  sharing ? 'agents shared with the team, the rest saved in this browser' : 'saved in this browser'
+                }`
             : 'Loading…'
         }
         actions={planner && !phone && <ImportExport planner={planner} />}
@@ -57,7 +64,7 @@ export function LunchPlannerPage() {
             onRemove={planner.removeAgent}
             onRefillYesterday={planner.refillYesterday}
             onMarkAllAvailable={planner.markAllAvailable}
-            emptyAction={<ImportExport planner={planner} importOnly />}
+            roster={planner.roster}
           />
           <ScheduleCard planner={planner} />
           <HistoryCard history={planner.history} today={planner.today} onDelete={planner.deleteHistory} />

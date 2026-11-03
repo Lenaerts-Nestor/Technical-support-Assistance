@@ -75,8 +75,9 @@ who wants to mark who is in, generate and paste the schedule into Teams. The des
   button, so they are in reach from the agent list as well as from the schedule. **Generate** also scrolls the new
   schedule into view, and what Copy for Teams did (copied, shared with the team, posted to the Teams chat) appears
   right above the buttons. Swapping works with the **Swap** button (dragging is not used on a touch screen).
-- **The roster is kept per browser**, so a phone browser starts empty. Until it has agents the Agents card
-  shows a single **Import a roster file** button, to bring in the *Roster + history (JSON)* export from a computer.
+- **The agents come from the shared roster** (below), so a phone needs no file: pick Kevin C or Nestor under **I am**
+  and the same agents as on the computer load. Changing Early (or anything else about who an agent is) on the phone
+  changes it for everyone. Who is *in today* and *yesterday's shift* stay on each device, as before.
 
 Keep the agent table (name, languages, chat agent, early shift, available today, yesterday's
 shift), press **Generate** for a fair two-shift lunch schedule, then adjust it by hand —
@@ -94,8 +95,33 @@ schedule** stores the day on purpose. Who is **not available** is remembered fro
 and **Hide chat column** drops the chat column — both are remembered in this browser.
 **Copy for Teams** copies the schedule (bold headings when pasted into Teams, plain text elsewhere). The roster imports from
 CSV (Excel, `,` or `;` separated) or JSON and exports to both; the JSON export also carries
-the history. The roster and history are stored in this browser only — not in the linked folder. The only
-thing that leaves the computer is the shared lunch shift below.
+the history. The schedule and history are stored in this browser only — not in the linked folder. What leaves the
+computer is the shared roster and the shared lunch shift below.
+
+### Shared roster (optional)
+
+The agents are kept in the database too, so **Kevin C and Nestor plan with the same agents**, on a computer or a phone:
+an agent added, renamed, deleted, or given other languages, chat or early shift by one of them appears for the other. The
+Agents card shows **Shared** next to its title while that works. It follows the same rules as the shared lunch shift:
+
+- **Who:** only a computer where **I am** is Kevin C or Nestor reads or changes the shared roster. For anyone else the
+  Agents table is as it always was, in their own browser.
+- **What is shared:** name, languages, chat agent and early shift. *Available today* and *yesterday's shift* are not:
+  they are worked out on each device from the published schedules (and shared with **Copy for Teams** and **Load it**,
+  below), so two devices never fight over them.
+- **Setup, once:** run `supabase/lunch_roster.sql` in the Supabase SQL editor (the same project as the shared lunch
+  shift). Until then the card says **Not set up** and the roster stays in the browser, nothing is lost. Keep the two names in
+  that file the same as `PUBLISHERS` in `src/features/shift/config.ts`.
+- **The first time:** the first of them to open the Lunch Planner after that uploads the roster already in their browser.
+  A computer that has not synced before takes the shared roster as it is and only adds the agents the shared roster does
+  not have yet; it never overwrites what is shared.
+- **Same rules as ever:** a change is sent a moment after it is made, the roster is looked up every 30 seconds and when the
+  window comes back, and a change made offline is kept and sent later (the card says **Offline**). An agent is the same
+  agent by name, so two people adding "Ann" at the same time end up with one Ann. **Importing** a file replaces the shared
+  roster for both (the confirmation says so), and **deleting** an agent removes them for both.
+- **Honor system:** there are no passwords, so someone who picks Kevin C or Nestor under **I am** can change the roster.
+  What is at stake is names, languages and two yes/no flags. The table itself is closed to the public key; the only way in is
+  the `sync_lunch_roster` function, which checks the name.
 
 ### Shared lunch shift (optional)
 
@@ -105,7 +131,7 @@ accounts and no passwords: the sidebar has an optional **I am** list (the roster
 list that comes with each published schedule), the choice stays in that browser, and nobody has to pick.
 Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterday's schedule is ignored.
 
-- **What is shared:** first names in Shift 1 / Shift 2, the roster's names (for the "I am" list), the
+- **What is shared:** first names in Shift 1 / Shift 2, the roster's names (for the "I am" list; the roster itself is in the shared roster above), the
   day, and who published. Nothing else. It is kept 14 days on a Supabase project.
 - **Setup, once:** run `supabase/lunch_shift.sql` in the Supabase SQL editor, then paste the project's
   *publishable* key into `key` in `src/features/shift/config.ts`. While `key` is empty the whole feature is

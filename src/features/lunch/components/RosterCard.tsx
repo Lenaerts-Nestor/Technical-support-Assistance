@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import type { AddResult } from '../useLunchPlanner'
+import type { AddResult, LunchPlanner } from '../useLunchPlanner'
+import { isShared } from '../rosterApi'
+import { phoneEmptyText } from '../rosterText'
 import { filterAgents, nameKey, sortAgents } from '../roster'
 import type { AvailabilityFilter, SortDirection } from '../roster'
 import type { Agent } from '../types'
@@ -8,6 +9,7 @@ import { COLUMNS } from './rosterColumns'
 import { AddAgentDialog } from './AddAgentDialog'
 import { AgentDecisionCard } from './AgentDecisionCard'
 import { ConfirmDialog } from './ConfirmDialog'
+import { RosterProblem, RosterStatusPill } from './RosterStatusLine'
 import { CheckIcon, ChevronIcon, RefreshIcon, SearchIcon, SortIcon } from './icons'
 import { useIsPhone } from '../../../shared/hooks/useMediaQuery'
 import { storageKey, usePersistentState } from '../../../shared/storage/usePersistentState'
@@ -33,8 +35,8 @@ type RosterCardProps = {
   onRemove: (id: string) => void
   onRefillYesterday: () => void
   onMarkAllAvailable: () => void
-  /** Shown on a phone when there are no agents yet, where Add agent and the page's Import are left out. */
-  emptyAction?: ReactNode
+  /** Whether the agents are shared with the other people who plan lunch, and where that stands. */
+  roster: LunchPlanner['roster']
 }
 
 /** Columns the "hide" toggle folds away: set once per agent, so mostly noise afterwards. */
@@ -44,7 +46,7 @@ const HIDEABLE = new Set(['chat', 'languages'])
  * The agent table: search, filter, sort by any column, edit in place, add and delete. On a phone it is a
  * list of decision cards instead (name, Early, Available, yesterday's shift), without adding or deleting.
  */
-export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterday, onMarkAllAvailable, emptyAction }: RosterCardProps) {
+export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterday, onMarkAllAvailable, roster }: RosterCardProps) {
   const phone = useIsPhone()
   const [query, setQuery] = useState('')
   const [availability, setAvailability] = useState<AvailabilityFilter>('all')
@@ -134,9 +136,12 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
           <p className={SECTION_LABEL}>
             {agents.length} / {availableCount} in today
           </p>
-          <h3 id="lunch-roster-title" className={`${CARD_TITLE} mt-1`}>
-            Agents
-          </h3>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h3 id="lunch-roster-title" className={CARD_TITLE}>
+              Agents
+            </h3>
+            <RosterStatusPill status={roster.status} />
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!phone && bulkActions}
@@ -153,6 +158,8 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
           </button>
         </div>
       </div>
+
+      <RosterProblem status={roster.status} />
 
       <div id="lunch-roster-body" hidden={!open}>
       {phone ? (
@@ -191,13 +198,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
 
           <div className="px-4 pt-3 pb-4">
             {agents.length === 0 ? (
-              <div className="space-y-3">
-                <p className={EMPTY}>
-                  No agents on this phone yet. The roster is kept per browser: bring it over from a computer with the
-                  file it exports (Roster + history, JSON).
-                </p>
-                {emptyAction}
-              </div>
+              <p className={EMPTY}>{phoneEmptyText(roster.status, roster.enabled)}</p>
             ) : (
               <ul className="space-y-2.5">
                 {rows.map((agent) => (
@@ -335,6 +336,7 @@ export function RosterCard({ agents, onAdd, onUpdate, onRemove, onRefillYesterda
           }}
         >
           <p>They are removed from the table and from today's schedule. Saved history is not changed.</p>
+          {isShared(roster.status) && <p>They are removed from the shared roster too, so for everyone who plans lunch.</p>}
         </ConfirmDialog>
       )}
     </section>

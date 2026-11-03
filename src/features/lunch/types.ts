@@ -40,6 +40,22 @@ export type HistoryEntry = {
   notes: string[]
 }
 
+/**
+ * Where this computer stands with the shared roster (see `sharedRoster.ts`): whether it has ever synced, and
+ * what it changed since that the database does not know yet. Kept with the data, so changes made offline
+ * (or before the page was closed) are still sent later instead of being overwritten by the shared roster.
+ */
+export type RosterQueue = {
+  /** True once the shared roster has been read (and this computer's agents sent) at least once. */
+  synced: boolean
+  /** Agents added or changed here (name, languages, chat, early shift) and not yet sent. */
+  dirty: string[]
+  /** Agents deleted here and not yet deleted in the database. */
+  removed: string[]
+  /** The next send replaces the whole shared roster (an import), instead of adding to it. */
+  replace?: boolean
+}
+
 /** Everything the page persists — one snapshot, so a storage backend has one thing to load and save. */
 export type LunchData = {
   agents: Agent[]
@@ -49,6 +65,8 @@ export type LunchData = {
   syncedDate: string
   /** The published day the roster was last brought up to date from (see `sharedHistory.ts`); empty when none. */
   sharedKey?: string
+  /** Shared-roster bookkeeping; absent until the roster is first synced or changed. */
+  roster?: RosterQueue
 }
 
 /** A language problem in a schedule. */
