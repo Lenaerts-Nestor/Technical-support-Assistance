@@ -132,13 +132,13 @@ list that comes with each published schedule), the choice stays in that browser,
 Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterday's schedule is ignored.
 
 - **What is shared:** first names in Shift 1 / Shift 2, the roster's names (for the "I am" list; the roster itself is in the shared roster above), the
-  day, and who published. Nothing else. It is kept 14 days on a Supabase project.
-- **Setup, once:** run `supabase/lunch_shift.sql` in the Supabase SQL editor, then paste the project's
+  day, and who published. Nothing else. It is kept 14 days on a  project.
+- **Setup, once:** run `/lunch_shift.sql` in the  SQL editor, then paste the project's
   *publishable* key into `key` in `src/features/shift/config.ts`. While `key` is empty the whole feature is
   off and the app makes no requests. Never use the `secret` / `service_role` key.
 - **Policies:** the table has row level security; the public key may only **read** the last 14 days. It
   cannot insert, update or delete: writing goes through one function that accepts only the publishers
-  listed in `supabase/lunch_shift.sql` and `config.ts` (keep the two lists the same), only for today, with
+  listed in `/lunch_shift.sql` and `config.ts` (keep the two lists the same), only for today, with
   short names. Without passwords this is an honor system: someone who picks "Kevin C" can publish, and the
   worst they can do is change today's displayed shifts.
 - The sidebar looks for a new schedule every 30 seconds and when the window is brought back.
@@ -146,8 +146,8 @@ Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterda
   chat gets "Reminder: Shift N lunch — Remember to take your lunch. Agents: …", using the schedule shared that day
   (so Copy for Teams must be pressed before then; a swap shared before the time is included, and nothing is sent
   if nothing was shared). Each reminder goes out once a day, and one that is more than 30 minutes late is skipped.
-  A timer inside Supabase does it (`pg_cron`, waking only at the two reminder times), so no app has to be open. Setup, once: run `supabase/lunch_shift.sql`
-  again, switch on **Integrations → Cron**, then run `supabase/lunch_reminders_schedule.sql`. The times are
+  A timer inside  does it (`pg_cron`, waking only at the two reminder times), so no app has to be open. Setup, once: run `/lunch_shift.sql`
+  again, switch on **Integrations → Cron**, then run `/lunch_reminders_schedule.sql`. The times are
   settings (see the end of `lunch_shift.sql`), not code.
 - **Same schedule for Kevin C and Nestor:** the published day also keeps who is on chat, who is out and the
   language warnings. (1) *Generate builds on it.* Earlier published days count as history on every computer,
@@ -158,13 +158,7 @@ Someone who picks nothing, or is not in today's schedule, sees nothing. Yesterda
   offers **Load it** (or **Use the shared schedule** if yours differs). The Agents table follows it: whoever
   is in a shift becomes available and everyone else on your roster becomes not available. Names the roster
   does not have are listed and left out.
-- **Teams post (optional, once a day):** the first publish of a day also posts the schedule to a Teams
-  chat or channel through a Workflows webhook ("Send webhook alerts to a channel / chat"). Pressing Copy for
-  Teams again, by either person, does not post again that day. The webhook address is a secret (whoever has
-  it can post to that chat): it is stored in Supabase in `private.settings`, which the public key cannot read,
-  and never in the app or the repository. `supabase/lunch_shift.sql` ends with the statement that stores it,
-  turns posting off, allows a repost for a retest, and checks whether Teams accepted a post. Without the
-  setting nothing is posted.
+
 
 Where to change things (all under `src/features/lunch/`): `config.ts` holds the language
 list and history length; `scheduler.ts` holds the scheduling rules and their weights at the
