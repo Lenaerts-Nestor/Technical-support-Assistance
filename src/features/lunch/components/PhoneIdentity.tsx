@@ -6,7 +6,7 @@ import { SECTION_LABEL, SELECT } from '../../../shared/ui/styles'
 
 /**
  * "I am …" for a phone, where the sidebar that normally holds it is gone. Copy for Teams only shares the
- * shifts with the team (and posts them to the Teams chat) once this is Kevin C or Nestor, so a phone that
+ * shifts with the team once this is Kevin C or Nestor, so a phone that
  * has never been told who is holding it needs the picker on the page. The publishers are always in the
  * list, because a phone that has no roster and has seen no published schedule would otherwise have nobody
  * to pick. Renders nothing while the shared shift is switched off.

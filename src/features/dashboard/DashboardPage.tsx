@@ -235,7 +235,7 @@ export function DashboardPage() {
           {day ? (
             <Roster day={day} meKey={meKey} favoriteKeys={favoriteKeys} lunchNow={lunchNow} />
           ) : (
-            <div className={EMPTY}>Today's schedule has not been posted to Teams yet.</div>
+            <div className={EMPTY}>Today's schedule has not been shared yet.</div>
           )}
         </div>
       </section>
