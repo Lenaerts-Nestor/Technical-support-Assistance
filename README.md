@@ -165,9 +165,20 @@ list and history length; `scheduler.ts` holds the scheduling rules and their wei
 top; `lunchStorage.ts` is the only file that touches `localStorage` (swap it for a backend
 there); `components/rosterColumns.tsx` lists the table's columns.
 
-## Game (Last Stand)
+## Game (Break room: Last Stand and Jump Hunter)
 
-(Shown as **Break room** in the sidebar.)
+(Shown as **Break room** in the sidebar.) The page opens on a choice of two games, **Last Stand** (fighting
+survival, below) and **Jump Hunter**. **Game modes** at the top of either one goes back to the choice and ends
+the run. Both share the controls, heroes and keys below, and `GameSession` runs either, given a `mode`.
+
+**Jump Hunter** is a climb: a tower of ledges (`climb.ts`, six levels of six
+ledges and a summit, about 66 m) built by `buildTower` from the `CLIMB_LEVELS` table, which is where to
+change the length and difficulty. Ledges are solid only from above, so a miss drops you onto a lower ledge.
+The run is **lost** when you are back on the ground after having left it, and **won** by standing on the
+summit. Around the main way up go side ledges (the main way mirrored on the other side, and small stones on the walls), so there is more than one route; `buildTower` keeps a side ledge only if the hero can reach it, so none is out of reach. The hero is always the Huntress (no picker). From the second level, archers stand on wall ledges (`Tower.sentries`, set per level by `sentryEvery`): each shows a red lane across the arena while it aims, then looses an arrow along it. Demons and ogres (`Tower.guards`, set per level by `guards`, ledge number to kind) patrol the ledges made wide for them, go for the hero when they share the ledge, and never leave it; later levels have more of them. A hit costs no health but shoves the hero off their line (harder from a bigger blow); dashing through, jumping over or cutting the arrow all work, and the archers can be killed.  The score is the highest ledge stood on, in metres. Attacks still work, but the Huntress's rising cut
+gives no free lift here. The camera only follows when the hero leaves a band of the view.
+
+### Last Stand
 
 A side-view brawler for the break between calls, in the dark style of the SHADOW Series art: pick one of
 three heroes and hold a level of ledges against demons and shades coming through the gates on both sides.
@@ -178,7 +189,7 @@ last until the page is reloaded. Your hero is remembered in this browser.
 |---|---|
 | **A / D** | run |
 | **W / Space** | jump (hold for height): a held jump reaches the next tier of ledges |
-| **S / ↓** | drop down through a ledge you stand on; with **J** in the air, the Huntress's dive |
+| **S / ↓** | drop down through a ledge you stand on; with **J** in the air, the Huntress's dive (it recharges for about 1.6 s, shown under the stamina bar) |
 | **Shift** | dash: you cannot be hit for a moment; costs stamina |
 | **J** | light attack: tap again to chain. In the air or out of a dash, some heroes have blows of their own |
 | **K** | heavy attack: slow, costs stamina, breaks poise. Can follow a light hit |

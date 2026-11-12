@@ -255,7 +255,9 @@ export function drawForeground(ctx: CanvasRenderingContext2D, w: World) {
   ctx.fillStyle = LOOKS[w.biome].mote
   for (const m of layout.motes) {
     const x = (m.x + w.time * m.speed) % W
-    const y = groundY - m.y + Math.sin(w.time * 0.8 + m.phase) * 14
+    // In the tower the camera climbs far above the arena the motes were laid out for, so they hang in the view and slip down past it.
+    const home = w.mode === 'climb' ? ((m.y * 0.9 + w.camY * 0.3) % H) - w.camY : groundY - m.y
+    const y = home + Math.sin(w.time * 0.8 + m.phase) * 14
     ctx.globalAlpha = 0.2 + 0.2 * Math.sin(w.time * 1.5 + m.phase)
     ctx.fillRect(Math.round(x / 3) * 3, Math.round(y / 3) * 3, 3, 3)
   }

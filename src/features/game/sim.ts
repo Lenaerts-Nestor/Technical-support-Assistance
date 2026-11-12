@@ -3,12 +3,13 @@
  * a small slice of time given what the player is pressing. The random source is passed in so a
  * test can play the same game twice.
  */
-import { ARENA, CAMERA, COMBO_WINDOW, DASH, ELITE, ENEMIES, PLAYER, POISE_RESET, ROUNDS, SHIELD, TIER, VULNERABLE_BONUS } from './config'
+import { ARENA, CAMERA, COMBO_WINDOW, DASH, DIVE, ELITE, ENEMIES, PLAYER, POISE_RESET, ROUNDS, SHIELD, TIER, VULNERABLE_BONUS } from './config'
 import type { AttackStep, ComboKind, EnemyStats } from './config'
 import { ledgeLeft, ledgeRight } from './biomes'
 import type { Platform } from './biomes'
 import { HEROES, stepsOf } from './heroes'
 import type { HeroDef } from './heroes'
+import { climbCamera, stepClimb } from './climb'
 import { awardKill, stepRound } from './rounds'
 import type { Enemy, FrameInput, Player, World } from './types'
 import { createWorld, spawnEnemy } from './world'
@@ -58,18 +59,21 @@ export function stepWorld(w: World, input: FrameInput, dt: number, rng: Rng) {
   buffer.heavy = Math.max(0, buffer.heavy - dt)
   w.time += dt
   stepPlayer(w, input, dt, rng)
-  for (const enemy of w.enemies) stepEnemy(w, enemy, dt, rng)
+  const climbing = w.mode === 'climb'
+  for (const enemy of w.enemies) (climbing && enemy.kind === 'archer' ? stepSentry : stepEnemy)(w, enemy, dt, rng)
   stepWaves(w, dt, rng)
   stepArrows(w, dt, rng)
   keepApart(w)
   w.enemies = w.enemies.filter((e) => e.state !== 'dying' || e.stateTime < 0.7)
-  stepRound(w, dt, rng)
+  if (w.mode === 'climb') stepClimb(w)
+  else stepRound(w, dt, rng)
   stepParticles(w, dt)
   stepCamera(w, dt)
 }
 
 /** The camera rises with the hero as they climb, keeping them a little below the middle of the view. */
 function stepCamera(w: World, dt: number) {
+  if (w.mode === 'climb') return climbCamera(w, dt)
   const p = w.player
   const target = clamp(floorBelow(w, p.x, p.y) - CAMERA.lead + 60, 0, CAMERA.maxRise)
   w.camY += (target - w.camY) * Math.min(1, dt * CAMERA.follow)
@@ -95,6 +99,7 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
   p.lowStamina = Math.max(0, p.lowStamina - dt)
   p.hitTime = Math.max(0, p.hitTime - dt)
   p.dropTime = Math.max(0, p.dropTime - dt)
+  p.diveCooldown = Math.max(0, p.diveCooldown - dt)
   if (p.comboWindow > 0) {
     p.comboWindow = Math.max(0, p.comboWindow - dt)
     if (p.comboWindow === 0) p.attackIndex = 0
@@ -147,7 +152,8 @@ function stepPlayer(w: World, input: FrameInput, dt: number, rng: Rng) {
       const t = p.stateTime
       if (t - dt < step.hitStart && t >= step.hitStart) {
         p.vx = p.facing * step.lunge
-        if (step.hop) {
+        // A free lift in mid-air would let a rising cut climb for nothing in the tower.
+        if (step.hop && w.mode !== 'climb') {
           p.vy = Math.max(p.vy, step.hop)
           p.grounded = false
         }
@@ -322,6 +328,11 @@ function tryDash(w: World, p: Player, input: FrameInput) {
 function tryAttack(w: World, p: Player, input: FrameInput, button: 'light' | 'heavy') {
   const special = heroOf(w).special
   if (button === 'light' && !p.grounded) {
+    // The dive has to recharge: asking for it again early does nothing, rather than turning into some other blow.
+    if (input.downHeld && special.airDown && p.diveCooldown > 0) {
+      w.buffer.light = 0
+      return false
+    }
     const air: ComboKind | null =
       input.downHeld && special.airDown ? 'airDown'
       : special.airUp && (input.jumpHeld || p.vy > 0 || !special.airForward) ? 'airUp'
@@ -354,6 +365,7 @@ function beginAttack(w: World, p: Player, input: FrameInput, kind: ComboKind, in
     return false
   }
   spend(p, step.stamina)
+  if (kind === 'airDown') p.diveCooldown = DIVE.cooldown
   p.state = 'attack'
   p.stateTime = 0
   p.attackKind = kind
@@ -556,6 +568,22 @@ function damagePlayer(w: World, amount: number, fromX: number, rng: Rng, baseBlo
   }
 
   const dir = p.x >= fromX ? 1 : -1
+  if (w.mode === 'climb') {
+    // In the tower a hit costs no health: it knocks the hero off their line, and that is the danger.
+    p.hitTime = 0.34
+    p.invuln = PLAYER.invulnAfterHit
+    p.vx = dir * Math.min(620, 300 + amount * 10)
+    p.vy = Math.min(p.vy, 0) + 220
+    p.grounded = false
+    p.stateTime = 0
+    p.state = 'hurt'
+    w.freeze = Math.max(w.freeze, 0.07)
+    w.shake = Math.max(w.shake, 7)
+    floater(w, p.x, p.y + p.height + 8, 'HIT!', '#ff6b6b', 26)
+    impact(w, p.x, p.y + p.height * 0.6, (dir * -1) as 1 | -1, 54, '#ff8f8f')
+    burst(w, p.x, p.y + p.height * 0.6, dir, rng, 10, ['#ff8f8f', '#ffffff', '#f5a93a'])
+    return result
+  }
   const taken = Math.max(1, Math.round(amount * w.mods.damageTaken))
   p.hp = Math.max(0, p.hp - taken)
   p.hitTime = 0.34
@@ -631,6 +659,10 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
 
   switch (e.state) {
     case 'walk': {
+      if (e.post) {
+        guardWalk(w, e, stats, speed, dt)
+        break
+      }
       e.facing = toward
       if (w.over) {
         e.vx = approach(e.vx, 0, 2600 * dt)
@@ -702,8 +734,89 @@ function stepEnemy(w: World, e: Enemy, dt: number, rng: Rng) {
   const hi = ARENA.width - stats.halfWidth * 0.6
   if (e.vx < 0 && x < lo) x = Math.min(e.x, lo)
   if (e.vx > 0 && x > hi) x = Math.max(e.x, hi)
+  // A guard stays on its ledge, whatever shoves it.
+  if (e.post) x = clamp(x, e.post.left + stats.halfWidth * 0.6, e.post.right - stats.halfWidth * 0.6)
   e.x = x
   e.grounded = moveVertically(w, e, dt, e.dropTime > 0) !== null
+}
+
+/** How far above or below an archer the hero must be for it to shoot: only the ones in (or near) the view. */
+const SENTRY_RANGE = 460
+
+/**
+ * An archer of the tower. It stays at its post on the wall, looking across the arena, and shoots
+ * along a level lane when the hero is near its height: a warning (the windup), the arrow, a rest,
+ * then again. It can be fought like any archer, and stops for good if it falls.
+ */
+function stepSentry(w: World, e: Enemy, dt: number, rng: Rng) {
+  const stats = ENEMIES[e.kind]
+  e.stateTime += dt
+  e.flash = Math.max(0, e.flash - dt)
+  e.hitTime = Math.max(0, e.hitTime - dt)
+  e.cooldown = Math.max(0, e.cooldown - dt)
+  e.poiseTimer = Math.max(0, e.poiseTimer - dt)
+  if (e.poiseTimer === 0) e.poiseHit = 0
+  e.facing = e.x < ARENA.width / 2 ? 1 : -1
+  e.vx = approach(e.vx, 0, 2600 * dt)
+  switch (e.state) {
+    case 'walk':
+      if (e.cooldown === 0 && !w.over && Math.abs(w.player.y - e.y) < SENTRY_RANGE) startWindup(e)
+      break
+    case 'windup':
+      if (e.stateTime >= windupTime(e)) beginEnemyAttack(w, e, stats, rng)
+      break
+    case 'attack':
+      if (e.stateTime >= stats.active) {
+        e.state = 'recover'
+        e.stateTime = 0
+      }
+      break
+    case 'recover':
+      if (e.stateTime >= stats.recover) {
+        e.state = 'walk'
+        e.stateTime = 0
+        e.cooldown = stats.attackCooldown
+      }
+      break
+    case 'hurt':
+    case 'stagger':
+      if (e.stateTime >= (e.state === 'hurt' ? stats.hurtTime : stats.staggerTime)) {
+        e.state = 'walk'
+        e.stateTime = 0
+        e.cooldown = 0.5
+      }
+      break
+    case 'dying':
+      break
+  }
+  e.vy -= ENEMY_GRAVITY * dt
+  e.grounded = moveVertically(w, e, dt, false) !== null
+}
+
+/**
+ * A guard of the tower on its ledge: it paces from end to end while the hero is elsewhere, and
+ * goes for them once they are on the ledge (or close above or below its height), striking like
+ * any of its kind. It never walks off.
+ */
+function guardWalk(w: World, e: Enemy, stats: EnemyStats, speed: number, dt: number) {
+  const post = e.post
+  if (!post) return
+  const p = w.player
+  const lo = post.left + stats.halfWidth
+  const hi = post.right - stats.halfWidth
+  const near = !w.over && p.state !== 'dead' && Math.abs(p.y - e.y) < 60 && p.x > post.left - 40 && p.x < post.right + 40
+  if (near) {
+    const dx = p.x - e.x
+    e.facing = dx >= 0 ? 1 : -1
+    const target = clamp(p.x, lo, hi)
+    e.vx = approach(e.vx, Math.abs(target - e.x) < 8 ? 0 : Math.sign(target - e.x) * speed, 2600 * dt)
+    if (Math.abs(dx) < stats.attackRange && e.cooldown === 0 && e.grounded) startWindup(e)
+    return
+  }
+  // Pacing: turn at the ends of the ledge, at half the speed of a chase.
+  if (e.x <= lo + 2) e.facing = 1
+  else if (e.x >= hi - 2) e.facing = -1
+  e.vx = approach(e.vx, hi > lo ? e.facing * speed * 0.5 : 0, 2600 * dt)
 }
 
 function startWindup(e: Enemy) {
@@ -978,7 +1091,8 @@ function stepArrows(w: World, dt: number, rng: Rng) {
  */
 function keepApart(w: World) {
   const p = w.player
-  const live = w.enemies.filter((e) => e.state !== 'dying')
+  // The archers of the tower stand at their posts; nobody shoves them.
+  const live = w.enemies.filter((e) => e.state !== 'dying' && !(w.mode === 'climb' && e.kind === 'archer'))
   if (p.state !== 'dash' && p.state !== 'dead') {
     for (const e of live) {
       const stats = ENEMIES[e.kind]

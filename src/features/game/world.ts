@@ -6,13 +6,14 @@ import { DEFAULT_HERO, HEROES } from './heroes'
 import type { HeroId } from './heroes'
 import { createObjective } from './objectives'
 import { BASE_MODS } from './upgrades'
-import type { Enemy, Player, World } from './types'
+import { TOWER, newClimbState } from './climb'
+import type { Enemy, GameMode, Player, World } from './types'
 import { enemyHealthScale, enemyPower, roundBudget } from './pacing'
 
 /** The order the shards of the first rounds are scattered in does not matter much; a fixed one keeps a new world the same each time. */
 const fixed = () => 0.5
 
-export function createWorld(hero: HeroId = DEFAULT_HERO): World {
+export function createWorld(hero: HeroId = DEFAULT_HERO, mode: GameMode = 'survival'): World {
   const def = HEROES[hero]
   const player: Player = {
     x: ARENA.width / 2,
@@ -39,6 +40,7 @@ export function createWorld(hero: HeroId = DEFAULT_HERO): World {
     parryFlash: 0,
     lowStamina: 0,
     dropTime: 0,
+    diveCooldown: 0,
     airJumps: def.airJumps,
     hitTime: 0,
     speed: def.speed,
@@ -46,8 +48,10 @@ export function createWorld(hero: HeroId = DEFAULT_HERO): World {
     height: def.height,
   }
   const budget = roundBudget(1)
-  const platforms = [...BIOMES.wetlands.platforms]
-  return {
+  const platforms = mode === 'climb' ? [...TOWER.platforms] : [...BIOMES.wetlands.platforms]
+  const world: World = {
+    mode,
+    climb: newClimbState(),
     time: 0,
     player,
     enemies: [],
@@ -88,13 +92,27 @@ export function createWorld(hero: HeroId = DEFAULT_HERO): World {
     buffer: { jump: 0, dash: 0, light: 0, heavy: 0 },
     over: false,
   }
+  // The archers of the tower stand at their posts from the start, each a little out of step with the others.
+  if (mode === 'climb') {
+    TOWER.sentries.forEach((post, i) => {
+      const sentry = spawnEnemy(world, 'archer', post.x, 0, { y: post.y })
+      sentry.cooldown = 1 + ((i * 0.9) % 2.4)
+    })
+    // Demons and ogres walk their ledges from the start, each facing a different way.
+    TOWER.guards.forEach((guard, i) => {
+      const e = spawnEnemy(world, guard.kind, guard.x, i, { y: guard.y, post: { left: guard.left, right: guard.right } })
+      e.facing = i % 2 ? 1 : -1
+      e.cooldown = 1.5
+    })
+  }
+  return world
 }
 
 /**
  * Put an enemy in the world, standing at height `y` (the ground by default). `variant` picks one
  * of the kind's looks; by default they take turns. An elite has more of everything.
  */
-export function spawnEnemy(w: World, kind: EnemyKind, x: number, variant?: number, options: { y?: number; elite?: boolean } = {}): Enemy {
+export function spawnEnemy(w: World, kind: EnemyKind, x: number, variant?: number, options: { y?: number; elite?: boolean; post?: { left: number; right: number } } = {}): Enemy {
   const stats = ENEMIES[kind]
   const id = w.nextId++
   const elite = options.elite ?? false
@@ -125,6 +143,7 @@ export function spawnEnemy(w: World, kind: EnemyKind, x: number, variant?: numbe
     variant: (variant ?? id) % ENEMY_LOOKS[kind].length,
     dropTime: 0,
     elite,
+    post: options.post ?? null,
   }
   w.enemies.push(enemy)
   return enemy

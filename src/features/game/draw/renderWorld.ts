@@ -3,6 +3,7 @@ import { floorBelow } from '../sim'
 import type { Enemy, World } from '../types'
 import { drawArena, drawBackdrop, drawForeground } from './biome'
 import { drawEnemy, drawHero } from './characters'
+import { drawClimbBanner, drawClimbHud, drawSentryLanes, drawTowerMarks } from './climb'
 import { drawBars, drawDizzy, drawWarning } from './heavies'
 import {
   drawArrows,
@@ -37,6 +38,7 @@ const depth = (e: Enemy) => (e.state === 'dying' ? -1 : DEPTH[e.kind])
 export function renderWorld(ctx: CanvasRenderingContext2D, w: World) {
   const sprites = getSprites()
   if (!sprites) return
+  const climbing = w.mode === 'climb'
   ctx.imageSmoothingEnabled = false
   ctx.save()
   const shake = w.shake > 0.3 ? w.shake : 0
@@ -46,8 +48,15 @@ export function renderWorld(ctx: CanvasRenderingContext2D, w: World) {
   ctx.save()
   ctx.translate(0, Math.round(w.camY))
   drawArena(ctx, w, sprites)
-  drawObjective(ctx, w, sprites)
-  drawDangerZones(ctx, w)
+  if (climbing) {
+    drawTowerMarks(ctx, w)
+    // An archer's arrow is marked by its lane; a melee guard's blow by the usual strike box (archers have none of their own).
+    drawSentryLanes(ctx, w)
+    drawDangerZones(ctx, w)
+  } else {
+    drawObjective(ctx, w, sprites)
+    drawDangerZones(ctx, w)
+  }
   const ordered = [...w.enemies].sort((a, b) => depth(a) - depth(b))
   for (const e of ordered) {
     const floor = floorBelow(w, e.x, e.y)
@@ -72,12 +81,19 @@ export function renderWorld(ctx: CanvasRenderingContext2D, w: World) {
   drawFloaters(ctx, w)
   drawForeground(ctx, w)
   ctx.restore()
-  drawIncoming(ctx, w)
-  drawObjectivePointers(ctx, w)
+  if (!climbing) {
+    drawIncoming(ctx, w)
+    drawObjectivePointers(ctx, w)
+  }
   ctx.restore()
   drawHurtVignette(ctx, w)
-  drawHud(ctx, w)
   drawHeroHud(ctx, w, sprites)
+  if (climbing) {
+    drawClimbHud(ctx, w)
+    drawClimbBanner(ctx, w)
+    return
+  }
+  drawHud(ctx, w)
   drawRoundHud(ctx, w)
   drawBossBar(ctx, w)
   drawBanner(ctx, w)

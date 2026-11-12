@@ -45,6 +45,11 @@ export const PLAYER = {
   blockRegenShare: 0.35,
 } as const
 
+/** The downward dive some heroes have in the air: after one it has to recharge, so it cannot be chained. */
+export const DIVE = {
+  cooldown: 1.6,
+} as const
+
 export const DASH = {
   speed: 780,
   time: 0.17,

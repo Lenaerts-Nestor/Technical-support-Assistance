@@ -1,3 +1,4 @@
+import { CLIMB_HERO } from './climb'
 import { ARENA } from './config'
 import { InputState } from './input'
 import { DEFAULT_HERO } from './heroes'
@@ -6,7 +7,7 @@ import { nextRound, pickUpgrade } from './rounds'
 import { createWorld, stepWorld } from './sim'
 import type { UpgradeId } from './upgrades'
 import { renderWorld } from './draw/renderWorld'
-import type { World } from './types'
+import type { GameMode, World } from './types'
 
 /** The longest slice of real time one frame may advance, so a stalled tab does not teleport the game. */
 const MAX_FRAME = 0.05
@@ -16,18 +17,27 @@ const MAX_STEP = 1 / 100
 /** Owns one game in progress: the world, the keys, and turning real time into steps. */
 export class GameEngine {
   /** The hero played; kept between runs so a retry starts as the last one did. */
-  hero: HeroId = DEFAULT_HERO
-  world: World = createWorld(this.hero)
+  hero: HeroId
+  readonly mode: GameMode
+  world: World
   readonly input = new InputState()
+
+  constructor(mode: GameMode = 'survival') {
+    this.mode = mode
+    this.hero = mode === 'climb' ? CLIMB_HERO : DEFAULT_HERO
+    this.world = createWorld(this.hero, mode)
+  }
 
   /** Choose who to play. Takes effect with the next run. */
   setHero(hero: HeroId) {
+    // Jump Hunter is always the Huntress.
+    if (this.mode === 'climb') return
     this.hero = hero
   }
 
   /** Start over with a fresh world. */
   reset() {
-    this.world = createWorld(this.hero)
+    this.world = createWorld(this.hero, this.mode)
     this.input.clear()
   }
 

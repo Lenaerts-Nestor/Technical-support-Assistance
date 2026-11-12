@@ -445,3 +445,35 @@ describe('death', () => {
     expect(w.enemies.length).toBeLessThanOrEqual(count)
   })
 })
+
+describe('the downward dive', () => {
+  const dive = { ...NO_INPUT, downHeld: true, lightPressed: true }
+  const inAir = () => {
+    const w = createWorld('huntress')
+    w.player.y = 500
+    w.player.vy = 0
+    w.player.grounded = false
+    return w
+  }
+
+  it('recharges: asking again straight away does nothing, and it works once recharged', () => {
+    const w = inAir()
+    stepWorld(w, dive, 0.01, () => 0.5)
+    expect(w.player.state).toBe('attack')
+    expect(w.player.attackKind).toBe('airDown')
+    expect(w.player.diveCooldown).toBeGreaterThan(1)
+
+    // Back in the air, and the dive is asked for again: it is refused, not turned into another blow.
+    w.player.state = 'free'
+    w.player.y = 500
+    w.player.vy = 0
+    w.player.grounded = false
+    stepWorld(w, dive, 0.01, () => 0.5)
+    expect(w.player.state).toBe('free')
+
+    w.player.diveCooldown = 0
+    stepWorld(w, dive, 0.01, () => 0.5)
+    expect(w.player.attackKind).toBe('airDown')
+    expect(w.player.state).toBe('attack')
+  })
+})

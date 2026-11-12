@@ -1,5 +1,5 @@
 import { BIOMES, startsBiome } from '../biomes'
-import { ARENA, COST, ENEMIES } from '../config'
+import { ARENA, COST, DIVE, ENEMIES } from '../config'
 import { bossVariantFor, lookOf } from '../enemyLooks'
 import { HEROES } from '../heroes'
 import { OBJECTIVE, objectiveProgress, objectiveText } from '../objectives'
@@ -175,16 +175,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World) {
   ctx.textAlign = 'left'
   ctx.fillText(`${Math.ceil(p.hp)} / ${p.maxHp}`, 88, 30)
 
-  // Stamina: spent by the dash, heavy swings and blocking; it flashes red when you asked for more than you had.
-  const stamina = p.stamina / p.maxStamina
-  ctx.fillStyle = 'rgba(10,10,14,.65)'
-  roundRect(ctx, 76, 46, 164, 12, 5)
-  ctx.fillStyle = 'rgba(10,10,14,.65)'
-  ctx.fill()
-  const short = p.lowStamina > 0 && Math.floor(p.lowStamina * 12) % 2 === 0
-  ctx.fillStyle = short ? '#ff6b6b' : stamina < 0.2 ? '#c9a24a' : '#5fd1a0'
-  roundRect(ctx, 78, 48, 160 * stamina, 8, 4)
-  ctx.fill()
+  drawStamina(ctx, p)
 
   // Score.
   ctx.textAlign = 'right'
@@ -196,7 +187,34 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World) {
   ctx.fillText(`SCORE · ${w.kills} KILL${w.kills === 1 ? '' : 'S'}`, W - 24, 52)
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+/** Stamina: spent by the dash, heavy swings and blocking; it flashes red when you asked for more than you had. */
+export function drawStamina(ctx: CanvasRenderingContext2D, p: World['player']) {
+  const stamina = p.stamina / p.maxStamina
+  ctx.fillStyle = 'rgba(10,10,14,.65)'
+  roundRect(ctx, 76, 46, 164, 12, 5)
+  ctx.fillStyle = 'rgba(10,10,14,.65)'
+  ctx.fill()
+  const short = p.lowStamina > 0 && Math.floor(p.lowStamina * 12) % 2 === 0
+  ctx.fillStyle = short ? '#ff6b6b' : stamina < 0.2 ? '#c9a24a' : '#5fd1a0'
+  roundRect(ctx, 78, 48, 160 * stamina, 8, 4)
+  ctx.fill()
+  // The dive recharging: a thin bar that fills until it can be used again.
+  if (p.diveCooldown > 0) {
+    ctx.fillStyle = 'rgba(10,10,14,.65)'
+    roundRect(ctx, 76, 62, 84, 8, 4)
+    ctx.fill()
+    ctx.fillStyle = '#9fc4ff'
+    roundRect(ctx, 78, 64, 80 * (1 - p.diveCooldown / DIVE.cooldown), 4, 2)
+    ctx.fill()
+    ctx.fillStyle = 'rgba(255,255,255,.7)'
+    ctx.font = '700 9px Inter, system-ui, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('DIVE', 166, 66)
+  }
+}
+
+export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   const radius = Math.min(r, w / 2, h / 2)
   ctx.beginPath()
   ctx.roundRect(x, y, Math.max(0, w), h, radius)

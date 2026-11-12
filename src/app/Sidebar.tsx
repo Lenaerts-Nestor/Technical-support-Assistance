@@ -11,7 +11,8 @@ import { ThemeSwitcher } from '../shared/theme/ThemeSwitcher'
 import { ArrowRightIcon, NavIcon } from './navIcons'
 import { SidebarStatus } from './SidebarStatus'
 import { SidebarIdentity } from './SidebarIdentity'
-import { SidebarTimers } from './SidebarTimers'
+import { SidebarLunchAlert } from './SidebarLunchAlert'
+import { RULES_CONTENT } from './rulesContent'
 
 /** Colour + wording of the folder-status dot on the Sync entry. */
 const FOLDER_DOT: Record<FolderStatus, { tone: string; label: string; pulse?: boolean }> = {
@@ -33,6 +34,8 @@ type SidebarProps = {
   /** The page needs the room, so the user's toggle is off until it lets go. */
   lockedCompact?: boolean
   onToggle: () => void
+  /** Opens the "Future plans" notice again. */
+  onShowRules: () => void
 }
 
 type NavButtonProps = {
@@ -80,12 +83,38 @@ function NavButton({ id, label, active, compact, onNavigate, status, className =
   )
 }
 
+/** A softly glowing button that brings the notice back; it stays lit so the rules are never out of sight. */
+function RulesButton({ compact, onClick }: { compact: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={compact ? RULES_CONTENT.sidebarLabel : 'Read the rules and future plans again'}
+      aria-label={compact ? RULES_CONTENT.sidebarLabel : undefined}
+      className={`border-brand/50 bg-brand-soft text-brand-strong hover:border-brand relative flex h-9 w-full items-center rounded-lg border text-sm font-extrabold tracking-[0.12em] shadow-[0_0_14px_color-mix(in_oklab,var(--color-brand)_40%,transparent)] transition-colors ${
+        compact ? 'justify-center px-0' : 'gap-2.5 px-3'
+      }`}
+    >
+      <svg {...ICON_BASE} className={`shrink-0 ${compact ? 'h-5 w-5' : 'h-[18px] w-[18px]'}`} aria-hidden="true">
+        <path d="M12 3 4 6v6c0 4.5 3.2 7.8 8 9 4.8-1.2 8-4.5 8-9V6Z" />
+        <path d="M12 8v5M12 16h.01" />
+      </svg>
+      {!compact && <span>{RULES_CONTENT.sidebarLabel}</span>}
+      <span
+        aria-hidden="true"
+        className={`bg-brand h-2 w-2 rounded-full motion-safe:animate-pulse ${compact ? 'absolute top-1.5 right-2.5' : 'ml-auto'}`}
+      />
+    </button>
+  )
+}
+
 export function Sidebar({
   current,
   onNavigate,
   compact = false,
   lockedCompact = false,
   onToggle,
+  onShowRules,
 }: SidebarProps) {
   const folder = useFolder()
   const toOrganize = useGuidesToOrganize()
@@ -144,7 +173,7 @@ export function Sidebar({
       </nav>
 
       <div className="border-sidebar-line mt-3 flex shrink-0 flex-col gap-3 border-t pt-3">
-        <SidebarTimers compact={compact} />
+        <SidebarLunchAlert compact={compact} />
         <SidebarIdentity compact={compact} />
         <div className={compact ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2'}>
           {bottom.length > 0 && (
@@ -164,6 +193,7 @@ export function Sidebar({
           )}
           <ThemeSwitcher />
         </div>
+        <RulesButton compact={compact} onClick={onShowRules} />
       </div>
     </aside>
   )

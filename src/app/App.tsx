@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { ErrorBoundary } from './ErrorBoundary'
+import { RulesDialog } from './RulesDialog'
+import { useRulesNotice } from './useRulesNotice'
 import { AppDataProvider } from './AppDataProvider'
 import { SharedShiftProvider } from '../features/shift/SharedShiftProvider'
 import { useSharedShift } from '../features/shift/sharedShiftContext'
@@ -100,6 +102,7 @@ export default function App() {
     })
   }, [])
   const forced = focused.has(page)
+  const rules = useRulesNotice()
 
   return (
     <ErrorBoundary>
@@ -118,7 +121,9 @@ export default function App() {
                 compact={collapsed || forced}
                 lockedCompact={forced}
                 onToggle={() => setCollapsed((c) => !c)}
+                onShowRules={rules.show}
               />
+              {rules.open && <RulesDialog onClose={rules.close} />}
               {/*
                 Every page stays mounted and the inactive ones are hidden, so stepping
                 away from a half-filled form mid-call and coming back keeps it. Each

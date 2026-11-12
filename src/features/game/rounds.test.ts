@@ -4,6 +4,7 @@ import { DEFAULT_HERO, HEROES } from './heroes'
 import { enemyHealthScale, enemyPower, isBossRound, maxAlive, maxOf, roundBudget } from './pacing'
 import { awardKill, nextRound, pickUpgrade, streakMultiplier } from './rounds'
 import { createWorld, spawnEnemy, stepWorld } from './sim'
+import { UPGRADES } from './upgrades'
 import { NO_INPUT } from './types'
 import type { EnemyKind } from './config'
 import type { World } from './types'
@@ -253,6 +254,21 @@ describe('upgrade picks', () => {
     const fresh = createWorld()
     fresh.offer = ['whetstone']
     expect(pickUpgrade(fresh, 'whetstone')).toBe(false)
+  })
+
+  it('offers nothing once every upgrade is maxed, and the next round can still be started', () => {
+    const w = createWorld()
+    const rng = rngFrom(9)
+    for (const upgrade of UPGRADES) w.upgrades[upgrade.id] = upgrade.max
+    playRound(w, rng)
+    toBreak(w, rng)
+    expect(w.stage).toBe('break')
+    expect(w.offer).toHaveLength(0)
+    expect(w.picked).toBeNull()
+    // No pick is needed: the break ends, and the round after is a harder one.
+    expect(nextRound(w)).toBe(true)
+    expect(w.stage).toBe('fight')
+    expect(w.round).toBe(2)
   })
 
   it('gives extra health and stamina at once, not just room for it', () => {

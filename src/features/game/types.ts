@@ -1,3 +1,4 @@
+import type { ClimbState } from './climb'
 import type { ComboKind, EnemyKind } from './config'
 import type { Mods, Picks, UpgradeId } from './upgrades'
 import type { BiomeId, Platform } from './biomes'
@@ -42,6 +43,8 @@ export type Player = {
   lowStamina: number
   /** While this runs the hero falls through ledges instead of landing on them. */
   dropTime: number
+  /** Seconds until the downward dive can be used again. */
+  diveCooldown: number
   /** Jumps left before landing (a hero with a double jump has one). */
   airJumps: number
   /** Seconds left of the flash and recoil after being hit. */
@@ -94,6 +97,8 @@ export type Enemy = {
   dropTime: number
   /** Wreathed in shadow: tougher, quicker and worth more (see `ELITE`). */
   elite: boolean
+  /** In the tower, the ledge it guards: it patrols it and never leaves it. */
+  post: { left: number; right: number } | null
 }
 
 /** An arrow in flight. It flies level, at the height it was loosed from. */
@@ -173,7 +178,13 @@ export type RoundSummary = {
   healed: number
 }
 
+/** `survival`: Last Stand, the fight against waves. `climb`: Jump Hunter, a tower of ledges with nobody to fight. */
+export type GameMode = 'survival' | 'climb'
+
 export type World = {
+  mode: GameMode
+  /** Progress up the tower; only meaningful in `climb`. */
+  climb: ClimbState
   /** Game time: stands still during hit-stop. */
   time: number
   player: Player

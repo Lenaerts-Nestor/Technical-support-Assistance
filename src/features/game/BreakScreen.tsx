@@ -21,10 +21,12 @@ type BreakScreenProps = {
 export function BreakScreen({ world, picked, onPick, onContinue }: BreakScreenProps) {
   const { summary } = world
   if (!summary) return null
+  // Once every upgrade is maxed nothing is offered, and the break just ends when the player is ready.
+  const noneLeft = world.offer.length === 0
   const owned = UPGRADES.filter((u) => (world.upgrades[u.id] ?? 0) > 0)
 
   return (
-    <div role="dialog" aria-label={`Round ${summary.round} cleared. Choose an upgrade.`} className="absolute inset-0 overflow-y-auto bg-black/75 text-white backdrop-blur-[2px]">
+    <div role="dialog" aria-label={`Round ${summary.round} cleared.${noneLeft ? '' : ' Choose an upgrade.'}`} className="absolute inset-0 overflow-y-auto bg-black/75 text-white backdrop-blur-[2px]">
       <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center gap-3 px-4 py-4">
         <header className="text-center">
           <p className="text-2xl font-extrabold tracking-tight">Round {summary.round} cleared</p>
@@ -39,7 +41,7 @@ export function BreakScreen({ world, picked, onPick, onContinue }: BreakScreenPr
 
         <div>
           <p className="mb-1.5 text-center text-[11px] font-bold tracking-[0.12em] text-white/70 uppercase">
-            {picked === null ? 'Choose an upgrade' : 'Choose an upgrade · you can change your mind until the round starts'}
+            {noneLeft ? 'Every upgrade is taken: the rounds only get harder from here' : picked === null ? 'Choose an upgrade' : 'Choose an upgrade · you can change your mind until the round starts'}
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             {world.offer.map((id, index) => {
@@ -88,11 +90,11 @@ export function BreakScreen({ world, picked, onPick, onContinue }: BreakScreenPr
         <div className="text-center">
           <button
             type="button"
-            disabled={picked === null}
+            disabled={picked === null && !noneLeft}
             onClick={onContinue}
             className="inline-flex items-center justify-center rounded-lg bg-linear-to-b from-[#ffd27a] to-[#f5a93a] px-5 py-2 text-sm font-extrabold text-[#2a1a05] shadow-lg transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {picked === null ? 'Pick an upgrade to continue' : `Start round ${world.round + 1}  (Enter)`}
+            {picked === null && !noneLeft ? 'Pick an upgrade to continue' : `Start round ${world.round + 1}  (Enter)`}
           </button>
         </div>
       </div>

@@ -55,7 +55,7 @@ export const HEROES: Record<HeroId, HeroDef> = {
     airJumps: 0,
     canBlock: false,
     aimRange: 200,
-    moves: { light: 'cut, then a reaping slash', heavy: 'phantom dash: cuts through and cannot be hit', air: 'rising cut, or hold S to dive', dash: 'dash cut' },
+    moves: { light: 'cut, then a reaping slash', heavy: 'phantom dash: cuts through and cannot be hit', air: 'rising cut, or hold {KeyS} to dive', dash: 'dash cut' },
     combos: {
       light: [
         { duration: 0.3, hitStart: 0.05, hitEnd: 0.14, cancelAt: 0.18, damage: 11, poise: 9, stamina: 0, reach: 165, knockback: 180, lunge: 120, hitStop: 0.045, shake: 2, move: 'cut' },

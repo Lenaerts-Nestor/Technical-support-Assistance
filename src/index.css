@@ -173,6 +173,22 @@ body {
   animation: panel-link-flow 1s linear infinite;
 }
 
+/* The sidebar lunch warning: on and off, a hard blink rather than a fade, so it is noticed in the corner of the eye. */
+@keyframes lunch-blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0.2;
+  }
+}
+
+.lunch-blink {
+  animation: lunch-blink 1.1s steps(1, end) infinite;
+}
+
 /* Reduced motion: no transitions, no animations, no smooth scrolling. */
 @media (prefers-reduced-motion: reduce) {
   *,

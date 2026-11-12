@@ -14,6 +14,7 @@ import { LUNCH_WINDOWS, clock, favoritesByShift, reviveFavorites, shiftOf, shift
 import type { FavoritesMap } from './dashboardData'
 import { CalendarIcon, ClockIcon, CloseIcon, StarIcon } from './icons'
 import { useMinute } from './useMinute'
+import { TimerButtons } from './TimerButtons'
 
 const SHIFTS = [1, 2] as const
 
@@ -216,16 +217,19 @@ export function DashboardPage() {
               Lunch roster
             </h2>
           </div>
-          <ul className="text-ink-muted flex items-center gap-4 text-xs" aria-label="Legend">
-            <li className="flex items-center gap-1.5">
-              <span aria-hidden="true" className="bg-brand h-2 w-2 rounded-full" />
-              You
-            </li>
-            <li className="flex items-center gap-1.5">
-              <StarIcon filled className="text-brand-strong h-3.5 w-3.5" />
-              Favourite
-            </li>
-          </ul>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <ul className="text-ink-muted flex items-center gap-4 text-xs" aria-label="Legend">
+              <li className="flex items-center gap-1.5">
+                <span aria-hidden="true" className="bg-brand h-2 w-2 rounded-full" />
+                You
+              </li>
+              <li className="flex items-center gap-1.5">
+                <StarIcon filled className="text-brand-strong h-3.5 w-3.5" />
+                Favourite
+              </li>
+            </ul>
+            <TimerButtons />
+          </div>
         </div>
         <div className="p-4">
           {day ? (

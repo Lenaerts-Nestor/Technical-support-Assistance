@@ -20,7 +20,27 @@ export function shiftOnLunch(now: Date): ShiftNo | null {
   return null
 }
 
-export const clock = (minutes: number) =>
+/** How long before the lunch window the sidebar starts warning, and how long after it started the warning stays. */
+export const LUNCH_ALERT_LEAD_MINUTES = 10
+export const LUNCH_ALERT_LINGER_MINUTES = 10
+
+export type LunchAlert = { phase: 'soon' | 'now'; minutes: number; start: number }
+
+/**
+ * The sidebar warning for a shift at `now`: `soon` from 10 minutes before the window (with the minutes left),
+ * `now` from the start until 10 minutes into it (with the minutes since it started), otherwise `null`.
+ */
+export function lunchAlert(shift: ShiftNo | null, now: Date): LunchAlert | null {
+  if (!shift) return null
+  const { start } = LUNCH_WINDOWS[shift]
+  const minutes = now.getHours() * 60 + now.getMinutes()
+  const untilStart = start - minutes
+  if (untilStart > 0 && untilStart <= LUNCH_ALERT_LEAD_MINUTES) return { phase: 'soon', minutes: untilStart, start }
+  if (untilStart <= 0 && -untilStart < LUNCH_ALERT_LINGER_MINUTES) return { phase: 'now', minutes: minutes - start, start }
+  return null
+}
+
+export const clock =(minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 
 export const shiftOf = (day: SharedDay | undefined, name: string): ShiftNo | null => {
