@@ -41,7 +41,7 @@ export const RULES_CONTENT = {
         name: 'NMBS train assistant',
         text: 'A page that does two things for those who take the train to work:',
         points: [
-          'Interim refunds: for people on an interim contract. It reads your activated or purchased ticket and sends the details to the interim of your choice, with one button on your phone. I built this privately for myself before, and I have never missed getting my money back since.',
+          'Interim refunds (in the process of being built): for people on an interim contract. It reads your activated or purchased ticket and sends the details to the interim of your choice, with one button on your phone.',
           'Train tracking: for the way home after work. See directly, or get a clear popup, when your train is coming, using a public API.',
         ],
       },
