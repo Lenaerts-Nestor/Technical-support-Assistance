@@ -35,7 +35,7 @@ export function PhoneIdentity() {
       </label>
       {!canPublish && (
         <p className="text-ink-muted mt-1.5 text-xs">
-          Pick {PUBLISHERS.join(' or ')} so Copy for Teams also shares the shifts with the team.
+          Optional. Shows your lunch shift here.
         </p>
       )}
     </div>

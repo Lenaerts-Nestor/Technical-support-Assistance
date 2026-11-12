@@ -1,4 +1,3 @@
-import { PUBLISHERS } from '../features/shift/config'
 import { useSharedShift } from '../features/shift/sharedShiftContext'
 import { SELECT } from '../shared/ui/styles'
 
@@ -9,7 +8,7 @@ import { SELECT } from '../shared/ui/styles'
  * screen readers, and the line under it explains what the choice does.
  */
 export function SidebarIdentity({ compact }: { compact: boolean }) {
-  const { enabled, me, setMe, choices, canPublish } = useSharedShift()
+  const { enabled, me, setMe, choices } = useSharedShift()
   if (!enabled) return null
 
   if (compact) {
@@ -42,11 +41,7 @@ export function SidebarIdentity({ compact }: { compact: boolean }) {
         ))}
       </select>
       <p className="text-ink-muted mt-1.5 text-[11px] leading-snug">
-        {choices.length === 0
-          ? `Names appear once ${PUBLISHERS.join(' or ')} presses Copy for Teams.`
-          : canPublish
-            ? 'Copy for Teams also shares the shifts with the team.'
-            : 'Optional. Shows your lunch shift here.'}
+        {choices.length === 0 ? 'Names appear once a schedule has been shared.' : 'Optional. Shows your lunch shift here.'}
       </p>
     </div>
   )

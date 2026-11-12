@@ -10,9 +10,7 @@ import type { LunchPlanner } from '../useLunchPlanner'
 import type { Agent, LanguageWarning, ShiftNo } from '../types'
 import { useCopyToClipboard } from '../../../shared/hooks/useCopyToClipboard'
 import { useIsPhone } from '../../../shared/hooks/useMediaQuery'
-import { PUBLISHERS, REMINDER_NOTE } from '../../shift/config'
 import { useSharedShift } from '../../shift/sharedShiftContext'
-import type { TeamsPost } from '../../shift/shiftLogic'
 import {
   ALERT_DANGER,
   ALERT_WARNING,
@@ -35,19 +33,6 @@ import { ShiftColumn } from './ShiftColumn'
 
 type Pending = { a: Agent; b?: Agent; lost: LanguageWarning[] }
 
-const SHARE_MESSAGE: Record<TeamsPost, string> = {
-  posted: 'Shared with the team and posted to the Teams chat. Everyone who picked their name sees their shift in the sidebar.',
-  already: 'Shared with the team. The Teams chat was already posted today, so it was not posted again.',
-  off: 'Shared with the team: everyone who picked their name sees their shift in the sidebar.',
-}
-
-/** The same results in fewer words, for the pinned bar of a phone (there is no sidebar there to mention). */
-const SHARE_MESSAGE_PHONE: Record<TeamsPost, string> = {
-  posted: 'Copied. Shared with the team and posted to the Teams chat.',
-  already: 'Copied. Shared with the team (the Teams chat was already posted today).',
-  off: 'Copied. Shared with the team.',
-}
-
 const WARNING_TONE: Record<LanguageWarning['kind'], string> = {
   uncovered: 'border-danger/45 bg-danger-surface text-rose-100',
   single: 'border-warning/45 bg-warning-surface text-amber-100',
@@ -68,11 +53,8 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
   const [announcement, setAnnouncement] = useState('')
   const { copied, copy } = useCopyToClipboard()
   const [copyFailed, setCopyFailed] = useState(false)
-  const shared = useSharedShift()
   /** Names of the shared schedule this roster does not have (kept here: the card is rebuilt when a schedule appears). */
   const [notOnRoster, setNotOnRoster] = useState<string[]>([])
-  /** Whether the last Copy for Teams also reached the team, and for which schedule (a later change makes it stale). */
-  const [shareResult, setShareResult] = useState<{ teams: TeamsPost | null; forText: string } | null>(null)
   /** The card being dragged. A ref, not state: a drop can land before React has re-rendered. */
   const dragging = useRef<string | null>(null)
   /** True while a card is being dragged, as opposed to picked with the Swap button. */
@@ -172,23 +154,7 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
     const text = teamsText(names)
     const ok = await copy(text, 'default', teamsHtml(names))
     setCopyFailed(!ok)
-    // Kevin C / Nestor: the same press also shows each agent their own shift in their sidebar.
-    if (ok && shared.canPublish) {
-      const teams = await shared.publish({
-        day: planner.today,
-        shift1: names.shift1,
-        shift2: names.shift2,
-        team: agents.map((a) => a.name),
-        chat: names.chat,
-        out: names.out,
-        notes: names.notes,
-      })
-      setShareResult({ teams, forText: text })
-    } else {
-      setShareResult(null)
-    }
   }
-  const currentText = teamsText(boardNames(board))
   // What Copy for Teams achieved. In the card on a computer; on a phone in the pinned bar, next to the button just pressed.
   const copyNotice = copyFailed ? (
     <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
@@ -197,21 +163,6 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         : 'Could not copy to the clipboard. Allow clipboard access for this site and try again.'}
     </p>
   ) : null
-  const shareNotice =
-    shareResult?.forText === currentText ? (
-      shareResult.teams ? (
-        <p role="status" className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
-          <CheckIcon className="h-4 w-4 shrink-0" />
-          {(phone ? SHARE_MESSAGE_PHONE : SHARE_MESSAGE)[shareResult.teams]}
-        </p>
-      ) : (
-        <p role="alert" className={`${ALERT_DANGER} font-semibold`}>
-          {phone
-            ? 'Copied, but not shared with the team. Check the connection and press Copy for Teams again.'
-            : 'Copied, but the shifts could not be shared with the team. Check the connection and press Copy for Teams again.'}
-        </p>
-      )
-    ) : null
   /** The shared schedule without the names this roster does not have, which can never be on screen. */
   const known = new Set(agents.map((a) => nameKey(a.name)))
   const onRoster = (day: { shift1: string[]; shift2: string[] }) => ({
@@ -265,14 +216,7 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
         onCopy={copyText}
         copied={copied === 'default'}
         phone={phone}
-        notice={
-          copyNotice || shareNotice ? (
-            <>
-              {copyNotice}
-              {shareNotice}
-            </>
-          ) : null
-        }
+        notice={copyNotice}
       />
 
       <div className="space-y-4 p-4">
@@ -282,19 +226,6 @@ export function ScheduleCard({ planner }: { planner: LunchPlanner }) {
             : announcement}
         </p>
         {!phone && copyNotice}
-        {!phone && shareNotice}
-        {shared.canPublish && (
-          <p className="text-ink-muted text-xs">
-            Reminders for each shift are posted to the Teams chat ({REMINDER_NOTE}) with the schedule shared here, so press
-            Copy for Teams before then.
-          </p>
-        )}
-        {shared.enabled && !shared.canPublish && (
-          <p className="text-ink-muted text-xs">
-            Only {PUBLISHERS.join(' and ')} share the shifts when copying for Teams. Choose who you are under “I am”{' '}
-            {phone ? 'at the top of the page' : 'in the sidebar'}.
-          </p>
-        )}
 
         <SharedBanner
           planner={planner}
